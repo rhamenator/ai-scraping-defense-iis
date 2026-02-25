@@ -70,7 +70,7 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
             return await response.Content.ReadFromJsonAsync<EscalationAcknowledgementResponse>(cancellationToken: cancellationToken)
                    ?? new EscalationAcknowledgementResponse(request.EscalationId, "acknowledged", DateTimeOffset.UtcNow);
         },
-        fallback: () => Task.FromResult(new EscalationAcknowledgementResponse(request.EscalationId, "queued-local", DateTimeOffset.UtcNow)),
+        fallback: () => Task.FromResult(new EscalationAcknowledgementResponse(request.EscalationId, "engine-unavailable", DateTimeOffset.UtcNow)),
         operationName: "escalation-ack");
     }
 
@@ -89,7 +89,7 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
                     return value;
                 }
             }
-            catch (Exception ex) when (attempt < maxAttempts)
+            catch (Exception ex) when (ex is not OperationCanceledException && attempt < maxAttempts)
             {
                 var delay = TimeSpan.FromMilliseconds(baseDelayMs * attempt);
                 _logger.LogWarning(ex,
@@ -100,7 +100,7 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
                     delay.TotalMilliseconds);
                 await Task.Delay(delay);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex,
                     "Linux engine call failed for {Operation} after {MaxAttempts} attempts. Using fallback behavior.",
