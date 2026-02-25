@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -8,73 +7,72 @@ namespace RedisBlocklistMiddlewareApp.Services.LinuxEngineClient;
 
 public class LinuxDefenseEngineClient : IDefenseEngineClient
 {
-    private readonly HttpClient _httpClient;
+    public const string HttpClientName = "LinuxDefenseEngine";
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly DefenseEngineOptions _options;
     private readonly ILogger<LinuxDefenseEngineClient> _logger;
 
     public LinuxDefenseEngineClient(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         IOptions<DefenseEngineOptions> options,
         ILogger<LinuxDefenseEngineClient> logger)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _logger = logger;
-
-        _httpClient.BaseAddress = new Uri(_options.EngineEndpoint);
-        _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds));
-
-        if (!string.IsNullOrWhiteSpace(_options.BearerToken))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", _options.BearerToken);
-        }
-
-        if (!string.IsNullOrWhiteSpace(_options.ApiKey))
-        {
-            _httpClient.DefaultRequestHeaders.Add("X-API-Key", _options.ApiKey);
-        }
     }
 
-    public Task<EngineHealthResponse> GetHealthAsync(CancellationToken cancellationToken = default) =>
-        SendWithRetryAsync(
-            () => _httpClient.GetFromJsonAsync<EngineHealthResponse>("/health", cancellationToken),
+    public Task<EngineHealthResponse> GetHealthAsync(CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+        return SendWithRetryAsync(
+            () => client.GetFromJsonAsync<EngineHealthResponse>("/health", cancellationToken),
             fallback: () => Task.FromResult(new EngineHealthResponse("unreachable", DateTimeOffset.UtcNow, _options.EngineEndpoint)),
-            operationName: "health-check");
+            operationName: "health-check",
+            cancellationToken);
+    }
 
-    public Task<TelemetrySnapshotResponse> GetTelemetryAsync(CancellationToken cancellationToken = default) =>
-        SendWithRetryAsync(
-            () => _httpClient.GetFromJsonAsync<TelemetrySnapshotResponse>("/api/v1/telemetry", cancellationToken),
+    public Task<TelemetrySnapshotResponse> GetTelemetryAsync(CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+        return SendWithRetryAsync(
+            () => client.GetFromJsonAsync<TelemetrySnapshotResponse>("/api/v1/telemetry", cancellationToken),
             fallback: () => Task.FromResult(new TelemetrySnapshotResponse(DateTimeOffset.UtcNow, 0, Array.Empty<TelemetryEvent>())),
-            operationName: "telemetry-pull");
+            operationName: "telemetry-pull",
+            cancellationToken);
+    }
 
     public async Task<PolicySubmissionResponse> SubmitPolicyAsync(PolicySubmissionRequest request, CancellationToken cancellationToken = default)
     {
+        var client = _httpClientFactory.CreateClient(HttpClientName);
         return await SendWithRetryAsync(async () =>
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/v1/policies", request, cancellationToken);
+            var response = await client.PostAsJsonAsync("/api/v1/policies", request, cancellationToken);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<PolicySubmissionResponse>(cancellationToken: cancellationToken)
                    ?? new PolicySubmissionResponse("unknown", "accepted", DateTimeOffset.UtcNow);
         },
         fallback: () => Task.FromResult(new PolicySubmissionResponse("pending", "queued-local", DateTimeOffset.UtcNow)),
-        operationName: "policy-submit");
+        operationName: "policy-submit",
+        cancellationToken);
     }
 
     public async Task<EscalationAcknowledgementResponse> AcknowledgeEscalationAsync(EscalationAcknowledgementRequest request, CancellationToken cancellationToken = default)
     {
+        var client = _httpClientFactory.CreateClient(HttpClientName);
         return await SendWithRetryAsync(async () =>
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/v1/escalations/ack", request, cancellationToken);
+            var response = await client.PostAsJsonAsync("/api/v1/escalations/ack", request, cancellationToken);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<EscalationAcknowledgementResponse>(cancellationToken: cancellationToken)
                    ?? new EscalationAcknowledgementResponse(request.EscalationId, "acknowledged", DateTimeOffset.UtcNow);
         },
         fallback: () => Task.FromResult(new EscalationAcknowledgementResponse(request.EscalationId, "engine-unavailable", DateTimeOffset.UtcNow)),
-        operationName: "escalation-ack");
+        operationName: "escalation-ack",
+        cancellationToken);
     }
 
-    private async Task<T> SendWithRetryAsync<T>(Func<Task<T?>> action, Func<Task<T>> fallback, string operationName)
+    private async Task<T> SendWithRetryAsync<T>(Func<Task<T?>> action, Func<Task<T>> fallback, string operationName, CancellationToken cancellationToken = default)
     {
         var maxAttempts = Math.Max(1, _options.RetryPolicy.MaxAttempts);
         var baseDelayMs = Math.Max(50, _options.RetryPolicy.BaseDelayMilliseconds);
@@ -89,7 +87,11 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
                     return value;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException && attempt < maxAttempts)
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
             {
                 var delay = TimeSpan.FromMilliseconds(baseDelayMs * attempt);
                 _logger.LogWarning(ex,
@@ -98,9 +100,9 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
                     attempt,
                     maxAttempts,
                     delay.TotalMilliseconds);
-                await Task.Delay(delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex)
             {
                 _logger.LogError(ex,
                     "Linux engine call failed for {Operation} after {MaxAttempts} attempts. Using fallback behavior.",

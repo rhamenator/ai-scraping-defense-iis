@@ -5,9 +5,12 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public class PolicyService : IPolicyService
 {
+    private const int MaxPendingQueueSize = 1000;
+
     private readonly IDefenseEngineClient _defenseEngineClient;
     private readonly ILogger<PolicyService> _logger;
     private readonly ConcurrentQueue<PolicySubmissionRequest> _pendingQueue = new();
+    private readonly object _enqueueLock = new();
 
     public PolicyService(IDefenseEngineClient defenseEngineClient, ILogger<PolicyService> logger)
     {
@@ -18,9 +21,22 @@ public class PolicyService : IPolicyService
     public async Task<PolicySubmissionResponse> PushPolicyAsync(PolicySubmissionRequest request, CancellationToken cancellationToken = default)
     {
         var response = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
-        if (response.Status.Equals("queued-local", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(response.Status, "queued-local", StringComparison.OrdinalIgnoreCase))
         {
-            _pendingQueue.Enqueue(request);
+            lock (_enqueueLock)
+            {
+                if (_pendingQueue.Count >= MaxPendingQueueSize)
+                {
+                    _logger.LogError(
+                        "Policy queue is full ({MaxSize}); dropping policy {PolicyName}.",
+                        MaxPendingQueueSize,
+                        request.PolicyName);
+                    return response with { Status = "dropped-queue-full" };
+                }
+
+                _pendingQueue.Enqueue(request);
+            }
+
             _logger.LogWarning("Policy {PolicyName} queued locally because Linux engine is unavailable.", request.PolicyName);
         }
 
@@ -41,7 +57,7 @@ public class PolicyService : IPolicyService
         while (_pendingQueue.TryDequeue(out var request))
         {
             var result = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
-            if (result.Status.Equals("queued-local", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(result.Status, "queued-local", StringComparison.OrdinalIgnoreCase))
             {
                 failed++;
                 retryBuffer.Add(request);
