@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
@@ -5,10 +6,22 @@ using RedisBlocklistMiddlewareApp.Services.LinuxEngineClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<DefenseEngineOptions>(
-    builder.Configuration.GetSection(DefenseEngineOptions.SectionName));
+builder.Services.AddOptions<DefenseEngineOptions>()
+    .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-builder.Services.AddHttpClient<IDefenseEngineClient, LinuxDefenseEngineClient>();
+builder.Services.AddHttpClient(LinuxDefenseEngineClient.HttpClientName, (sp, client) =>
+{
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DefenseEngineOptions>>().Value;
+    client.BaseAddress = new Uri(options.EngineEndpoint);
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+    if (!string.IsNullOrWhiteSpace(options.BearerToken))
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.BearerToken);
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+        client.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+});
+builder.Services.AddSingleton<IDefenseEngineClient, LinuxDefenseEngineClient>();
 builder.Services.AddSingleton<ITelemetryService, TelemetryService>();
 builder.Services.AddSingleton<IPolicyService, PolicyService>();
 builder.Services.AddHostedService<DefenseEngineSyncService>();
@@ -27,23 +40,28 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/health", async (IDefenseEngineClient engineClient, CancellationToken ct) =>
 {
     var status = await engineClient.GetHealthAsync(ct);
-    return Results.Ok(status);
+    return string.Equals(status.Status, "unreachable", StringComparison.OrdinalIgnoreCase)
+        ? Results.Json(status, statusCode: 503)
+        : Results.Ok(status);
 });
 
-app.MapGet("/api/control/telemetry", async (ITelemetryService telemetryService, CancellationToken ct) =>
+var control = app.MapGroup("/api/control")
+    .AddEndpointFilter<ApiKeyEndpointFilter>();
+
+control.MapGet("/telemetry", async (ITelemetryService telemetryService, CancellationToken ct) =>
 {
     var telemetry = await telemetryService.GetCachedTelemetryAsync(ct)
                     ?? await telemetryService.RefreshTelemetryAsync(ct);
     return Results.Ok(telemetry);
 });
 
-app.MapPost("/api/control/policies", async (PolicySubmissionRequest request, IPolicyService policyService, CancellationToken ct) =>
+control.MapPost("/policies", async (PolicySubmissionRequest request, IPolicyService policyService, CancellationToken ct) =>
 {
     var response = await policyService.PushPolicyAsync(request, ct);
     return Results.Ok(response);
 });
 
-app.MapPost("/api/control/escalations/ack", async (EscalationAcknowledgementRequest request, IDefenseEngineClient engineClient, CancellationToken ct) =>
+control.MapPost("/escalations/ack", async (EscalationAcknowledgementRequest request, IDefenseEngineClient engineClient, CancellationToken ct) =>
 {
     var response = await engineClient.AcknowledgeEscalationAsync(request, ct);
     return Results.Ok(response);
