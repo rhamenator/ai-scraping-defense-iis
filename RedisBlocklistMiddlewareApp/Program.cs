@@ -16,6 +16,9 @@ builder.Services
 builder.Services
     .AddOptions<DefenseEngineSyncOptions>()
     .Bind(builder.Configuration.GetSection(DefenseEngineSyncOptions.SectionName));
+builder.Services
+    .AddOptions<ControlPlaneSecurityOptions>()
+    .Bind(builder.Configuration.GetSection(ControlPlaneSecurityOptions.SectionName));
 builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
 
 builder.Services.AddHttpClient<IDefenseEngineClient, LinuxDefenseEngineClient>();
@@ -63,13 +66,13 @@ app.MapPost("/api/control/policies", async (PolicySubmissionRequest request, IPo
 {
     var response = await policyService.PushPolicyAsync(request, ct);
     return Results.Ok(response);
-});
+}).AddEndpointFilter<ApiKeyEndpointFilter>();
 
 app.MapPost("/api/control/escalations/ack", async (EscalationAcknowledgementRequest request, IDefenseEngineClient engineClient, CancellationToken ct) =>
 {
     var response = await engineClient.AcknowledgeEscalationAsync(request, ct);
     return Results.Ok(response);
-});
+}).AddEndpointFilter<ApiKeyEndpointFilter>();
 
 app.MapGet("/", () => Results.Ok(new
 {

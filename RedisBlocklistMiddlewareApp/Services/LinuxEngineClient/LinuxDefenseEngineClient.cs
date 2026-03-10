@@ -102,6 +102,14 @@ public class LinuxDefenseEngineClient : IDefenseEngineClient
                 {
                     return value;
                 }
+                else
+                {
+                    _logger.LogWarning(
+                        "Linux engine call for {Operation} returned null response on attempt {Attempt}/{MaxAttempts}; retrying.",
+                        operationName,
+                        attempt,
+                        maxAttempts);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
