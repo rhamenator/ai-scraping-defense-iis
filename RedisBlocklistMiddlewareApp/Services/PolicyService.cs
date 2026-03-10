@@ -10,7 +10,7 @@ public class PolicyService : IPolicyService
     private readonly IDefenseEngineClient _defenseEngineClient;
     private readonly ILogger<PolicyService> _logger;
     private readonly ConcurrentQueue<PolicySubmissionRequest> _pendingQueue = new();
-    private readonly object _enqueueLock = new();
+    private int _pendingCount = 0;
 
     public PolicyService(IDefenseEngineClient defenseEngineClient, ILogger<PolicyService> logger)
     {
@@ -23,18 +23,13 @@ public class PolicyService : IPolicyService
         var response = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
         if (string.Equals(response.Status, "queued-local", StringComparison.OrdinalIgnoreCase))
         {
-            lock (_enqueueLock)
+            if (!TryEnqueue(request))
             {
-                if (_pendingQueue.Count >= MaxPendingQueueSize)
-                {
-                    _logger.LogError(
-                        "Policy queue is full ({MaxSize}); dropping policy {PolicyName}.",
-                        MaxPendingQueueSize,
-                        request.PolicyName);
-                    return response with { Status = "dropped-queue-full" };
-                }
-
-                _pendingQueue.Enqueue(request);
+                _logger.LogError(
+                    "Policy queue is full ({MaxSize}); dropping policy {PolicyName}.",
+                    MaxPendingQueueSize,
+                    request.PolicyName);
+                return response with { Status = "dropped-queue-full" };
             }
 
             _logger.LogWarning("Policy {PolicyName} queued locally because Linux engine is unavailable.", request.PolicyName);
@@ -56,6 +51,7 @@ public class PolicyService : IPolicyService
 
         while (_pendingQueue.TryDequeue(out var request))
         {
+            Interlocked.Decrement(ref _pendingCount);
             var result = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
             if (string.Equals(result.Status, "queued-local", StringComparison.OrdinalIgnoreCase))
             {
@@ -68,22 +64,49 @@ public class PolicyService : IPolicyService
             }
         }
 
+        var dropped = 0;
         foreach (var item in retryBuffer)
         {
-            _pendingQueue.Enqueue(item);
+            if (TryEnqueue(item))
+            {
+                // re-queued for next sync cycle
+            }
+            else
+            {
+                dropped++;
+            }
         }
 
         var success = failed == 0;
-        var message = $"Policy sync complete. Synced: {synced}, Deferred: {failed}.";
         if (!success)
         {
-            _logger.LogWarning(message);
+            _logger.LogWarning(
+                "Policy sync complete. Synced: {Synced}, Deferred: {Deferred}, Dropped: {Dropped}.",
+                synced, failed, dropped);
         }
         else
         {
-            _logger.LogInformation(message);
+            _logger.LogInformation(
+                "Policy sync complete. Synced: {Synced}, Deferred: {Deferred}, Dropped: {Dropped}.",
+                synced, failed, dropped);
         }
 
-        return new ServiceOperationResult(success, message);
+        return new ServiceOperationResult(success, $"Policy sync complete. Synced: {synced}, Deferred: {failed}, Dropped: {dropped}.");
+    }
+
+    private bool TryEnqueue(PolicySubmissionRequest request)
+    {
+        // Increment first to reserve a slot. If another thread dequeues between the increment
+        // and the Enqueue call, _pendingCount will temporarily overcount by one until Enqueue
+        // completes—this is a conservative reservation and does not cause permanent drift.
+        var newCount = Interlocked.Increment(ref _pendingCount);
+        if (newCount > MaxPendingQueueSize)
+        {
+            Interlocked.Decrement(ref _pendingCount);
+            return false;
+        }
+
+        _pendingQueue.Enqueue(request);
+        return true;
     }
 }

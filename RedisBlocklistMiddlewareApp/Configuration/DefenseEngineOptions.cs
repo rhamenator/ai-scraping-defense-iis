@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RedisBlocklistMiddlewareApp.Configuration;
 
-public class DefenseEngineOptions
+public class DefenseEngineOptions : IValidatableObject
 {
     public const string SectionName = "DefenseEngine";
 
@@ -15,6 +15,14 @@ public class DefenseEngineOptions
     [Range(1, int.MaxValue, ErrorMessage = "TimeoutSeconds must be at least 1.")]
     public int TimeoutSeconds { get; set; } = 10;
     public RetryPolicyOptions RetryPolicy { get; set; } = new();
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        var retryContext = new ValidationContext(RetryPolicy, validationContext, validationContext.Items);
+        var retryResults = new List<ValidationResult>();
+        Validator.TryValidateObject(RetryPolicy, retryContext, retryResults, validateAllProperties: true);
+        return retryResults;
+    }
 }
 
 public class RetryPolicyOptions
