@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RedisBlocklistMiddlewareApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5edd04ba03e2848fdd4a71ebd6f3a41e8ce003ef")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+19a70dc95d89e53432976c5713c110e844d821f0")]
 [assembly: System.Reflection.AssemblyProductAttribute("RedisBlocklistMiddlewareApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RedisBlocklistMiddlewareApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

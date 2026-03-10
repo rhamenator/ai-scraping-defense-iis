@@ -86,3 +86,11 @@ dotnet build anti-scraping-defense-iis.sln
 ## Security and Ethics
 
 This project is intended for defensive security operations and enterprise traffic protection use cases.
+
+## Resources
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [License](LICENSE)
+- [Security Policy](SECURITY.md)
+- [IIS Deployment Guide](docs/iis_deployment_guide.md)
+

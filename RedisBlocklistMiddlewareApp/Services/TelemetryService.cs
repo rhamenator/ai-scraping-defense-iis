@@ -1,23 +1,26 @@
+using Microsoft.Extensions.DependencyInjection;
 using RedisBlocklistMiddlewareApp.Models;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
 public class TelemetryService : ITelemetryService
 {
-    private readonly IDefenseEngineClient _defenseEngineClient;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TelemetryService> _logger;
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
     private TelemetrySnapshotResponse? _cachedTelemetry;
 
-    public TelemetryService(IDefenseEngineClient defenseEngineClient, ILogger<TelemetryService> logger)
+    public TelemetryService(IServiceScopeFactory scopeFactory, ILogger<TelemetryService> logger)
     {
-        _defenseEngineClient = defenseEngineClient;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
     public async Task<TelemetrySnapshotResponse> RefreshTelemetryAsync(CancellationToken cancellationToken = default)
     {
-        var telemetry = await _defenseEngineClient.GetTelemetryAsync(cancellationToken);
+        using var scope = _scopeFactory.CreateScope();
+        var client = scope.ServiceProvider.GetRequiredService<IDefenseEngineClient>();
+        var telemetry = await client.GetTelemetryAsync(cancellationToken);
 
         await _cacheLock.WaitAsync(cancellationToken);
         try

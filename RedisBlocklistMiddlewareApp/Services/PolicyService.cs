@@ -1,23 +1,26 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.DependencyInjection;
 using RedisBlocklistMiddlewareApp.Models;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
 public class PolicyService : IPolicyService
 {
-    private readonly IDefenseEngineClient _defenseEngineClient;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<PolicyService> _logger;
     private readonly ConcurrentQueue<PolicySubmissionRequest> _pendingQueue = new();
 
-    public PolicyService(IDefenseEngineClient defenseEngineClient, ILogger<PolicyService> logger)
+    public PolicyService(IServiceScopeFactory scopeFactory, ILogger<PolicyService> logger)
     {
-        _defenseEngineClient = defenseEngineClient;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
     public async Task<PolicySubmissionResponse> PushPolicyAsync(PolicySubmissionRequest request, CancellationToken cancellationToken = default)
     {
-        var response = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
+        using var scope = _scopeFactory.CreateScope();
+        var client = scope.ServiceProvider.GetRequiredService<IDefenseEngineClient>();
+        var response = await client.SubmitPolicyAsync(request, cancellationToken);
         if (response.Status.Equals("queued-local", StringComparison.OrdinalIgnoreCase))
         {
             _pendingQueue.Enqueue(request);
@@ -40,7 +43,9 @@ public class PolicyService : IPolicyService
 
         while (_pendingQueue.TryDequeue(out var request))
         {
-            var result = await _defenseEngineClient.SubmitPolicyAsync(request, cancellationToken);
+            using var itemScope = _scopeFactory.CreateScope();
+            var itemClient = itemScope.ServiceProvider.GetRequiredService<IDefenseEngineClient>();
+            var result = await itemClient.SubmitPolicyAsync(request, cancellationToken);
             if (result.Status.Equals("queued-local", StringComparison.OrdinalIgnoreCase))
             {
                 failed++;
@@ -58,16 +63,15 @@ public class PolicyService : IPolicyService
         }
 
         var success = failed == 0;
-        var message = $"Policy sync complete. Synced: {synced}, Deferred: {failed}.";
         if (!success)
         {
-            _logger.LogWarning(message);
+            _logger.LogWarning("Policy sync complete. Synced: {Synced}, Deferred: {Deferred}.", synced, failed);
         }
         else
         {
-            _logger.LogInformation(message);
+            _logger.LogInformation("Policy sync complete. Synced: {Synced}, Deferred: {Deferred}.", synced, failed);
         }
 
-        return new ServiceOperationResult(success, message);
+        return new ServiceOperationResult(success, $"Policy sync complete. Synced: {synced}, Deferred: {failed}.");
     }
 }

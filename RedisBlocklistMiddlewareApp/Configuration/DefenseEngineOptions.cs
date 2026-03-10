@@ -4,7 +4,7 @@ public class DefenseEngineOptions
 {
     public const string SectionName = "DefenseEngine";
 
-    public string EngineEndpoint { get; set; } = "http://localhost:8080";
+    public string EngineEndpoint { get; set; } = "http://localhost:5000";
     public string? ApiKey { get; set; }
     public string? BearerToken { get; set; }
     public int TimeoutSeconds { get; set; } = 10;
