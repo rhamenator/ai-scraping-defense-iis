@@ -11,6 +11,7 @@ using System.Net;
 var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
 
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
 builder.Services.AddSingleton<ProductionConfigurationValidator>();
 builder.Services
@@ -60,6 +61,38 @@ builder.Services
 
         options.Audit.MaxRecentEvents = Math.Max(1, options.Audit.MaxRecentEvents);
 
+        options.Escalation.ConfiguredRanges.Entries = options.Escalation.ConfiguredRanges.Entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Cidr))
+            .Select(entry => new ReputationRangeEntry
+            {
+                Name = string.IsNullOrWhiteSpace(entry.Name) ? entry.Cidr.Trim() : entry.Name.Trim(),
+                Cidr = entry.Cidr.Trim(),
+                ScoreAdjustment = entry.ScoreAdjustment,
+                Signals = entry.Signals
+                    .Where(signal => !string.IsNullOrWhiteSpace(signal))
+                    .Select(signal => signal.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+            })
+            .ToArray();
+
+        options.Escalation.HttpReputation.Endpoint = options.Escalation.HttpReputation.Endpoint.Trim();
+        options.Escalation.HttpReputation.ApiKeyHeaderName =
+            string.IsNullOrWhiteSpace(options.Escalation.HttpReputation.ApiKeyHeaderName)
+                ? "X-Api-Key"
+                : options.Escalation.HttpReputation.ApiKeyHeaderName.Trim();
+        options.Escalation.HttpReputation.ApiKey = options.Escalation.HttpReputation.ApiKey.Trim();
+        options.Escalation.HttpReputation.TimeoutSeconds = Math.Max(1, options.Escalation.HttpReputation.TimeoutSeconds);
+
+        options.Escalation.OpenAiCompatibleModel.Endpoint = options.Escalation.OpenAiCompatibleModel.Endpoint.Trim();
+        options.Escalation.OpenAiCompatibleModel.ApiKey = options.Escalation.OpenAiCompatibleModel.ApiKey.Trim();
+        options.Escalation.OpenAiCompatibleModel.Model = options.Escalation.OpenAiCompatibleModel.Model.Trim();
+        options.Escalation.OpenAiCompatibleModel.SystemPrompt =
+            string.IsNullOrWhiteSpace(options.Escalation.OpenAiCompatibleModel.SystemPrompt)
+                ? "You are classifying incoming web requests for scraping-defense enforcement. Return JSON with classification and summary."
+                : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
+        options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -81,6 +114,10 @@ builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>()
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
+builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputationProvider>();
+builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
+builder.Services.AddSingleton<IThreatModelAdapter, OpenAiCompatibleModelAdapter>();
+builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
@@ -103,7 +140,7 @@ app.UseMiddleware<RedisBlocklistMiddleware>();
 app.MapGet("/", () => Results.Ok(new
 {
     service = "ai-scraping-defense-dotnet",
-    mode = "foundation",
+    mode = "commercial_v1",
     endpoints = advertisedEndpoints
 }));
 

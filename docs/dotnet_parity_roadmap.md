@@ -10,7 +10,7 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 | --- | --- | --- |
 | Nginx/Lua edge filter | Implemented as ASP.NET Core middleware | Split into a dedicated edge gateway project |
 | AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and separate service boundary |
-| Escalation Engine | Implemented at a baseline level in `DefenseAnalysisService` | Add richer heuristics, reputation providers, model scoring, optional LLM adapters |
+| Escalation Engine | Implemented with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and separate service boundary |
 | Tarpit API | Implemented as deterministic synthetic page endpoint | Add richer tarpit modes, streaming, and Markov/PostgreSQL-backed content |
 | Admin UI | Not implemented in .NET | Add operator dashboard on top of the authenticated admin API |
 | Community blocklist sync | Not implemented in .NET | Add background worker and contracts |

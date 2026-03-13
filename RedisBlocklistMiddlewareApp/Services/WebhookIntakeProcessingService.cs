@@ -52,7 +52,19 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
                     signals,
                     $"Blocked from webhook intake: {reason}",
                     item.Event.TimestampUtc,
-                    DateTimeOffset.UtcNow));
+                    DateTimeOffset.UtcNow,
+                    new DefenseScoreBreakdown(
+                        100,
+                        0,
+                        100,
+                        true,
+                        [
+                            new DefenseScoreContribution(
+                                "webhook_intake",
+                                100,
+                                signals,
+                                $"Webhook intake supplied a blocking verdict: {reason}")
+                        ])));
 
                 await _inbox.CompleteAsync(item.Id, stoppingToken);
             }

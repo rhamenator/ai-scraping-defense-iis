@@ -80,6 +80,33 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 * **DatabasePath**: Path to the SQLite database file used for durable defense-event storage. Relative paths are resolved from the application content root.
 * **MaxRecentEvents**: Maximum number of persisted events returned from the recent-events feed.
 
+#### **DefenseEngine:Escalation**
+
+* **ConfiguredRanges**: Optional CIDR-based reputation entries that contribute named score adjustments during queued analysis.
+  * **Enabled**: Turns configured-range reputation matching on or off.
+  * **Entries**: Array of CIDR entries.
+    * **Name**: Friendly label recorded in the score breakdown.
+    * **Cidr**: IPv4 or IPv6 CIDR to match.
+    * **ScoreAdjustment**: Positive or negative score contribution applied when the CIDR matches.
+    * **Signals**: Optional custom signals recorded on matching decisions.
+* **HttpReputation**: Optional HTTP-based reputation lookup used during queued analysis.
+  * **Enabled**: Turns the provider on or off.
+  * **Endpoint**: URL that accepts a POST body containing `ip`, `path`, `signals`, and `frequency`.
+  * **ApiKeyHeaderName**: Optional header name for the shared secret sent to the provider.
+  * **ApiKey**: Optional shared secret sent to the provider.
+  * **TimeoutSeconds**: Request timeout for the provider call.
+  * **MaliciousScoreAdjustment**: Fallback score adjustment when the provider returns `is_malicious=true` without an explicit `score_adjustment`.
+* **OpenAiCompatibleModel**: Optional classifier hook for local or remote chat-completions endpoints that follow the OpenAI-compatible shape.
+  * **Enabled**: Turns the classifier on or off.
+  * **Endpoint**: Full chat-completions URL.
+  * **ApiKey**: Optional bearer token sent as `Authorization: Bearer`.
+  * **Model**: Model identifier submitted to the endpoint.
+  * **SystemPrompt**: Prompt used to request a strict JSON classification response.
+  * **TimeoutSeconds**: Request timeout for the classifier call.
+  * **MaliciousScoreAdjustment**: Score delta applied when the model classifies `MALICIOUS_BOT`.
+  * **BenignCrawlerScoreAdjustment**: Score delta applied when the model classifies `BENIGN_CRAWLER`.
+  * **HumanScoreAdjustment**: Score delta applied when the model classifies `HUMAN`.
+
 #### **DefenseEngine:Queue**
 
 * **Capacity**: Maximum number of suspicious requests buffered for background analysis. When the queue is full, writers wait for capacity instead of dropping older suspicious requests.

@@ -20,7 +20,21 @@ public sealed record DefenseDecision(
     IReadOnlyList<string> Signals,
     string Summary,
     DateTimeOffset ObservedAtUtc,
-    DateTimeOffset DecidedAtUtc);
+    DateTimeOffset DecidedAtUtc,
+    DefenseScoreBreakdown? Breakdown = null);
+
+public sealed record DefenseScoreBreakdown(
+    int BaseSignalScore,
+    int FrequencyScore,
+    int TotalScore,
+    bool ExplicitMaliciousVerdict,
+    IReadOnlyList<DefenseScoreContribution> Contributions);
+
+public sealed record DefenseScoreContribution(
+    string Source,
+    int ScoreDelta,
+    IReadOnlyList<string> Signals,
+    string Summary);
 
 public sealed record DefenseEventMetrics(
     long TotalDecisions,
