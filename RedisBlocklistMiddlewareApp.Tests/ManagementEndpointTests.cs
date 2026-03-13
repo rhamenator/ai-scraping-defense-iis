@@ -104,6 +104,26 @@ public sealed class ManagementEndpointTests
         Assert.Equal("/custom-tarpit/{**path}", pattern);
     }
 
+    [Theory]
+    [InlineData("203.0.113.10", "203.0.113.10")]
+    [InlineData("::ffff:203.0.113.10", "203.0.113.10")]
+    [InlineData("2001:db8::10", "2001:db8::10")]
+    public void TryNormalizeIpAddress_ReturnsNormalizedAddress(string input, string expected)
+    {
+        var parsed = Program.TryNormalizeIpAddress(input, out var normalized);
+
+        Assert.True(parsed);
+        Assert.Equal(expected, normalized);
+    }
+
+    [Fact]
+    public void TryNormalizeIpAddress_RejectsInvalidInput()
+    {
+        var parsed = Program.TryNormalizeIpAddress("not-an-ip", out _);
+
+        Assert.False(parsed);
+    }
+
     [Fact]
     public void MapManagementEndpoints_DoesNotRegisterDefenseEvents_WhenManagementApiKeyIsMissing()
     {
@@ -132,7 +152,7 @@ public sealed class ManagementEndpointTests
 
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
-        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist/{ip}");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
     }
 
     private static ApiKeyEndpointFilter CreateFilter()

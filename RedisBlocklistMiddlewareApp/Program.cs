@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
@@ -194,46 +196,70 @@ public partial class Program
             return Results.Ok(store.GetMetrics());
         });
 
-        management.MapGet("/blocklist/{ip}", async (
-            string ip,
+        management.MapGet("/blocklist", async (
+            [FromQuery] string ip,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
             return Results.Ok(new
             {
-                ip,
-                blocked = await blocklistService.IsBlockedAsync(ip, cancellationToken)
+                ip = normalizedIp,
+                blocked = await blocklistService.IsBlockedAsync(normalizedIp, cancellationToken)
             });
         });
 
-        management.MapPost("/blocklist/{ip}", async (
-            string ip,
-            string? reason,
+        management.MapPost("/blocklist", async (
+            [FromQuery] string ip,
+            [FromQuery] string? reason,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
             await blocklistService.BlockAsync(
-                ip,
+                normalizedIp,
                 string.IsNullOrWhiteSpace(reason) ? "manual_block" : reason.Trim(),
                 ["manual_block"],
                 cancellationToken);
 
-            return Results.Accepted($"/defense/blocklist/{ip}", new
+            return Results.Accepted($"/defense/blocklist?ip={Uri.EscapeDataString(normalizedIp)}", new
             {
-                ip,
+                ip = normalizedIp,
                 blocked = true
             });
         });
 
-        management.MapDelete("/blocklist/{ip}", async (
-            string ip,
+        management.MapDelete("/blocklist", async (
+            [FromQuery] string ip,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
-            await blocklistService.UnblockAsync(ip, cancellationToken);
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            await blocklistService.UnblockAsync(normalizedIp, cancellationToken);
             return Results.Ok(new
             {
-                ip,
+                ip = normalizedIp,
                 blocked = false
             });
         });
@@ -255,5 +281,23 @@ public partial class Program
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)
     {
         return $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
+    }
+
+    public static bool TryNormalizeIpAddress(string value, out string normalizedIp)
+    {
+        normalizedIp = string.Empty;
+
+        if (!IPAddress.TryParse(value, out var address))
+        {
+            return false;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        normalizedIp = address.ToString();
+        return true;
     }
 }

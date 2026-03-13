@@ -24,7 +24,14 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture an
 - `GET /anti-scrape-tarpit/{path}`
 
 `GET /defense/events` is only exposed when `DefenseEngine:Management:ApiKey` is configured.
-`GET /defense/metrics` and the `/defense/blocklist/{ip}` management endpoints follow the same API-key protection.
+`GET /defense/metrics` and the blocklist management endpoints follow the same API-key protection via the configured `DefenseEngine:Management:ApiKeyHeaderName` header.
+
+Management endpoints:
+- `GET /defense/events?count=50`
+- `GET /defense/metrics`
+- `GET /defense/blocklist?ip=203.0.113.10`
+- `POST /defense/blocklist?ip=203.0.113.10&reason=manual_block`
+- `DELETE /defense/blocklist?ip=203.0.113.10`
 
 ## Near-Term Roadmap
 
