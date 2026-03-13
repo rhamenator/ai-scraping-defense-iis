@@ -1,4 +1,4 @@
-# AI Scraping Defense (.NET Foundation)
+# AI Scraping Defense (.NET)
 
 This repository is being repositioned toward the original goal: a pure-.NET implementation of the `ai-scraping-defense` stack rather than an IIS-to-Linux control-plane adapter.
 
@@ -13,11 +13,19 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
 
-## Current Scope
+## Commercial v1 Scope
 
-Today the repository is still a hybrid of legacy Python-era assets and the new .NET defense app. The .NET app is the active direction. It intentionally mirrors the same functional roles as the upstream Python project, but starts as a modular ASP.NET Core service instead of a multi-container Python stack.
+The first commercial release is a single deployable ASP.NET Core service that provides the core `ai-scraping-defense` workflow in .NET:
 
-See [docs/architecture.md](docs/architecture.md) for the current architecture and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the parity plan against the upstream repository.
+- inspect inbound requests at the edge
+- tarpit suspicious traffic
+- persist defense decisions and operator-visible events
+- accept authenticated webhook intake for confirmed malicious traffic
+- block and unblock IPs through authenticated operator endpoints
+
+This is intentionally a modular monolith for v1. It preserves the upstream functional roles, but keeps them in one deployable until the .NET contracts and production behavior settle.
+
+See [docs/architecture.md](docs/architecture.md) for the current architecture, [docs/commercial_scope.md](docs/commercial_scope.md) for the v1 definition, and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the post-v1 parity queue.
 
 ## Implemented Endpoints
 
@@ -41,12 +49,12 @@ Webhook intake endpoint:
   - `details.ip` is required and must be a valid IP address
   - accepted events are written durably before background processing
 
-## Near-Term Roadmap
+## Supported Data Stores
 
-- Split the current modular monolith into clear .NET service boundaries that line up with the upstream roles: edge gateway, AI intake, escalation engine, tarpit API, and admin surface.
-- Replace the current synthetic tarpit page generator with a PostgreSQL-backed Markov or equivalent .NET content engine.
-- Add persistent operational telemetry and blocklist management endpoints.
-- Port community blocklist sync, peer sync, and model-based escalation into .NET services.
+- `Redis`: required for hot operational state such as blocklists and short-window frequency counters.
+- `SQLite`: supported for local development, demos, and single-node/lightweight production installs as the durable audit and webhook intake store.
+- `PostgreSQL`: planned as the primary production relational backend for richer tarpit content, sync features, and larger-scale persistence.
+- `SQL Server`: deferred. It is not a commercial v1 target unless customer demand justifies the extra provider and test surface.
 
 ## Configuration
 
@@ -71,4 +79,4 @@ In `Production`, startup now fails fast if Redis still points at a loopback endp
 
 ## Status
 
-This remains work in progress. The solution now builds with `dotnet`, but release readiness still depends on completing the blocker queue in [docs/release_blockers.md](docs/release_blockers.md).
+The project now has an explicit commercial-v1 target, but release readiness still depends on closing the remaining items in [docs/release_blockers.md](docs/release_blockers.md) and the post-v1 parity queue in [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md).
