@@ -48,6 +48,30 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public async Task IntakeApiKeyFilter_ReturnsUnauthorized_WhenHeaderIsMissing()
+    {
+        var filter = CreateIntakeFilter();
+        var context = new TestEndpointFilterInvocationContext(new DefaultHttpContext());
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task IntakeApiKeyFilter_AllowsRequest_WhenHeaderMatches()
+    {
+        var filter = CreateIntakeFilter();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Webhook-Key"] = "test-intake-key";
+        var context = new TestEndpointFilterInvocationContext(httpContext);
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status200OK);
+    }
+
+    [Fact]
     public void GetAdvertisedEndpoints_HidesEvents_WhenManagementApiKeyIsMissing()
     {
         var endpoints = Program.GetAdvertisedEndpoints(new DefenseEngineOptions());
@@ -70,6 +94,22 @@ public sealed class ManagementEndpointTests
 
         Assert.Equal("/defense/events", endpoints["events"]);
         Assert.Equal("/defense/metrics", endpoints["metrics"]);
+    }
+
+    [Fact]
+    public void GetAdvertisedEndpoints_IncludesAnalyze_WhenIntakeApiKeyIsConfigured()
+    {
+        var options = new DefenseEngineOptions
+        {
+            Intake = new IntakeOptions
+            {
+                ApiKey = "test-intake-key"
+            }
+        };
+
+        var endpoints = Program.GetAdvertisedEndpoints(options);
+
+        Assert.Equal("/analyze", endpoints["analyze"]);
     }
 
     [Fact]
@@ -155,6 +195,35 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
     }
 
+    [Fact]
+    public void MapIntakeEndpoints_RegistersAnalyze_WhenIntakeApiKeyIsConfigured()
+    {
+        var app = CreateApp();
+        var options = new DefenseEngineOptions
+        {
+            Intake = new IntakeOptions
+            {
+                ApiKey = "test-intake-key"
+            }
+        };
+
+        Program.MapIntakeEndpoints(app, options);
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/analyze");
+    }
+
+    [Fact]
+    public void MapIntakeEndpoints_DoesNotRegisterAnalyze_WhenIntakeApiKeyIsMissing()
+    {
+        var app = CreateApp();
+
+        Program.MapIntakeEndpoints(app, new DefenseEngineOptions());
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.DoesNotContain(endpoints, endpoint => endpoint.RoutePattern.RawText == "/analyze");
+    }
+
     private static ApiKeyEndpointFilter CreateFilter()
     {
         var options = Options.Create(new DefenseEngineOptions
@@ -169,12 +238,28 @@ public sealed class ManagementEndpointTests
         return new ApiKeyEndpointFilter(options);
     }
 
+    private static IntakeApiKeyEndpointFilter CreateIntakeFilter()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            Intake = new IntakeOptions
+            {
+                ApiKeyHeaderName = "X-Webhook-Key",
+                ApiKey = "test-intake-key"
+            }
+        });
+
+        return new IntakeApiKeyEndpointFilter(options);
+    }
+
     private static WebApplication CreateApp()
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
+        builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
+        builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
         return builder.Build();
     }
 
@@ -253,6 +338,35 @@ public sealed class ManagementEndpointTests
         public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestWebhookEventInbox : IWebhookEventInbox
+    {
+        public Task<long> EnqueueAsync(Models.IntakeWebhookEvent webhookEvent, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(1L);
+        }
+
+        public IAsyncEnumerable<Models.WebhookInboxItem> ReadAllAsync(CancellationToken cancellationToken)
+        {
+            return ReadEmptyAsync();
+        }
+
+        public Task CompleteAsync(long id, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AbandonAsync(long id, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        private static async IAsyncEnumerable<Models.WebhookInboxItem> ReadEmptyAsync()
+        {
+            await Task.CompletedTask;
+            yield break;
         }
     }
 }

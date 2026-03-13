@@ -70,6 +70,11 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 * **ApiKeyHeaderName**: Header name required for authenticated management endpoints.
 * **ApiKey**: Shared secret required to access `/defense/events`. If blank, the endpoint is not exposed.
 
+#### **DefenseEngine:Intake**
+
+* **ApiKeyHeaderName**: Header name required for the authenticated `/analyze` webhook endpoint.
+* **ApiKey**: Shared secret required to access `/analyze`. If blank, the endpoint is not exposed.
+
 #### **DefenseEngine:Audit**
 
 * **DatabasePath**: Path to the SQLite database file used for durable defense-event storage. Relative paths are resolved from the application content root.

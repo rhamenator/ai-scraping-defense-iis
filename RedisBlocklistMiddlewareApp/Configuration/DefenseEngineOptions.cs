@@ -12,6 +12,8 @@ public sealed class DefenseEngineOptions
 
     public ManagementOptions Management { get; set; } = new();
 
+    public IntakeOptions Intake { get; set; } = new();
+
     public AuditOptions Audit { get; set; } = new();
 
     public QueueOptions Queue { get; set; } = new();
@@ -104,6 +106,13 @@ public static class ClientIpResolutionModes
 public sealed class ManagementOptions
 {
     public string ApiKeyHeaderName { get; set; } = "X-API-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
+}
+
+public sealed class IntakeOptions
+{
+    public string ApiKeyHeaderName { get; set; } = "X-Webhook-Key";
 
     public string ApiKey { get; set; } = string.Empty;
 }

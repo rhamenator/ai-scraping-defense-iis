@@ -1,5 +1,7 @@
 namespace RedisBlocklistMiddlewareApp.Models;
 
+using System.Text.Json.Serialization;
+
 public sealed record SuspiciousRequest(
     string IpAddress,
     string Method,
@@ -30,3 +32,21 @@ public sealed record RequestSignalEvaluation(
     bool BlockImmediately,
     string BlockReason,
     IReadOnlyList<string> Signals);
+
+public sealed record IntakeWebhookEvent(
+    [property: JsonPropertyName("event_type")] string EventType,
+    [property: JsonPropertyName("reason")] string Reason,
+    [property: JsonPropertyName("timestamp_utc")] DateTimeOffset TimestampUtc,
+    [property: JsonPropertyName("details")] IntakeWebhookDetails Details);
+
+public sealed record IntakeWebhookDetails(
+    [property: JsonPropertyName("ip")] string IpAddress,
+    [property: JsonPropertyName("method")] string? Method,
+    [property: JsonPropertyName("path")] string? Path,
+    [property: JsonPropertyName("query_string")] string? QueryString,
+    [property: JsonPropertyName("user_agent")] string? UserAgent,
+    [property: JsonPropertyName("signals")] IReadOnlyList<string>? Signals);
+
+public sealed record WebhookInboxItem(
+    long Id,
+    IntakeWebhookEvent Event);

@@ -27,7 +27,18 @@ The background worker in [RedisBlocklistMiddlewareApp/Services/DefenseAnalysisSe
 - Update per-IP frequency counters in Redis.
 - Compute a score from the collected request signals.
 - Promote high-risk or high-frequency IPs into the Redis blocklist.
-- Store recent decisions in an in-memory event feed.
+- Store recent decisions in the persistent audit/event store.
+
+### Webhook Intake
+
+The upstream AI-service webhook role is now represented by `POST /analyze` in [RedisBlocklistMiddlewareApp/Program.cs](../RedisBlocklistMiddlewareApp/Program.cs). Accepted webhook events are written durably through [RedisBlocklistMiddlewareApp/Services/SqliteWebhookEventInbox.cs](../RedisBlocklistMiddlewareApp/Services/SqliteWebhookEventInbox.cs), and [RedisBlocklistMiddlewareApp/Services/WebhookIntakeProcessingService.cs](../RedisBlocklistMiddlewareApp/Services/WebhookIntakeProcessingService.cs) consumes them asynchronously.
+
+Current behavior:
+
+- Requires an intake API key when the endpoint is enabled.
+- Accepts webhook events in the legacy AI-service shape.
+- Persists accepted events before processing.
+- Promotes the flagged IP into the Redis blocklist and records a defense decision.
 
 ### Redis State
 

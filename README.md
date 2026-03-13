@@ -11,6 +11,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
+- An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
 
 ## Current Scope
 
@@ -25,6 +26,7 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture an
 
 `GET /defense/events` is only exposed when `DefenseEngine:Management:ApiKey` is configured.
 `GET /defense/metrics` and the blocklist management endpoints follow the same API-key protection via the configured `DefenseEngine:Management:ApiKeyHeaderName` header.
+`POST /analyze` is only exposed when `DefenseEngine:Intake:ApiKey` is configured and expects the configured `DefenseEngine:Intake:ApiKeyHeaderName` header.
 
 Management endpoints:
 - `GET /defense/events?count=50`
@@ -32,6 +34,12 @@ Management endpoints:
 - `GET /defense/blocklist?ip=203.0.113.10`
 - `POST /defense/blocklist?ip=203.0.113.10&reason=manual_block`
 - `DELETE /defense/blocklist?ip=203.0.113.10`
+
+Webhook intake endpoint:
+- `POST /analyze`
+  - body shape mirrors the legacy AI service webhook: `event_type`, `reason`, `timestamp_utc`, `details`
+  - `details.ip` is required and must be a valid IP address
+  - accepted events are written durably before background processing
 
 ## Near-Term Roadmap
 
@@ -50,6 +58,7 @@ Key areas:
 - `DefenseEngine:Heuristics`
 - `DefenseEngine:Networking`
 - `DefenseEngine:Management`
+- `DefenseEngine:Intake`
 - `DefenseEngine:Audit`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
