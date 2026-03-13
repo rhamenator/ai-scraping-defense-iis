@@ -1,75 +1,46 @@
-# AI Scraping Defense (IIS Control Plane Adapter)
+# AI Scraping Defense (.NET Foundation)
 
-This repository is the **Windows enterprise integration layer** for the Linux-native [ai-scraping-defense](https://github.com/rhamenator/ai-scraping-defense) defense engine.
+This repository is being repositioned toward the original goal: a pure-.NET implementation of the `ai-scraping-defense` stack rather than an IIS-to-Linux control-plane adapter.
 
-## Architecture Positioning
+The current codebase now contains the first .NET-native defense slice inside [RedisBlocklistMiddlewareApp/Program.cs](RedisBlocklistMiddlewareApp/Program.cs):
 
-This IIS/.NET project is now intentionally scoped as a:
+- Redis-backed IP blocklist enforcement at the edge.
+- Heuristic request inspection for known bad user agents, malformed headers, and suspicious paths.
+- A bounded suspicious-request queue with a background analysis worker.
+- Redis-backed request-frequency tracking for simple escalation decisions.
+- A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
+- A lightweight event feed at `/defense/events` for recent decisions.
 
-- **Control Plane / Management Layer**
-- **Enterprise Integration Surface**
-- **Windows-native Deployment Adapter**
+## Current Scope
 
-It does **not** reimplement Linux defense execution behavior (Lua detection, tarpit internals, honeypot engines, escalation pipelines, or network-layer controls).
+Today the repository is still a hybrid of legacy Python-era assets and the new .NET defense app. The .NET app is the active direction. It intentionally mirrors the same functional roles as the upstream Python project, but starts as a modular ASP.NET Core service instead of a multi-container Python stack.
 
-## Responsibility Split
+See [docs/architecture.md](docs/architecture.md) for the current architecture and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the parity plan against the upstream repository.
 
-### Linux Defense Engine (Source of Truth)
-
-Owns defensive execution:
-
-- Detection logic
-- Honeypots / tarpits
-- Escalation engine
-- Telemetry generation
-- Runtime/network behavior
-
-### IIS Control Plane (This Repo)
-
-Owns integration and orchestration:
-
-- Admin-facing API endpoints for policy and monitoring workflows
-- Typed `LinuxDefenseEngineClient` for remote engine communication
-- Telemetry cache/refresh orchestration
-- Policy push queueing/synchronization
-- Background synchronization (`DefenseEngineSyncService`)
-
-## Control Plane Layers
-
-```text
-ASP.NET Core (IIS-hosted)
-  ├─ Management APIs (/api/control/*)
-  ├─ AuthN/AuthZ integration point (enterprise extension)
-  ├─ Windows integration point (Event Log / PowerShell extension)
-  ↓
-Services + Interfaces
-  ├─ IDefenseEngineClient
-  ├─ ITelemetryService
-  └─ IPolicyService
-  ↓
-Linux Defense Engine API (remote appliance)
-```
-
-## Current API Integration Contract (Provisional)
-
-Because Linux APIs may evolve, this repo currently uses provisional contracts:
+## Implemented Endpoints
 
 - `GET /health`
-- `GET /api/v1/telemetry`
-- `POST /api/v1/policies`
-- `POST /api/v1/escalations/ack`
+- `GET /defense/events`
+- `GET /anti-scrape-tarpit/{path}`
 
-See `docs/architecture.md` for full flow and boundary design.
+## Near-Term Roadmap
 
-## Development
+- Split the current modular monolith into clear .NET service boundaries that line up with the upstream roles: edge gateway, AI intake, escalation engine, tarpit API, and admin surface.
+- Replace the current synthetic tarpit page generator with a PostgreSQL-backed Markov or equivalent .NET content engine.
+- Add persistent operational telemetry and blocklist management endpoints.
+- Port community blocklist sync, peer sync, and model-based escalation into .NET services.
 
-> Prerequisite: .NET 8 SDK
+## Configuration
 
-```bash
-dotnet restore anti-scraping-defense-iis.sln
-dotnet build anti-scraping-defense-iis.sln
-```
+The .NET defense foundation is configured in [RedisBlocklistMiddlewareApp/appsettings.json](RedisBlocklistMiddlewareApp/appsettings.json) under the `DefenseEngine` section.
 
-## Security and Ethics
+Key areas:
 
-This project is intended for defensive security operations and enterprise traffic protection use cases.
+- `DefenseEngine:Redis`
+- `DefenseEngine:Heuristics`
+- `DefenseEngine:Queue`
+- `DefenseEngine:Tarpit`
+
+## Status
+
+This remains work in progress. The environment available to this agent does not include the .NET SDK, so build verification must be done in a machine that has `dotnet` installed.

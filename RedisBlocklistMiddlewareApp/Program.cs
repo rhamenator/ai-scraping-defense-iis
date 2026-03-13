@@ -1,77 +1,147 @@
-using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Options;
+using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
-using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
-using RedisBlocklistMiddlewareApp.Services.LinuxEngineClient;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
+var trustedProxyAddresses = builder.Configuration
+    .GetSection($"{DefenseEngineOptions.SectionName}:Networking:TrustedProxies")
+    .Get<string[]>() ?? [];
 
-builder.Services.AddOptions<DefenseEngineOptions>()
+builder.Services
+    .AddOptions<DefenseEngineOptions>()
     .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    .PostConfigure(options =>
+    {
+        if (!string.IsNullOrWhiteSpace(redisConnectionString) &&
+            string.IsNullOrWhiteSpace(options.Redis.ConnectionString))
+        {
+            options.Redis.ConnectionString = redisConnectionString;
+        }
 
-builder.Services.AddHttpClient(LinuxDefenseEngineClient.HttpClientName, (sp, client) =>
+        if (!options.Tarpit.PathPrefix.StartsWith('/'))
+        {
+            options.Tarpit.PathPrefix = "/" + options.Tarpit.PathPrefix;
+        }
+
+        options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
+
+        if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
+        {
+            options.Redis.BlocklistKeyPrefix += ":";
+        }
+
+        if (!options.Redis.FrequencyKeyPrefix.EndsWith(':'))
+        {
+            options.Redis.FrequencyKeyPrefix += ":";
+        }
+    });
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DefenseEngineOptions>>().Value;
-    client.BaseAddress = new Uri(options.EngineEndpoint);
-    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
-    if (!string.IsNullOrWhiteSpace(options.BearerToken))
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.BearerToken);
-    if (!string.IsNullOrWhiteSpace(options.ApiKey))
-        client.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
-});
-builder.Services.AddSingleton<IDefenseEngineClient, LinuxDefenseEngineClient>();
-builder.Services.AddSingleton<ITelemetryService, TelemetryService>();
-builder.Services.AddSingleton<IPolicyService, PolicyService>();
-builder.Services.AddHostedService<DefenseEngineSyncService>();
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+    foreach (var trustedProxyAddress in trustedProxyAddresses)
+    {
+        if (IPAddress.TryParse(trustedProxyAddress, out var trustedProxy))
+        {
+            options.KnownProxies.Add(trustedProxy);
+        }
+    }
+});
+
+builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
+builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
+builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
+builder.Services.AddSingleton<IDefenseEventStore, DefenseEventStore>();
+builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
+builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
+builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
+builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
+builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();
+var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
+var tarpitRoutePattern = $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.MapGet("/health", async (IDefenseEngineClient engineClient, CancellationToken ct) =>
-{
-    var status = await engineClient.GetHealthAsync(ct);
-    return string.Equals(status.Status, "unreachable", StringComparison.OrdinalIgnoreCase)
-        ? Results.Json(status, statusCode: 503)
-        : Results.Ok(status);
-});
-
-var control = app.MapGroup("/api/control")
-    .AddEndpointFilter<ApiKeyEndpointFilter>();
-
-control.MapGet("/telemetry", async (ITelemetryService telemetryService, CancellationToken ct) =>
-{
-    var telemetry = await telemetryService.GetCachedTelemetryAsync(ct)
-                    ?? await telemetryService.RefreshTelemetryAsync(ct);
-    return Results.Ok(telemetry);
-});
-
-control.MapPost("/policies", async (PolicySubmissionRequest request, IPolicyService policyService, CancellationToken ct) =>
-{
-    var response = await policyService.PushPolicyAsync(request, ct);
-    return Results.Ok(response);
-});
-
-control.MapPost("/escalations/ack", async (EscalationAcknowledgementRequest request, IDefenseEngineClient engineClient, CancellationToken ct) =>
-{
-    var response = await engineClient.AcknowledgeEscalationAsync(request, ct);
-    return Results.Ok(response);
-});
+app.UseForwardedHeaders();
+app.UseMiddleware<RedisBlocklistMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new
 {
-    service = "ai-scraping-defense-iis control plane",
-    mode = "adapter",
-    linuxEngine = "remote"
+    service = "ai-scraping-defense-dotnet",
+    mode = "foundation",
+    endpoints = new
+    {
+        health = "/health",
+        events = "/defense/events",
+        tarpit = $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
+    }
 }));
+
+app.MapGet("/health", async (
+    IRedisConnectionProvider redisConnectionProvider,
+    IOptions<DefenseEngineOptions> options,
+    ILogger<Program> logger,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var redis = await redisConnectionProvider.GetAsync(cancellationToken);
+        await redis.GetDatabase(options.Value.Redis.BlocklistDatabase).PingAsync();
+        return Results.Ok(new { status = "healthy" });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Redis health check failed.");
+        return Results.Json(
+            new
+            {
+                status = "degraded",
+                error = "A dependency check failed."
+            },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapGet("/defense/events", (
+    IDefenseEventStore store,
+    int count = 50) =>
+{
+    return Results.Ok(store.GetRecent(count));
+});
+
+app.MapGet(tarpitRoutePattern, async (
+    HttpContext context,
+    string? path,
+    ITarpitPageService tarpitPageService,
+    IClientIpResolver clientIpResolver,
+    IOptions<DefenseEngineOptions> options,
+    CancellationToken cancellationToken) =>
+{
+    var tarpitOptions = options.Value.Tarpit;
+
+    if (tarpitOptions.ResponseDelayMilliseconds > 0)
+    {
+        await Task.Delay(tarpitOptions.ResponseDelayMilliseconds, cancellationToken);
+    }
+
+    var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
+    var content = tarpitPageService.GeneratePage(path ?? string.Empty, clientIp);
+    return Results.Content(content, "text/html");
+});
+
+app.Run(async context =>
+{
+    context.Response.StatusCode = StatusCodes.Status404NotFound;
+    await context.Response.WriteAsync("Endpoint not found.");
+});
 
 app.Run();

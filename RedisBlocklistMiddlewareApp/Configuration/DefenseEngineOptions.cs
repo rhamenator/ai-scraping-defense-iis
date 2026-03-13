@@ -1,26 +1,105 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace RedisBlocklistMiddlewareApp.Configuration;
 
-public class DefenseEngineOptions
+public sealed class DefenseEngineOptions
 {
     public const string SectionName = "DefenseEngine";
 
-    [Required(AllowEmptyStrings = false)]
-    public string EngineEndpoint { get; set; } = "http://localhost:8080";
-    public string? ApiKey { get; set; }
-    public string? BearerToken { get; set; }
-    /// <summary>Inbound API key required on X-Control-API-Key header for /api/control/* endpoints.</summary>
-    public string? ControlApiKey { get; set; }
-    [Range(1, int.MaxValue, ErrorMessage = "TimeoutSeconds must be at least 1.")]
-    public int TimeoutSeconds { get; set; } = 10;
-    public RetryPolicyOptions RetryPolicy { get; set; } = new();
+    public RedisOptions Redis { get; set; } = new();
+
+    public HeuristicOptions Heuristics { get; set; } = new();
+
+    public NetworkingOptions Networking { get; set; } = new();
+
+    public QueueOptions Queue { get; set; } = new();
+
+    public TarpitOptions Tarpit { get; set; } = new();
 }
 
-public class RetryPolicyOptions
+public sealed class RedisOptions
 {
-    [Range(1, int.MaxValue, ErrorMessage = "MaxAttempts must be at least 1.")]
-    public int MaxAttempts { get; set; } = 3;
-    [Range(1, int.MaxValue, ErrorMessage = "BaseDelayMilliseconds must be at least 1.")]
-    public int BaseDelayMilliseconds { get; set; } = 250;
+    public string ConnectionString { get; set; } = "localhost:6379";
+
+    public string BlocklistKeyPrefix { get; set; } = "blocklist:ip:";
+
+    public string FrequencyKeyPrefix { get; set; } = "frequency:ip:";
+
+    public int BlocklistDatabase { get; set; } = 2;
+
+    public int FrequencyDatabase { get; set; } = 3;
+
+    public int BlockDurationMinutes { get; set; } = 240;
+
+    public int FrequencyWindowSeconds { get; set; } = 60;
+}
+
+public sealed class HeuristicOptions
+{
+    public string[] KnownBadUserAgents { get; set; } =
+    [
+        "GPTBot",
+        "CCBot",
+        "ClaudeBot",
+        "Bytespider",
+        "PetalBot",
+        "AhrefsBot",
+        "SemrushBot",
+        "MJ12bot",
+        "DotBot",
+        "Scrapy",
+        "python-requests",
+        "curl",
+        "wget",
+        "masscan",
+        "zgrab",
+        "nmap",
+        "sqlmap",
+        "nikto"
+    ];
+
+    public string[] SuspiciousPathSubstrings { get; set; } =
+    [
+        "/wp-admin",
+        "/wp-login",
+        "/xmlrpc.php",
+        "/.env",
+        "/phpmyadmin",
+        "/graphql",
+        "/admin",
+        "/actuator"
+    ];
+
+    public bool CheckEmptyUserAgent { get; set; } = true;
+
+    public bool CheckMissingAcceptLanguage { get; set; } = true;
+
+    public bool CheckGenericAcceptHeader { get; set; } = true;
+
+    public bool TarpitSuspiciousRequests { get; set; } = true;
+
+    public int BlockScoreThreshold { get; set; } = 60;
+
+    public int FrequencyBlockThreshold { get; set; } = 8;
+}
+
+public sealed class NetworkingOptions
+{
+    public string[] TrustedProxies { get; set; } = [];
+}
+
+public sealed class QueueOptions
+{
+    public int Capacity { get; set; } = 1024;
+}
+
+public sealed class TarpitOptions
+{
+    public string PathPrefix { get; set; } = "/anti-scrape-tarpit";
+
+    public string Seed { get; set; } = "ai-scraping-defense-dotnet";
+
+    public int LinkCount { get; set; } = 6;
+
+    public int ParagraphCount { get; set; } = 5;
+
+    public int ResponseDelayMilliseconds { get; set; } = 200;
 }
