@@ -72,6 +72,38 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void GetAdvertisedEndpoints_UsesConfiguredTarpitPrefix()
+    {
+        var options = new DefenseEngineOptions
+        {
+            Tarpit = new TarpitOptions
+            {
+                PathPrefix = "/custom-tarpit"
+            }
+        };
+
+        var endpoints = Program.GetAdvertisedEndpoints(options);
+
+        Assert.Equal("/custom-tarpit/{path}", endpoints["tarpit"]);
+    }
+
+    [Fact]
+    public void GetTarpitRoutePattern_UsesCatchAllUnderConfiguredPrefix()
+    {
+        var options = new DefenseEngineOptions
+        {
+            Tarpit = new TarpitOptions
+            {
+                PathPrefix = "/custom-tarpit"
+            }
+        };
+
+        var pattern = Program.GetTarpitRoutePattern(options);
+
+        Assert.Equal("/custom-tarpit/{**path}", pattern);
+    }
+
+    [Fact]
     public void MapManagementEndpoints_DoesNotRegisterDefenseEvents_WhenManagementApiKeyIsMissing()
     {
         var app = CreateApp();
