@@ -16,7 +16,7 @@ public sealed class SuspiciousRequestQueue : ISuspiciousRequestQueue
         {
             SingleReader = true,
             SingleWriter = false,
-            FullMode = BoundedChannelFullMode.DropOldest
+            FullMode = BoundedChannelFullMode.Wait
         });
     }
 
@@ -24,12 +24,15 @@ public sealed class SuspiciousRequestQueue : ISuspiciousRequestQueue
         SuspiciousRequest request,
         CancellationToken cancellationToken)
     {
-        if (!await _channel.Writer.WaitToWriteAsync(cancellationToken))
+        try
+        {
+            await _channel.Writer.WriteAsync(request, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
         {
             return false;
         }
-
-        return _channel.Writer.TryWrite(request);
     }
 
     public IAsyncEnumerable<SuspiciousRequest> ReadAllAsync(CancellationToken cancellationToken)

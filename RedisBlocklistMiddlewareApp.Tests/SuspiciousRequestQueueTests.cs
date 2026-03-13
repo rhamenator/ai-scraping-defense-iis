@@ -1,0 +1,77 @@
+using Microsoft.Extensions.Options;
+using RedisBlocklistMiddlewareApp.Configuration;
+using RedisBlocklistMiddlewareApp.Models;
+using RedisBlocklistMiddlewareApp.Services;
+
+namespace RedisBlocklistMiddlewareApp.Tests;
+
+public sealed class SuspiciousRequestQueueTests
+{
+    [Fact]
+    public async Task QueueAsync_WaitsForCapacityInsteadOfDroppingOldestRequest()
+    {
+        var queue = CreateQueue(capacity: 1);
+        var first = CreateRequest("198.51.100.1", "/first");
+        var second = CreateRequest("198.51.100.2", "/second");
+
+        Assert.True(await queue.QueueAsync(first, CancellationToken.None));
+
+        using var secondWriteCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var secondWriteTask = queue.QueueAsync(second, secondWriteCts.Token).AsTask();
+
+        await Task.Delay(100);
+        Assert.False(secondWriteTask.IsCompleted);
+
+        var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Equal("/first", enumerator.Current.Path);
+
+        Assert.True(await secondWriteTask);
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Equal("/second", enumerator.Current.Path);
+
+        await enumerator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task QueueAsync_ReturnsFalseWhenWaitingWriterIsCancelled()
+    {
+        var queue = CreateQueue(capacity: 1);
+
+        Assert.True(await queue.QueueAsync(CreateRequest("198.51.100.1", "/first"), CancellationToken.None));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var queued = await queue.QueueAsync(CreateRequest("198.51.100.2", "/second"), cts.Token);
+
+        Assert.False(queued);
+
+        var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.Equal("/first", enumerator.Current.Path);
+        await enumerator.DisposeAsync();
+    }
+
+    private static SuspiciousRequestQueue CreateQueue(int capacity)
+    {
+        return new SuspiciousRequestQueue(Options.Create(new DefenseEngineOptions
+        {
+            Queue = new QueueOptions
+            {
+                Capacity = capacity
+            }
+        }));
+    }
+
+    private static SuspiciousRequest CreateRequest(string ipAddress, string path)
+    {
+        return new SuspiciousRequest(
+            ipAddress,
+            "GET",
+            path,
+            string.Empty,
+            "test-agent",
+            ["signal"],
+            DateTimeOffset.UtcNow);
+    }
+}

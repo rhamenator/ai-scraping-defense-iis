@@ -16,8 +16,8 @@ This document turns release readiness into a tracked execution queue. Each block
 | --- | --- | --- | --- |
 | 1 | Done | Protect operational endpoints and event data with authentication/authorization | The current stack exposes defense telemetry and recent decisions publicly. |
 | 2 | Done | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
-| 3 | In Progress | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
-| 4 | Todo | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
+| 3 | Done | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
+| 4 | In Progress | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
 | 5 | Todo | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
 | 6 | Todo | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
 | 7 | Todo | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
@@ -63,4 +63,16 @@ Defense decisions currently disappear when the process restarts because the even
 - Defense decisions are persisted durably.
 - `/defense/events` reads from durable storage.
 - Persistence is created automatically and documented.
+- The behavior is covered by automated tests.
+
+## Blocker 4
+
+### Problem
+
+The suspicious-request queue currently discards older entries when the queue reaches capacity. That makes the system least reliable when it is under attack pressure, which is exactly when it most needs to preserve evidence.
+
+### Definition of Done
+
+- Suspicious-request intake no longer silently drops older items by default.
+- Queue pressure behavior is explicit and documented.
 - The behavior is covered by automated tests.
