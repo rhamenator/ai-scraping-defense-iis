@@ -14,8 +14,8 @@ This document turns release readiness into a tracked execution queue. Each block
 
 | Order | Status | Blocker | Why it blocks release |
 | --- | --- | --- | --- |
-| 1 | In Progress | Protect operational endpoints and event data with authentication/authorization | The current stack exposes defense telemetry and recent decisions publicly. |
-| 2 | Todo | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
+| 1 | Done | Protect operational endpoints and event data with authentication/authorization | The current stack exposes defense telemetry and recent decisions publicly. |
+| 2 | In Progress | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
 | 3 | Todo | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
 | 4 | Todo | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
 | 5 | Todo | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
@@ -38,3 +38,16 @@ The application exposes `/defense/events` with no authentication, and the payloa
 - Health remains available without exposing sensitive internals.
 - The change is validated by automated tests.
 - Core request inspection behavior has regression coverage so future release blockers can build on a stable test baseline.
+
+## Blocker 2
+
+### Problem
+
+The application currently relies on forwarded-header trust configuration that is easy to misapply in real proxy/CDN deployments. Without an explicit operating mode and validated trusted proxy list, the service can attribute requests to the wrong IP address and block infrastructure instead of the real client.
+
+### Definition of Done
+
+- Client IP resolution mode is explicit and documented.
+- Trusted proxy configuration is validated on startup.
+- Forwarded headers are only enabled when the app is explicitly placed into trusted-proxy mode.
+- The behavior is covered by automated tests.
