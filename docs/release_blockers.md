@@ -21,7 +21,7 @@ This document turns release readiness into a tracked execution queue. Each block
 | 5 | Done | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
 | 6 | Done | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
 | 7 | In Progress | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
-| 8 | Todo | Close parity gaps required for the first commercial scope | The repo still declares itself a foundation/WIP rather than a releasable product. |
+| 8 | Done | Close parity gaps required for the first commercial scope | Commercial v1 scope, supported storage, and deferred features are now explicitly defined. |
 
 ## Blocker 1
 
@@ -114,3 +114,16 @@ The service still lacks a minimally complete authenticated operator API for obse
 - Authenticated manual blocklist inspection and update endpoints are exposed.
 - The behavior is documented.
 - The behavior is covered by automated tests.
+
+## Blocker 8
+
+### Problem
+
+The repository previously described itself as a `.NET foundation` and listed parity work as an undifferentiated backlog. That makes release-readiness ambiguous because the product boundary is unclear.
+
+### Definition of Done
+
+- Commercial v1 scope is explicitly documented.
+- Supported storage backends for v1 are explicitly documented.
+- Deferred features are explicitly documented as post-v1 work.
+- The README and parity docs align with the commercial-v1 definition.

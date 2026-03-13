@@ -1,6 +1,6 @@
-# System Architecture (.NET Foundation)
+# System Architecture (.NET)
 
-This repository is moving toward a pure-.NET version of the upstream `ai-scraping-defense` platform. The current implementation is a foundation release: one ASP.NET Core application that already exposes the same core roles as the upstream stack, but keeps them in-process while the .NET service boundaries settle.
+This repository is moving toward a pure-.NET version of the upstream `ai-scraping-defense` platform. Commercial v1 is intentionally a single ASP.NET Core application that already exposes the same core roles as the upstream stack, but keeps them in-process while the .NET service boundaries settle.
 
 ## Current Components
 
@@ -86,4 +86,4 @@ This app is intentionally shaped so it can be split into separate .NET services 
 - Admin API/UI
 - Blocklist sync workers
 
-The mapping and order of that work is documented in [docs/dotnet_parity_roadmap.md](dotnet_parity_roadmap.md).
+The commercial-v1 scope is documented in [docs/commercial_scope.md](commercial_scope.md). The post-v1 split and parity work is documented in [docs/dotnet_parity_roadmap.md](dotnet_parity_roadmap.md).
