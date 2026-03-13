@@ -80,6 +80,25 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.UtcDateTime.ToString("O"));
             command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.UtcDateTime.ToString("O"));
             command.ExecuteNonQuery();
+
+            using var summaryCommand = connection.CreateCommand();
+            summaryCommand.CommandText =
+                """
+                UPDATE defense_event_summary
+                SET
+                    total_decisions = total_decisions + 1,
+                    blocked_count = blocked_count + CASE WHEN $action = 'blocked' THEN 1 ELSE 0 END,
+                    observed_count = observed_count + CASE WHEN $action = 'observed' THEN 1 ELSE 0 END,
+                    latest_decision_at_utc = CASE
+                        WHEN latest_decision_at_utc IS NULL OR latest_decision_at_utc < $decidedAtUtc
+                            THEN $decidedAtUtc
+                        ELSE latest_decision_at_utc
+                    END
+                WHERE summary_key = 1;
+                """;
+            summaryCommand.Parameters.AddWithValue("$action", decision.Action);
+            summaryCommand.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.UtcDateTime.ToString("O"));
+            summaryCommand.ExecuteNonQuery();
         }
     }
 
@@ -129,6 +148,38 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         return results;
     }
 
+    public DefenseEventMetrics GetMetrics()
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT
+                    total_decisions,
+                    blocked_count,
+                    observed_count,
+                    latest_decision_at_utc
+                FROM defense_event_summary
+                WHERE summary_key = 1;
+                """;
+
+            using var reader = command.ExecuteReader();
+            reader.Read();
+
+            var latestDecisionAtUtc = reader.IsDBNull(3)
+                ? (DateTimeOffset?)null
+                : DateTimeOffset.Parse(reader.GetString(3));
+
+            return new DefenseEventMetrics(
+                reader.GetInt64(0),
+                reader.GetInt64(1),
+                reader.GetInt64(2),
+                latestDecisionAtUtc);
+        }
+    }
+
     private void EnsureSchema()
     {
         lock (_gate)
@@ -153,8 +204,53 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
 
                 CREATE INDEX IF NOT EXISTS idx_defense_events_decided_at
                     ON defense_events (decided_at_utc DESC, id DESC);
+
+                CREATE TABLE IF NOT EXISTS defense_event_summary
+                (
+                    summary_key INTEGER PRIMARY KEY CHECK (summary_key = 1),
+                    total_decisions INTEGER NOT NULL,
+                    blocked_count INTEGER NOT NULL,
+                    observed_count INTEGER NOT NULL,
+                    latest_decision_at_utc TEXT NULL
+                );
                 """;
             command.ExecuteNonQuery();
+
+            using var seedCommand = connection.CreateCommand();
+            seedCommand.CommandText =
+                """
+                INSERT OR IGNORE INTO defense_event_summary
+                (
+                    summary_key,
+                    total_decisions,
+                    blocked_count,
+                    observed_count,
+                    latest_decision_at_utc
+                )
+                VALUES
+                (
+                    1,
+                    0,
+                    0,
+                    0,
+                    NULL
+                );
+
+                UPDATE defense_event_summary
+                SET
+                    total_decisions = (SELECT COUNT(*) FROM defense_events),
+                    blocked_count = (
+                        SELECT COALESCE(SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END), 0)
+                        FROM defense_events
+                    ),
+                    observed_count = (
+                        SELECT COALESCE(SUM(CASE WHEN action = 'observed' THEN 1 ELSE 0 END), 0)
+                        FROM defense_events
+                    ),
+                    latest_decision_at_utc = (SELECT MAX(decided_at_utc) FROM defense_events)
+                WHERE summary_key = 1;
+                """;
+            seedCommand.ExecuteNonQuery();
         }
     }
 

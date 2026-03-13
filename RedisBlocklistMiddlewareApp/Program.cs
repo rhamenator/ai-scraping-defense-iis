@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
@@ -163,6 +165,7 @@ public partial class Program
         if (ShouldExposeManagementEndpoints(runtimeOptions))
         {
             endpoints["events"] = "/defense/events";
+            endpoints["metrics"] = "/defense/metrics";
         }
 
         return endpoints;
@@ -177,13 +180,89 @@ public partial class Program
             return;
         }
 
-        app.MapGet("/defense/events", (
+        var management = app.MapGroup("/defense")
+            .AddEndpointFilter<ApiKeyEndpointFilter>();
+
+        management.MapGet("/events", (
             IDefenseEventStore store,
             int count = 50) =>
         {
             return Results.Ok(store.GetRecent(count));
-        })
-        .AddEndpointFilter<ApiKeyEndpointFilter>();
+        });
+
+        management.MapGet("/metrics", (
+            IDefenseEventStore store) =>
+        {
+            return Results.Ok(store.GetMetrics());
+        });
+
+        management.MapGet("/blocklist", async (
+            [FromQuery] string ip,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            return Results.Ok(new
+            {
+                ip = normalizedIp,
+                blocked = await blocklistService.IsBlockedAsync(normalizedIp, cancellationToken)
+            });
+        });
+
+        management.MapPost("/blocklist", async (
+            [FromQuery] string ip,
+            [FromQuery] string? reason,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            await blocklistService.BlockAsync(
+                normalizedIp,
+                string.IsNullOrWhiteSpace(reason) ? "manual_block" : reason.Trim(),
+                ["manual_block"],
+                cancellationToken);
+
+            return Results.Accepted($"/defense/blocklist?ip={Uri.EscapeDataString(normalizedIp)}", new
+            {
+                ip = normalizedIp,
+                blocked = true
+            });
+        });
+
+        management.MapDelete("/blocklist", async (
+            [FromQuery] string ip,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip query parameter must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            await blocklistService.UnblockAsync(normalizedIp, cancellationToken);
+            return Results.Ok(new
+            {
+                ip = normalizedIp,
+                blocked = false
+            });
+        });
     }
 
     public static bool ShouldExposeManagementEndpoints(DefenseEngineOptions runtimeOptions)
@@ -202,5 +281,23 @@ public partial class Program
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)
     {
         return $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
+    }
+
+    public static bool TryNormalizeIpAddress(string value, out string normalizedIp)
+    {
+        normalizedIp = string.Empty;
+
+        if (!IPAddress.TryParse(value, out var address))
+        {
+            return false;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        normalizedIp = address.ToString();
+        return true;
     }
 }
