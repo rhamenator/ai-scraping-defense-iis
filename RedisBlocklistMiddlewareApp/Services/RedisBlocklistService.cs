@@ -1,27 +1,27 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
-using StackExchange.Redis;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class RedisBlocklistService : IBlocklistService
 {
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IRedisConnectionProvider _redisConnectionProvider;
     private readonly RedisOptions _options;
 
     public RedisBlocklistService(
-        IConnectionMultiplexer redis,
+        IRedisConnectionProvider redisConnectionProvider,
         IOptions<DefenseEngineOptions> options)
     {
-        _redis = redis;
+        _redisConnectionProvider = redisConnectionProvider;
         _options = options.Value.Redis;
     }
 
-    public Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken)
+    public async Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken)
     {
-        var database = _redis.GetDatabase(_options.BlocklistDatabase);
-        return database.KeyExistsAsync(GetBlocklistKey(ipAddress));
+        var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
+        var database = redis.GetDatabase(_options.BlocklistDatabase);
+        return await database.KeyExistsAsync(GetBlocklistKey(ipAddress));
     }
 
     public async Task BlockAsync(
@@ -30,7 +30,8 @@ public sealed class RedisBlocklistService : IBlocklistService
         IReadOnlyCollection<string> signals,
         CancellationToken cancellationToken)
     {
-        var database = _redis.GetDatabase(_options.BlocklistDatabase);
+        var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
+        var database = redis.GetDatabase(_options.BlocklistDatabase);
         var payload = JsonSerializer.Serialize(new
         {
             reason,

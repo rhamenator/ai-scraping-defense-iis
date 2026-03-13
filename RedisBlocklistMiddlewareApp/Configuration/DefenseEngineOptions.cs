@@ -8,6 +8,8 @@ public sealed class DefenseEngineOptions
 
     public HeuristicOptions Heuristics { get; set; } = new();
 
+    public NetworkingOptions Networking { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -77,6 +79,11 @@ public sealed class HeuristicOptions
     public int BlockScoreThreshold { get; set; } = 60;
 
     public int FrequencyBlockThreshold { get; set; } = 8;
+}
+
+public sealed class NetworkingOptions
+{
+    public string[] TrustedProxies { get; set; } = [];
 }
 
 public sealed class QueueOptions

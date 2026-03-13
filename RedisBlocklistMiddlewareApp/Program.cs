@@ -1,22 +1,26 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
-using StackExchange.Redis;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
+var trustedProxyAddresses = builder.Configuration
+    .GetSection($"{DefenseEngineOptions.SectionName}:Networking:TrustedProxies")
+    .Get<string[]>() ?? [];
 
 builder.Services
     .AddOptions<DefenseEngineOptions>()
     .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
     .PostConfigure(options =>
     {
-        var connectionString = builder.Configuration.GetConnectionString("RedisConnection");
-        if (!string.IsNullOrWhiteSpace(connectionString) &&
+        if (!string.IsNullOrWhiteSpace(redisConnectionString) &&
             string.IsNullOrWhiteSpace(options.Redis.ConnectionString))
         {
-            options.Redis.ConnectionString = connectionString;
+            options.Redis.ConnectionString = redisConnectionString;
         }
 
         if (!options.Tarpit.PathPrefix.StartsWith('/'))
@@ -37,34 +41,35 @@ builder.Services
         }
     });
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    var logger = sp.GetRequiredService<ILogger<Program>>();
-    var options = sp.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
-    var redisConnectionString = options.Redis.ConnectionString;
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 
-    if (string.IsNullOrWhiteSpace(redisConnectionString))
+    foreach (var trustedProxyAddress in trustedProxyAddresses)
     {
-        throw new InvalidOperationException("Redis connection string is not configured.");
+        if (IPAddress.TryParse(trustedProxyAddress, out var trustedProxy))
+        {
+            options.KnownProxies.Add(trustedProxy);
+        }
     }
-
-    logger.LogInformation(
-        "Connecting to Redis at {RedisHost}",
-        redisConnectionString.Split(',')[0]);
-
-    return ConnectionMultiplexer.Connect(redisConnectionString);
 });
 
+builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
 builder.Services.AddSingleton<IDefenseEventStore, DefenseEventStore>();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
+builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseMiddleware<RedisBlocklistMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new
@@ -80,21 +85,25 @@ app.MapGet("/", () => Results.Ok(new
 }));
 
 app.MapGet("/health", async (
-    IConnectionMultiplexer redis,
-    IOptions<DefenseEngineOptions> options) =>
+    IRedisConnectionProvider redisConnectionProvider,
+    IOptions<DefenseEngineOptions> options,
+    ILogger<Program> logger,
+    CancellationToken cancellationToken) =>
 {
     try
     {
+        var redis = await redisConnectionProvider.GetAsync(cancellationToken);
         await redis.GetDatabase(options.Value.Redis.BlocklistDatabase).PingAsync();
         return Results.Ok(new { status = "healthy" });
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Redis health check failed.");
         return Results.Json(
             new
             {
                 status = "degraded",
-                error = ex.Message
+                error = "A dependency check failed."
             },
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -111,6 +120,7 @@ app.MapGet("/anti-scrape-tarpit/{**path}", async (
     HttpContext context,
     string? path,
     ITarpitPageService tarpitPageService,
+    IClientIpResolver clientIpResolver,
     IOptions<DefenseEngineOptions> options,
     CancellationToken cancellationToken) =>
 {
@@ -121,7 +131,7 @@ app.MapGet("/anti-scrape-tarpit/{**path}", async (
         await Task.Delay(tarpitOptions.ResponseDelayMilliseconds, cancellationToken);
     }
 
-    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
     var content = tarpitPageService.GeneratePage(path ?? string.Empty, clientIp);
     return Results.Content(content, "text/html");
 });

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -52,6 +53,8 @@ public sealed class TarpitPageService : ITarpitPageService
     {
         var normalizedPath = string.IsNullOrWhiteSpace(path) ? "index" : path.Trim('/');
         var random = new Random(GetDeterministicSeed(normalizedPath, clientIpAddress));
+        var encodedPathText = WebUtility.HtmlEncode("/" + normalizedPath);
+        var encodedPathForUrl = EncodePathForUrl(normalizedPath);
         var builder = new StringBuilder();
 
         builder.AppendLine("<!doctype html>");
@@ -70,7 +73,7 @@ public sealed class TarpitPageService : ITarpitPageService
         builder.AppendLine("<body>");
         builder.AppendLine("<main>");
         builder.AppendLine($"  <h1>{Pick(Topics, random)}</h1>");
-        builder.AppendLine($"  <p>Session path: /{normalizedPath}</p>");
+        builder.AppendLine($"  <p>Session path: {encodedPathText}</p>");
 
         for (var i = 0; i < Math.Max(1, _options.ParagraphCount); i++)
         {
@@ -83,8 +86,10 @@ public sealed class TarpitPageService : ITarpitPageService
         for (var i = 0; i < Math.Max(1, _options.LinkCount); i++)
         {
             var slug = BuildSlug(random);
+            var encodedSlug = Uri.EscapeDataString(slug);
+            var encodedSlugText = WebUtility.HtmlEncode(slug);
             builder.AppendLine(
-                $"    <li><a href=\"{_options.PathPrefix}/{normalizedPath}/{slug}\">{slug}</a></li>");
+                $"    <li><a href=\"{_options.PathPrefix}/{encodedPathForUrl}/{encodedSlug}\">{encodedSlugText}</a></li>");
         }
 
         builder.AppendLine("  </ul>");
@@ -119,6 +124,14 @@ public sealed class TarpitPageService : ITarpitPageService
     private static string BuildSlug(Random random)
     {
         return $"{Pick(Nouns, random)}-{Pick(Nouns, random)}-{random.Next(1000, 9999)}";
+    }
+
+    private static string EncodePathForUrl(string path)
+    {
+        return string.Join(
+            '/',
+            path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Select(Uri.EscapeDataString));
     }
 
     private static string Pick(string[] values, Random random)

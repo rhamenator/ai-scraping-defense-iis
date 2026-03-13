@@ -1,4 +1,3 @@
-using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,6 +15,7 @@ public sealed class RedisBlocklistMiddleware
     private readonly IRequestSignalEvaluator _signalEvaluator;
     private readonly ISuspiciousRequestQueue _queue;
     private readonly IDefenseEventStore _eventStore;
+    private readonly IClientIpResolver _clientIpResolver;
     private readonly DefenseEngineOptions _options;
 
     public RedisBlocklistMiddleware(
@@ -25,6 +25,7 @@ public sealed class RedisBlocklistMiddleware
         IRequestSignalEvaluator signalEvaluator,
         ISuspiciousRequestQueue queue,
         IDefenseEventStore eventStore,
+        IClientIpResolver clientIpResolver,
         IOptions<DefenseEngineOptions> options)
     {
         _next = next;
@@ -33,6 +34,7 @@ public sealed class RedisBlocklistMiddleware
         _signalEvaluator = signalEvaluator;
         _queue = queue;
         _eventStore = eventStore;
+        _clientIpResolver = clientIpResolver;
         _options = options.Value;
     }
 
@@ -44,7 +46,7 @@ public sealed class RedisBlocklistMiddleware
             return;
         }
 
-        var ipAddress = ResolveRemoteIpAddress(context);
+        var ipAddress = _clientIpResolver.Resolve(context);
         if (string.IsNullOrWhiteSpace(ipAddress))
         {
             await _next(context);
@@ -124,30 +126,5 @@ public sealed class RedisBlocklistMiddleware
         return value.StartsWith(_options.Tarpit.PathPrefix, StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/defense", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? ResolveRemoteIpAddress(HttpContext context)
-    {
-        string? value = null;
-
-        if (context.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
-        {
-            value = forwardedFor
-                .ToString()
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            value = context.Connection.RemoteIpAddress?.ToString();
-        }
-
-        if (IPAddress.TryParse(value, out var address) && address.IsIPv4MappedToIPv6)
-        {
-            return address.MapToIPv4().ToString();
-        }
-
-        return value;
     }
 }

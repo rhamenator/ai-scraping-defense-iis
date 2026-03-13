@@ -10,7 +10,7 @@ The request pipeline begins in [RedisBlocklistMiddlewareApp/RedisBlocklistMiddle
 
 Responsibilities:
 
-- Resolve the client IP, including `X-Forwarded-For`.
+- Resolve the client IP, honoring forwarded headers only from configured trusted proxies.
 - Reject IPs already present in the Redis blocklist.
 - Block known bad user agents immediately.
 - Flag suspicious requests based on headers, query size, and request path.
