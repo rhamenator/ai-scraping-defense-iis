@@ -76,7 +76,7 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 #### **DefenseEngine:Queue**
 
-* **Capacity**: Maximum number of suspicious requests buffered for background analysis.
+* **Capacity**: Maximum number of suspicious requests buffered for background analysis. When the queue is full, writers wait for capacity instead of dropping older suspicious requests.
 
 #### **DefenseEngine:Tarpit**
 
