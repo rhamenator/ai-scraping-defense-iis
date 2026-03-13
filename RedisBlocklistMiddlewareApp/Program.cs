@@ -163,6 +163,7 @@ public partial class Program
         if (ShouldExposeManagementEndpoints(runtimeOptions))
         {
             endpoints["events"] = "/defense/events";
+            endpoints["metrics"] = "/defense/metrics";
         }
 
         return endpoints;
@@ -177,13 +178,65 @@ public partial class Program
             return;
         }
 
-        app.MapGet("/defense/events", (
+        var management = app.MapGroup("/defense")
+            .AddEndpointFilter<ApiKeyEndpointFilter>();
+
+        management.MapGet("/events", (
             IDefenseEventStore store,
             int count = 50) =>
         {
             return Results.Ok(store.GetRecent(count));
-        })
-        .AddEndpointFilter<ApiKeyEndpointFilter>();
+        });
+
+        management.MapGet("/metrics", (
+            IDefenseEventStore store) =>
+        {
+            return Results.Ok(store.GetMetrics());
+        });
+
+        management.MapGet("/blocklist/{ip}", async (
+            string ip,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            return Results.Ok(new
+            {
+                ip,
+                blocked = await blocklistService.IsBlockedAsync(ip, cancellationToken)
+            });
+        });
+
+        management.MapPost("/blocklist/{ip}", async (
+            string ip,
+            string? reason,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            await blocklistService.BlockAsync(
+                ip,
+                string.IsNullOrWhiteSpace(reason) ? "manual_block" : reason.Trim(),
+                ["manual_block"],
+                cancellationToken);
+
+            return Results.Accepted($"/defense/blocklist/{ip}", new
+            {
+                ip,
+                blocked = true
+            });
+        });
+
+        management.MapDelete("/blocklist/{ip}", async (
+            string ip,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            await blocklistService.UnblockAsync(ip, cancellationToken);
+            return Results.Ok(new
+            {
+                ip,
+                blocked = false
+            });
+        });
     }
 
     public static bool ShouldExposeManagementEndpoints(DefenseEngineOptions runtimeOptions)

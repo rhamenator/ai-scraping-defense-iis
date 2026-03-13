@@ -9,4 +9,6 @@ public interface IBlocklistService
         string reason,
         IReadOnlyCollection<string> signals,
         CancellationToken cancellationToken);
+
+    Task UnblockAsync(string ipAddress, CancellationToken cancellationToken);
 }

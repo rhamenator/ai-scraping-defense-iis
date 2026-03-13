@@ -45,6 +45,13 @@ public sealed class RedisBlocklistService : IBlocklistService
             TimeSpan.FromMinutes(Math.Max(1, _options.BlockDurationMinutes)));
     }
 
+    public async Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
+    {
+        var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
+        var database = redis.GetDatabase(_options.BlocklistDatabase);
+        await database.KeyDeleteAsync(GetBlocklistKey(ipAddress));
+    }
+
     private string GetBlocklistKey(string ipAddress)
     {
         return $"{_options.BlocklistKeyPrefix}{ipAddress}";

@@ -129,6 +129,37 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         return results;
     }
 
+    public DefenseEventMetrics GetMetrics()
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT
+                    COUNT(*) AS total_decisions,
+                    COALESCE(SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count,
+                    COALESCE(SUM(CASE WHEN action = 'observed' THEN 1 ELSE 0 END), 0) AS observed_count,
+                    MAX(decided_at_utc) AS latest_decision_at_utc
+                FROM defense_events;
+                """;
+
+            using var reader = command.ExecuteReader();
+            reader.Read();
+
+            var latestDecisionAtUtc = reader.IsDBNull(3)
+                ? (DateTimeOffset?)null
+                : DateTimeOffset.Parse(reader.GetString(3));
+
+            return new DefenseEventMetrics(
+                reader.GetInt64(0),
+                reader.GetInt64(1),
+                reader.GetInt64(2),
+                latestDecisionAtUtc);
+        }
+    }
+
     private void EnsureSchema()
     {
         lock (_gate)

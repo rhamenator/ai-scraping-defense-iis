@@ -19,8 +19,8 @@ This document turns release readiness into a tracked execution queue. Each block
 | 3 | Done | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
 | 4 | Done | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
 | 5 | Done | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
-| 6 | In Progress | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
-| 7 | Todo | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
+| 6 | Done | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
+| 7 | In Progress | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
 | 8 | Todo | Close parity gaps required for the first commercial scope | The repo still declares itself a foundation/WIP rather than a releasable product. |
 
 ## Blocker 1
@@ -100,4 +100,17 @@ The application still allows clearly development-only defaults like loopback Red
 
 - Startup fails fast in production when unsafe defaults are still configured.
 - The validation is documented.
+- The behavior is covered by automated tests.
+
+## Blocker 7
+
+### Problem
+
+The service still lacks a minimally complete authenticated operator API for observability and intervention. Operators need protected metrics and manual blocklist controls without resorting to direct Redis or database access.
+
+### Definition of Done
+
+- Authenticated management metrics are exposed.
+- Authenticated manual blocklist inspection and update endpoints are exposed.
+- The behavior is documented.
 - The behavior is covered by automated tests.

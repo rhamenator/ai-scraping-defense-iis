@@ -69,6 +69,7 @@ public sealed class ManagementEndpointTests
         var endpoints = Program.GetAdvertisedEndpoints(options);
 
         Assert.Equal("/defense/events", endpoints["events"]);
+        Assert.Equal("/defense/metrics", endpoints["metrics"]);
     }
 
     [Fact]
@@ -130,6 +131,8 @@ public sealed class ManagementEndpointTests
         var endpoints = GetRouteEndpoints(app);
 
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist/{ip}");
     }
 
     private static ApiKeyEndpointFilter CreateFilter()
@@ -151,6 +154,7 @@ public sealed class ManagementEndpointTests
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
+        builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
         return builder.Build();
     }
 
@@ -202,6 +206,33 @@ public sealed class ManagementEndpointTests
         public IReadOnlyList<Models.DefenseDecision> GetRecent(int count)
         {
             return [];
+        }
+
+        public Models.DefenseEventMetrics GetMetrics()
+        {
+            return new Models.DefenseEventMetrics(0, 0, 0, null);
+        }
+    }
+
+    private sealed class TestBlocklistService : IBlocklistService
+    {
+        public Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
+        }
+
+        public Task BlockAsync(
+            string ipAddress,
+            string reason,
+            IReadOnlyCollection<string> signals,
+            CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
         }
     }
 }

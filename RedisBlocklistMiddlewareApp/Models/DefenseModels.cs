@@ -20,6 +20,12 @@ public sealed record DefenseDecision(
     DateTimeOffset ObservedAtUtc,
     DateTimeOffset DecidedAtUtc);
 
+public sealed record DefenseEventMetrics(
+    long TotalDecisions,
+    long BlockedCount,
+    long ObservedCount,
+    DateTimeOffset? LatestDecisionAtUtc);
+
 public sealed record RequestSignalEvaluation(
     bool BlockImmediately,
     string BlockReason,

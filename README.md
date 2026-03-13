@@ -10,6 +10,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Redis-backed request-frequency tracking for simple escalation decisions.
 - A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
+- Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 
 ## Current Scope
 
@@ -23,6 +24,7 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture an
 - `GET /anti-scrape-tarpit/{path}`
 
 `GET /defense/events` is only exposed when `DefenseEngine:Management:ApiKey` is configured.
+`GET /defense/metrics` and the `/defense/blocklist/{ip}` management endpoints follow the same API-key protection.
 
 ## Near-Term Roadmap
 

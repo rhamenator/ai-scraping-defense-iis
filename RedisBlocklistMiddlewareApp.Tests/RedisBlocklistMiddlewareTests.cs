@@ -256,6 +256,11 @@ public sealed class RedisBlocklistMiddlewareTests
             BlockCalls.Add((ipAddress, reason, signals));
             return Task.CompletedTask;
         }
+
+        public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeRequestSignalEvaluator : IRequestSignalEvaluator
@@ -302,6 +307,17 @@ public sealed class RedisBlocklistMiddlewareTests
         public IReadOnlyList<DefenseDecision> GetRecent(int count)
         {
             return Decisions.Take(count).ToArray();
+        }
+
+        public DefenseEventMetrics GetMetrics()
+        {
+            return new DefenseEventMetrics(
+                Decisions.Count,
+                Decisions.LongCount(decision => decision.Action == "blocked"),
+                Decisions.LongCount(decision => decision.Action == "observed"),
+                Decisions.OrderByDescending(decision => decision.DecidedAtUtc)
+                    .Select(decision => (DateTimeOffset?)decision.DecidedAtUtc)
+                    .FirstOrDefault());
         }
     }
 

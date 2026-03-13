@@ -58,12 +58,28 @@ public sealed class DefenseEventStoreTests
         Assert.Equal("198.51.100.9", recent[0].IpAddress);
     }
 
-    private static DefenseDecision CreateDecision(string ipAddress, string path)
+    [Fact]
+    public void GetMetrics_ReturnsAggregatedDecisionCounts()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var store = harness.CreateStore();
+        store.Add(CreateDecision("198.51.100.1", "/observed"));
+        store.Add(CreateDecision("198.51.100.2", "/blocked", action: "blocked"));
+
+        var metrics = store.GetMetrics();
+
+        Assert.Equal(2, metrics.TotalDecisions);
+        Assert.Equal(1, metrics.BlockedCount);
+        Assert.Equal(1, metrics.ObservedCount);
+        Assert.NotNull(metrics.LatestDecisionAtUtc);
+    }
+
+    private static DefenseDecision CreateDecision(string ipAddress, string path, string action = "observed")
     {
         var observedAt = DateTimeOffset.UtcNow;
         return new DefenseDecision(
             ipAddress,
-            "observed",
+            action,
             10,
             1,
             path,
