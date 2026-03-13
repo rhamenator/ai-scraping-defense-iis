@@ -76,7 +76,7 @@ builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
-var tarpitRoutePattern = $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
+var tarpitRoutePattern = Program.GetTarpitRoutePattern(runtimeOptions);
 var advertisedEndpoints = Program.GetAdvertisedEndpoints(runtimeOptions);
 
 if (Program.ShouldUseForwardedHeaders(runtimeOptions))
@@ -195,5 +195,10 @@ public partial class Program
             runtimeOptions.Networking.ClientIpResolutionMode,
             ClientIpResolutionModes.TrustedProxy,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)
+    {
+        return $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
     }
 }

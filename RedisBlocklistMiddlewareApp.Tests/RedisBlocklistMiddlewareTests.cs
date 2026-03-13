@@ -37,6 +37,54 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_BypassesDefenseEndpoints()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.11"));
+        var context = CreateContext("/defense/events");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_BypassesTarpitEndpoints()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.12"));
+        var context = CreateContext("/anti-scrape-tarpit/nested/path");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
+    }
+
+    [Fact]
     public async Task InvokeAsync_ReturnsForbidden_ForBlockedClientIp()
     {
         var blocklist = new FakeBlocklistService { IsBlockedResult = true };

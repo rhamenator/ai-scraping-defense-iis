@@ -17,8 +17,8 @@ This document turns release readiness into a tracked execution queue. Each block
 | 1 | Done | Protect operational endpoints and event data with authentication/authorization | The current stack exposes defense telemetry and recent decisions publicly. |
 | 2 | Done | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
 | 3 | Done | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
-| 4 | In Progress | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
-| 5 | Todo | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
+| 4 | Done | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
+| 5 | In Progress | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
 | 6 | Todo | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
 | 7 | Todo | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
 | 8 | Todo | Close parity gaps required for the first commercial scope | The repo still declares itself a foundation/WIP rather than a releasable product. |
@@ -76,3 +76,16 @@ The suspicious-request queue currently discards older entries when the queue rea
 - Suspicious-request intake no longer silently drops older items by default.
 - Queue pressure behavior is explicit and documented.
 - The behavior is covered by automated tests.
+
+## Blocker 5
+
+### Problem
+
+The project now has a meaningful test baseline, but release confidence still depends on directly covering the routing and bypass decisions that determine whether suspicious traffic is inspected, tarpitted, or allowed through to operational endpoints.
+
+### Definition of Done
+
+- Automated tests cover edge filtering and bypass behavior.
+- Automated tests cover tarpit routing behavior.
+- Automated tests cover auth and persistence behavior.
+- The release checklist can mark the testing blocker done.
