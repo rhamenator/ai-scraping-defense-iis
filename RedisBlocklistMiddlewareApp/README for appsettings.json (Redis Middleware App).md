@@ -41,6 +41,7 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 #### **DefenseEngine:Redis**
 
 * **ConnectionString**: Redis connection string used by the blocklist and frequency services.
+* **AllowLoopbackConnectionStringInProduction**: Allows `localhost`/loopback Redis endpoints in `Production`. Leave this `false` for normal deployments so startup fails fast on local-only defaults.
 * **BlocklistKeyPrefix**: Prefix used for Redis keys that represent blocked IP addresses.
 * **FrequencyKeyPrefix**: Prefix used for Redis keys that track suspicious request frequency.
 * **BlocklistDatabase**: Redis database index used for the blocklist.

@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
 
 builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
+builder.Services.AddSingleton<ProductionConfigurationValidator>();
 builder.Services
     .AddOptions<DefenseEngineOptions>()
     .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
@@ -72,6 +73,7 @@ builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>()
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
+builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();

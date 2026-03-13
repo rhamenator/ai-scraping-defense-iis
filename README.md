@@ -49,6 +49,8 @@ For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionM
 
 Defense decisions are now persisted to SQLite via `DefenseEngine:Audit:DatabasePath`, which keeps recent event history available across restarts.
 
+In `Production`, startup now fails fast if Redis still points at a loopback endpoint like `localhost` unless you explicitly opt in with `DefenseEngine:Redis:AllowLoopbackConnectionStringInProduction`.
+
 ## Status
 
 This remains work in progress. The solution now builds with `dotnet`, but release readiness still depends on completing the blocker queue in [docs/release_blockers.md](docs/release_blockers.md).
