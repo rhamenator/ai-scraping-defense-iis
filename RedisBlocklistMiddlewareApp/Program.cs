@@ -44,6 +44,12 @@ builder.Services
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        options.Audit.DatabasePath = string.IsNullOrWhiteSpace(options.Audit.DatabasePath)
+            ? "data/defense-events.db"
+            : options.Audit.DatabasePath.Trim();
+
+        options.Audit.MaxRecentEvents = Math.Max(1, options.Audit.MaxRecentEvents);
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -60,7 +66,7 @@ builder.Services.AddSingleton<IConfigureOptions<ForwardedHeadersOptions>, Forwar
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
-builder.Services.AddSingleton<IDefenseEventStore, DefenseEventStore>();
+builder.Services.AddSingleton<IDefenseEventStore, SqliteDefenseEventStore>();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();

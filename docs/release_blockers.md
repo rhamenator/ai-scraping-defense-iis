@@ -15,8 +15,8 @@ This document turns release readiness into a tracked execution queue. Each block
 | Order | Status | Blocker | Why it blocks release |
 | --- | --- | --- | --- |
 | 1 | Done | Protect operational endpoints and event data with authentication/authorization | The current stack exposes defense telemetry and recent decisions publicly. |
-| 2 | In Progress | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
-| 3 | Todo | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
+| 2 | Done | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
+| 3 | In Progress | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
 | 4 | Todo | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
 | 5 | Todo | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
 | 6 | Todo | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
@@ -50,4 +50,17 @@ The application currently relies on forwarded-header trust configuration that is
 - Client IP resolution mode is explicit and documented.
 - Trusted proxy configuration is validated on startup.
 - Forwarded headers are only enabled when the app is explicitly placed into trusted-proxy mode.
+- The behavior is covered by automated tests.
+
+## Blocker 3
+
+### Problem
+
+Defense decisions currently disappear when the process restarts because the event feed is backed only by in-memory state. A market-facing security product needs restart-safe audit history so operators can investigate and trust the system's automated actions.
+
+### Definition of Done
+
+- Defense decisions are persisted durably.
+- `/defense/events` reads from durable storage.
+- Persistence is created automatically and documented.
 - The behavior is covered by automated tests.

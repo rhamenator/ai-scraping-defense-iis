@@ -12,6 +12,8 @@ public sealed class DefenseEngineOptions
 
     public ManagementOptions Management { get; set; } = new();
 
+    public AuditOptions Audit { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -107,6 +109,13 @@ public sealed class ManagementOptions
 public sealed class QueueOptions
 {
     public int Capacity { get; set; } = 1024;
+}
+
+public sealed class AuditOptions
+{
+    public string DatabasePath { get; set; } = "data/defense-events.db";
+
+    public int MaxRecentEvents { get; set; } = 500;
 }
 
 public sealed class TarpitOptions
