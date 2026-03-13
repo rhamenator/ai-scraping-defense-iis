@@ -10,6 +10,8 @@ public sealed class DefenseEngineOptions
 
     public NetworkingOptions Networking { get; set; } = new();
 
+    public ManagementOptions Management { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -84,6 +86,13 @@ public sealed class HeuristicOptions
 public sealed class NetworkingOptions
 {
     public string[] TrustedProxies { get; set; } = [];
+}
+
+public sealed class ManagementOptions
+{
+    public string ApiKeyHeaderName { get; set; } = "X-API-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
 }
 
 public sealed class QueueOptions
