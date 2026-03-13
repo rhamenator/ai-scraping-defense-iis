@@ -68,6 +68,8 @@ builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();
+var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
+var tarpitRoutePattern = $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
 
 app.UseForwardedHeaders();
 app.UseMiddleware<RedisBlocklistMiddleware>();
@@ -80,7 +82,7 @@ app.MapGet("/", () => Results.Ok(new
     {
         health = "/health",
         events = "/defense/events",
-        tarpit = "/anti-scrape-tarpit/{path}"
+        tarpit = $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
     }
 }));
 
@@ -116,7 +118,7 @@ app.MapGet("/defense/events", (
     return Results.Ok(store.GetRecent(count));
 });
 
-app.MapGet("/anti-scrape-tarpit/{**path}", async (
+app.MapGet(tarpitRoutePattern, async (
     HttpContext context,
     string? path,
     ITarpitPageService tarpitPageService,
