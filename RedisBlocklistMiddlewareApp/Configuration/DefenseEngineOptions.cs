@@ -85,7 +85,16 @@ public sealed class HeuristicOptions
 
 public sealed class NetworkingOptions
 {
+    public string ClientIpResolutionMode { get; set; } = ClientIpResolutionModes.Direct;
+
     public string[] TrustedProxies { get; set; } = [];
+}
+
+public static class ClientIpResolutionModes
+{
+    public const string Direct = "Direct";
+
+    public const string TrustedProxy = "TrustedProxy";
 }
 
 public sealed class ManagementOptions

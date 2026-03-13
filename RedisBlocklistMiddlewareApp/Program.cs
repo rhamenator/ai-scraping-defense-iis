@@ -4,17 +4,15 @@ using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
-using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
-var trustedProxyAddresses = builder.Configuration
-    .GetSection($"{DefenseEngineOptions.SectionName}:Networking:TrustedProxies")
-    .Get<string[]>() ?? [];
 
+builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
 builder.Services
     .AddOptions<DefenseEngineOptions>()
     .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
+    .ValidateOnStart()
     .PostConfigure(options =>
     {
         if (!string.IsNullOrWhiteSpace(redisConnectionString) &&
@@ -36,6 +34,16 @@ builder.Services
 
         options.Management.ApiKey = options.Management.ApiKey.Trim();
 
+        options.Networking.ClientIpResolutionMode = string.IsNullOrWhiteSpace(options.Networking.ClientIpResolutionMode)
+            ? ClientIpResolutionModes.Direct
+            : options.Networking.ClientIpResolutionMode.Trim();
+
+        options.Networking.TrustedProxies = options.Networking.TrustedProxies
+            .Where(proxy => !string.IsNullOrWhiteSpace(proxy))
+            .Select(proxy => proxy.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -47,21 +55,7 @@ builder.Services
         }
     });
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
-    options.ForwardLimit = 1;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-
-    foreach (var trustedProxyAddress in trustedProxyAddresses)
-    {
-        if (IPAddress.TryParse(trustedProxyAddress, out var trustedProxy))
-        {
-            options.KnownProxies.Add(trustedProxy);
-        }
-    }
-});
+builder.Services.AddSingleton<IConfigureOptions<ForwardedHeadersOptions>, ForwardedHeadersOptionsSetup>();
 
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
@@ -79,7 +73,11 @@ var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptio
 var tarpitRoutePattern = $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
 var advertisedEndpoints = Program.GetAdvertisedEndpoints(runtimeOptions);
 
-app.UseForwardedHeaders();
+if (Program.ShouldUseForwardedHeaders(runtimeOptions))
+{
+    app.UseForwardedHeaders();
+}
+
 app.UseMiddleware<RedisBlocklistMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new
@@ -183,5 +181,13 @@ public partial class Program
     public static bool ShouldExposeManagementEndpoints(DefenseEngineOptions runtimeOptions)
     {
         return !string.IsNullOrWhiteSpace(runtimeOptions.Management.ApiKey);
+    }
+
+    public static bool ShouldUseForwardedHeaders(DefenseEngineOptions runtimeOptions)
+    {
+        return string.Equals(
+            runtimeOptions.Networking.ClientIpResolutionMode,
+            ClientIpResolutionModes.TrustedProxy,
+            StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -39,9 +39,12 @@ Key areas:
 
 - `DefenseEngine:Redis`
 - `DefenseEngine:Heuristics`
+- `DefenseEngine:Networking`
 - `DefenseEngine:Management`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
+
+For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
 
 ## Status
 

@@ -61,7 +61,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 #### **DefenseEngine:Networking**
 
-* **TrustedProxies**: Explicit reverse-proxy IPs whose forwarded headers should be trusted.
+* **ClientIpResolutionMode**: Controls whether the app trusts only the direct socket peer (`Direct`) or enables `X-Forwarded-For` processing from explicitly trusted proxies (`TrustedProxy`).
+* **TrustedProxies**: Explicit reverse-proxy IPs whose forwarded headers should be trusted. This list must be empty in `Direct` mode and must be populated in `TrustedProxy` mode.
 
 #### **DefenseEngine:Management**
 
