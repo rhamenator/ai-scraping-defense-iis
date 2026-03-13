@@ -118,7 +118,7 @@ public sealed class ManagementEndpointTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
-        builder.Services.AddSingleton<IDefenseEventStore, DefenseEventStore>();
+        builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         return builder.Build();
     }
 
@@ -158,6 +158,18 @@ public sealed class ManagementEndpointTests
         public override T GetArgument<T>(int index)
         {
             return (T)Arguments[index]!;
+        }
+    }
+
+    private sealed class TestDefenseEventStore : IDefenseEventStore
+    {
+        public void Add(Models.DefenseDecision decision)
+        {
+        }
+
+        public IReadOnlyList<Models.DefenseDecision> GetRecent(int count)
+        {
+            return [];
         }
     }
 }
