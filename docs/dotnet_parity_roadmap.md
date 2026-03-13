@@ -7,7 +7,7 @@ This document maps the upstream `ai-scraping-defense` roles to the .NET implemen
 | Upstream role | Current .NET status | Next target |
 | --- | --- | --- |
 | Nginx/Lua edge filter | Implemented as ASP.NET Core middleware | Split into a dedicated edge gateway project |
-| AI Service webhook | Partially represented by queued suspicious-request intake | Add explicit webhook/API surface and durable intake storage |
+| AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and separate service boundary |
 | Escalation Engine | Partially represented by `DefenseAnalysisService` | Add richer heuristics, persistent telemetry, model scoring, optional LLM adapters |
 | Tarpit API | Implemented as deterministic synthetic page endpoint | Add richer tarpit modes, streaming, and Markov/PostgreSQL-backed content |
 | Admin UI | Not implemented in .NET | Add admin API first, then UI |

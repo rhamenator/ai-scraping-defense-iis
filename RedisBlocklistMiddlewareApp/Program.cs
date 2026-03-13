@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
+using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
 using System.Net;
 
@@ -36,6 +37,12 @@ builder.Services
             : options.Management.ApiKeyHeaderName.Trim();
 
         options.Management.ApiKey = options.Management.ApiKey.Trim();
+
+        options.Intake.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.Intake.ApiKeyHeaderName)
+            ? "X-Webhook-Key"
+            : options.Intake.ApiKeyHeaderName.Trim();
+
+        options.Intake.ApiKey = options.Intake.ApiKey.Trim();
 
         options.Networking.ClientIpResolutionMode = string.IsNullOrWhiteSpace(options.Networking.ClientIpResolutionMode)
             ? ClientIpResolutionModes.Direct
@@ -75,8 +82,11 @@ builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>()
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
+builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
+builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
+builder.Services.AddHostedService<WebhookIntakeProcessingService>();
 
 var app = builder.Build();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
@@ -123,6 +133,7 @@ app.MapGet("/health", async (
 });
 
 Program.MapManagementEndpoints(app, runtimeOptions);
+Program.MapIntakeEndpoints(app, runtimeOptions);
 
 app.MapGet(tarpitRoutePattern, async (
     HttpContext context,
@@ -166,6 +177,11 @@ public partial class Program
         {
             endpoints["events"] = "/defense/events";
             endpoints["metrics"] = "/defense/metrics";
+        }
+
+        if (ShouldExposeIntakeEndpoints(runtimeOptions))
+        {
+            endpoints["analyze"] = "/analyze";
         }
 
         return endpoints;
@@ -278,9 +294,55 @@ public partial class Program
             StringComparison.OrdinalIgnoreCase);
     }
 
+    public static void MapIntakeEndpoints(
+        IEndpointRouteBuilder app,
+        DefenseEngineOptions runtimeOptions)
+    {
+        if (!ShouldExposeIntakeEndpoints(runtimeOptions))
+        {
+            return;
+        }
+
+        app.MapPost("/analyze", async (
+            IntakeWebhookEvent webhookEvent,
+            IWebhookEventInbox inbox,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryNormalizeIpAddress(webhookEvent.Details.IpAddress, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The webhook details.ip field must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            var normalizedEvent = webhookEvent with
+            {
+                Details = webhookEvent.Details with
+                {
+                    IpAddress = normalizedIp
+                }
+            };
+
+            var itemId = await inbox.EnqueueAsync(normalizedEvent, cancellationToken);
+
+            return Results.Accepted($"/analyze/{itemId}", new
+            {
+                status = "queued",
+                itemId
+            });
+        })
+        .AddEndpointFilter<IntakeApiKeyEndpointFilter>();
+    }
+
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)
     {
         return $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
+    }
+
+    public static bool ShouldExposeIntakeEndpoints(DefenseEngineOptions runtimeOptions)
+    {
+        return !string.IsNullOrWhiteSpace(runtimeOptions.Intake.ApiKey);
     }
 
     public static bool TryNormalizeIpAddress(string value, out string normalizedIp)
