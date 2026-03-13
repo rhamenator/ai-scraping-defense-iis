@@ -34,33 +34,58 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
     * "redis-sentinel-master,serviceName=yourServiceName,password=yourPassword" (For Sentinel)  
   * **Action Needed:** You **MUST** update the placeholder value with the correct connection string for your Redis server, including the password if applicable.
 
-### **Redis**
+### **DefenseEngine**
 
-* **Purpose:** Contains custom configuration settings specifically used by the RedisBlocklistMiddleware.cs. These values are read using IConfiguration in the middleware's constructor.  
-* **BlocklistKeyPrefix**: **(Required)** Defines the prefix prepended to the IP address when checking for a blocklist key in Redis.  
-  * Example Value: "blocklist:"  
-  * Resulting Key Checked: blocklist:ip:1.2.3.4 (as constructed in the middleware code)  
-  * **Action Needed:** Ensure this prefix **exactly matches** the prefix used by the Python ai\_service when it *adds* IPs to the blocklist. Consistency is crucial.  
-* **DbBlocklist**: **(Required)** Specifies the numeric Redis database index (typically 0-15) where the blocklist keys are stored.  
-  * Example Value: 2  
-  * **Action Needed:** Ensure this database number matches the REDIS\_DB\_BLOCKLIST environment variable used by the Python services.
+* **Purpose:** Contains the .NET-native defense configuration used by the ASP.NET Core service.
 
-### **Heuristics**
+#### **DefenseEngine:Redis**
 
-* **Purpose:** Contains settings for the heuristic checks performed by the RedisBlocklistMiddleware after the Redis blocklist check.  
-* **KnownBadUaSubstrings**: **(Required)** An array of strings. If any of these substrings (matched case-insensitively) are found within the request's User-Agent header, the middleware will immediately block the request with a 403 Forbidden status. Add or remove entries based on observed malicious traffic patterns.  
-* **TarpitRewritePath**: **(Required)** Specifies the base URL path *within your IIS site* where the Tarpit API application is hosted (e.g., /anti-scrape-tarpit/). When the middleware decides to tarpit a request based on other heuristics, it will internally rewrite the request to {TarpitRewritePath}{OriginalPath}.  
-  * **Action Needed:** Ensure this value correctly points to your Tarpit application's configured base URL path within IIS and typically ends with a /.  
-* **CheckEmptyUa**: **(Optional, Default: true)** If true, requests with a missing or empty User-Agent header will be rewritten to the TarpitRewritePath.  
-* **CheckMissingAcceptLanguage**: **(Optional, Default: true)** If true, requests missing the Accept-Language header will be rewritten to the TarpitRewritePath (potentially excluding asset requests depending on middleware logic).  
-* **CheckGenericAccept**: **(Optional, Default: true)** If true, requests where the Accept header is exactly \*/\* will be rewritten to the TarpitRewritePath (potentially excluding asset requests).
+* **ConnectionString**: Redis connection string used by the blocklist and frequency services.
+* **BlocklistKeyPrefix**: Prefix used for Redis keys that represent blocked IP addresses.
+* **FrequencyKeyPrefix**: Prefix used for Redis keys that track suspicious request frequency.
+* **BlocklistDatabase**: Redis database index used for the blocklist.
+* **FrequencyDatabase**: Redis database index used for suspicious request frequency counters.
+* **BlockDurationMinutes**: How long an automated block remains active.
+* **FrequencyWindowSeconds**: TTL applied to the rolling suspicious-request frequency counter.
+
+#### **DefenseEngine:Heuristics**
+
+* **KnownBadUserAgents**: User-Agent substrings that trigger an immediate block.
+* **SuspiciousPathSubstrings**: URL path fragments that contribute to suspicious-request scoring.
+* **CheckEmptyUserAgent**: Flags requests with an empty or missing User-Agent.
+* **CheckMissingAcceptLanguage**: Flags requests that omit `Accept-Language`.
+* **CheckGenericAcceptHeader**: Flags requests that send `Accept: */*`.
+* **TarpitSuspiciousRequests**: Rewrites suspicious requests into the tarpit path instead of allowing the original route to handle them.
+* **BlockScoreThreshold**: Score at which the queued analysis service converts suspicious traffic into a block.
+* **FrequencyBlockThreshold**: Number of suspicious requests per window that triggers blocking.
+
+#### **DefenseEngine:Networking**
+
+* **TrustedProxies**: Explicit reverse-proxy IPs whose forwarded headers should be trusted.
+
+#### **DefenseEngine:Management**
+
+* **ApiKeyHeaderName**: Header name required for authenticated management endpoints.
+* **ApiKey**: Shared secret required to access `/defense/events`. If blank, the endpoint is not exposed.
+
+#### **DefenseEngine:Queue**
+
+* **Capacity**: Maximum number of suspicious requests buffered for background analysis.
+
+#### **DefenseEngine:Tarpit**
+
+* **PathPrefix**: Prefix used for the deterministic tarpit endpoint.
+* **Seed**: Seed used to keep generated tarpit pages deterministic.
+* **LinkCount**: Number of recursive links rendered in each tarpit page.
+* **ParagraphCount**: Number of generated paragraphs rendered in each tarpit page.
+* **ResponseDelayMilliseconds**: Artificial delay applied before returning tarpit content.
 
 ## **Overrides**
 
 Remember that settings in appsettings.json can be overridden by:
 
 1. appsettings.Development.json (or other environment-specific files).  
-2. Environment variables (e.g., ConnectionStrings\_\_RedisConnection=your\_string, Redis\_\_DbBlocklist=3, Heuristics\_\_CheckEmptyUa=false). Environment variables often use \_\_ (double underscore) to denote hierarchy.  
+2. Environment variables (e.g., `ConnectionStrings__RedisConnection=your_string`, `DefenseEngine__Management__ApiKey=change-me`). Environment variables often use `__` (double underscore) to denote hierarchy.  
 3. Command-line arguments.
 
 Check your hosting environment (like the web.config for IIS deployment) to see how environment variables might be set, potentially overriding these JSON values.

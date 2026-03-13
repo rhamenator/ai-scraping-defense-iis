@@ -9,7 +9,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - A bounded suspicious-request queue with a background analysis worker.
 - Redis-backed request-frequency tracking for simple escalation decisions.
 - A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
-- A lightweight event feed at `/defense/events` for recent decisions.
+- A lightweight authenticated event feed at `/defense/events` for recent decisions.
 
 ## Current Scope
 
@@ -20,8 +20,9 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture an
 ## Implemented Endpoints
 
 - `GET /health`
-- `GET /defense/events`
 - `GET /anti-scrape-tarpit/{path}`
+
+`GET /defense/events` is only exposed when `DefenseEngine:Management:ApiKey` is configured.
 
 ## Near-Term Roadmap
 
@@ -38,9 +39,10 @@ Key areas:
 
 - `DefenseEngine:Redis`
 - `DefenseEngine:Heuristics`
+- `DefenseEngine:Management`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
 
 ## Status
 
-This remains work in progress. The environment available to this agent does not include the .NET SDK, so build verification must be done in a machine that has `dotnet` installed.
+This remains work in progress. The solution now builds with `dotnet`, but release readiness still depends on completing the blocker queue in [docs/release_blockers.md](docs/release_blockers.md).

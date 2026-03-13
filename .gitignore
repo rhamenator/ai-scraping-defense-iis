@@ -2,6 +2,8 @@
 # Byte-compiled / optimized / DLL files
 RedisBlocklistMiddlewareApp/bin
 RedisBlocklistMiddlewareApp/obj
+RedisBlocklistMiddlewareApp.Tests/bin
+RedisBlocklistMiddlewareApp.Tests/obj
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -30,6 +30,12 @@ builder.Services
 
         options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
 
+        options.Management.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.Management.ApiKeyHeaderName)
+            ? "X-API-Key"
+            : options.Management.ApiKeyHeaderName.Trim();
+
+        options.Management.ApiKey = options.Management.ApiKey.Trim();
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -65,11 +71,13 @@ builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>()
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
+builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 
 var app = builder.Build();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
 var tarpitRoutePattern = $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
+var advertisedEndpoints = Program.GetAdvertisedEndpoints(runtimeOptions);
 
 app.UseForwardedHeaders();
 app.UseMiddleware<RedisBlocklistMiddleware>();
@@ -78,12 +86,7 @@ app.MapGet("/", () => Results.Ok(new
 {
     service = "ai-scraping-defense-dotnet",
     mode = "foundation",
-    endpoints = new
-    {
-        health = "/health",
-        events = "/defense/events",
-        tarpit = $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
-    }
+    endpoints = advertisedEndpoints
 }));
 
 app.MapGet("/health", async (
@@ -111,12 +114,7 @@ app.MapGet("/health", async (
     }
 });
 
-app.MapGet("/defense/events", (
-    IDefenseEventStore store,
-    int count = 50) =>
-{
-    return Results.Ok(store.GetRecent(count));
-});
+Program.MapManagementEndpoints(app, runtimeOptions);
 
 app.MapGet(tarpitRoutePattern, async (
     HttpContext context,
@@ -145,3 +143,45 @@ app.Run(async context =>
 });
 
 app.Run();
+
+public partial class Program
+{
+    public static IReadOnlyDictionary<string, string> GetAdvertisedEndpoints(DefenseEngineOptions runtimeOptions)
+    {
+        var endpoints = new Dictionary<string, string>
+        {
+            ["health"] = "/health",
+            ["tarpit"] = $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
+        };
+
+        if (ShouldExposeManagementEndpoints(runtimeOptions))
+        {
+            endpoints["events"] = "/defense/events";
+        }
+
+        return endpoints;
+    }
+
+    public static void MapManagementEndpoints(
+        IEndpointRouteBuilder app,
+        DefenseEngineOptions runtimeOptions)
+    {
+        if (!ShouldExposeManagementEndpoints(runtimeOptions))
+        {
+            return;
+        }
+
+        app.MapGet("/defense/events", (
+            IDefenseEventStore store,
+            int count = 50) =>
+        {
+            return Results.Ok(store.GetRecent(count));
+        })
+        .AddEndpointFilter<ApiKeyEndpointFilter>();
+    }
+
+    public static bool ShouldExposeManagementEndpoints(DefenseEngineOptions runtimeOptions)
+    {
+        return !string.IsNullOrWhiteSpace(runtimeOptions.Management.ApiKey);
+    }
+}
