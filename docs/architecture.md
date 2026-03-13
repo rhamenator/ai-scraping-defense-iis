@@ -26,8 +26,9 @@ The background worker in [RedisBlocklistMiddlewareApp/Services/DefenseAnalysisSe
 - Consume suspicious requests asynchronously.
 - Update per-IP frequency counters in Redis.
 - Compute a score from the collected request signals.
+- Apply optional configured-range reputation, HTTP reputation, and OpenAI-compatible model contributions.
 - Promote high-risk or high-frequency IPs into the Redis blocklist.
-- Store recent decisions in the persistent audit/event store.
+- Store recent decisions and their score breakdown in the persistent audit/event store.
 
 ### Webhook Intake
 

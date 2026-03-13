@@ -52,6 +52,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                     frequency,
                     path,
                     signals_json,
+                    breakdown_json,
                     summary,
                     observed_at_utc,
                     decided_at_utc
@@ -64,6 +65,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                     $frequency,
                     $path,
                     $signalsJson,
+                    $breakdownJson,
                     $summary,
                     $observedAtUtc,
                     $decidedAtUtc
@@ -76,6 +78,9 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.Parameters.AddWithValue("$frequency", decision.Frequency);
             command.Parameters.AddWithValue("$path", decision.Path);
             command.Parameters.AddWithValue("$signalsJson", JsonSerializer.Serialize(decision.Signals));
+            command.Parameters.AddWithValue(
+                "$breakdownJson",
+                decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
             command.Parameters.AddWithValue("$summary", decision.Summary);
             command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.UtcDateTime.ToString("O"));
             command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.UtcDateTime.ToString("O"));
@@ -120,6 +125,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                     frequency,
                     path,
                     signals_json,
+                    breakdown_json,
                     summary,
                     observed_at_utc,
                     decided_at_utc
@@ -139,9 +145,12 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                     reader.GetInt64(3),
                     reader.GetString(4),
                     JsonSerializer.Deserialize<string[]>(reader.GetString(5)) ?? [],
-                    reader.GetString(6),
-                    DateTimeOffset.Parse(reader.GetString(7)),
-                    DateTimeOffset.Parse(reader.GetString(8))));
+                    reader.GetString(7),
+                    DateTimeOffset.Parse(reader.GetString(8)),
+                    DateTimeOffset.Parse(reader.GetString(9)),
+                    reader.IsDBNull(6)
+                        ? null
+                        : JsonSerializer.Deserialize<DefenseScoreBreakdown>(reader.GetString(6))));
             }
         }
 
@@ -197,6 +206,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                     frequency INTEGER NOT NULL,
                     path TEXT NOT NULL,
                     signals_json TEXT NOT NULL,
+                    breakdown_json TEXT NULL,
                     summary TEXT NOT NULL,
                     observed_at_utc TEXT NOT NULL,
                     decided_at_utc TEXT NOT NULL
@@ -215,6 +225,8 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                 );
                 """;
             command.ExecuteNonQuery();
+
+            EnsureBreakdownColumn(connection);
 
             using var seedCommand = connection.CreateCommand();
             seedCommand.CommandText =
@@ -259,5 +271,37 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
         return connection;
+    }
+
+    private static void EnsureBreakdownColumn(SqliteConnection connection)
+    {
+        using var tableInfo = connection.CreateCommand();
+        tableInfo.CommandText = "PRAGMA table_info(defense_events);";
+
+        var hasBreakdownColumn = false;
+        using (var reader = tableInfo.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "breakdown_json", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasBreakdownColumn = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasBreakdownColumn)
+        {
+            return;
+        }
+
+        using var alterCommand = connection.CreateCommand();
+        alterCommand.CommandText =
+            """
+            ALTER TABLE defense_events
+            ADD COLUMN breakdown_json TEXT NULL;
+            """;
+        alterCommand.ExecuteNonQuery();
     }
 }

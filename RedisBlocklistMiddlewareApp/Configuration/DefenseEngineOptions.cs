@@ -16,6 +16,8 @@ public sealed class DefenseEngineOptions
 
     public AuditOptions Audit { get; set; } = new();
 
+    public EscalationOptions Escalation { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -127,6 +129,72 @@ public sealed class AuditOptions
     public string DatabasePath { get; set; } = "data/defense-events.db";
 
     public int MaxRecentEvents { get; set; } = 500;
+}
+
+public sealed class EscalationOptions
+{
+    public ConfiguredRangeReputationOptions ConfiguredRanges { get; set; } = new();
+
+    public HttpReputationProviderOptions HttpReputation { get; set; } = new();
+
+    public OpenAiCompatibleModelAdapterOptions OpenAiCompatibleModel { get; set; } = new();
+}
+
+public sealed class ConfiguredRangeReputationOptions
+{
+    public bool Enabled { get; set; }
+
+    public ReputationRangeEntry[] Entries { get; set; } = [];
+}
+
+public sealed class ReputationRangeEntry
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Cidr { get; set; } = string.Empty;
+
+    public int ScoreAdjustment { get; set; } = 0;
+
+    public string[] Signals { get; set; } = [];
+}
+
+public sealed class HttpReputationProviderOptions
+{
+    public bool Enabled { get; set; }
+
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string ApiKeyHeaderName { get; set; } = "X-Api-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    public int MaliciousScoreAdjustment { get; set; } = 35;
+}
+
+public sealed class OpenAiCompatibleModelAdapterOptions
+{
+    public bool Enabled { get; set; }
+
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public string Model { get; set; } = string.Empty;
+
+    public string SystemPrompt { get; set; } =
+        "You are classifying incoming web requests for scraping-defense enforcement. " +
+        "Return JSON with classification and summary. Classification must be one of " +
+        "MALICIOUS_BOT, BENIGN_CRAWLER, HUMAN, or INCONCLUSIVE.";
+
+    public int TimeoutSeconds { get; set; } = 20;
+
+    public int MaliciousScoreAdjustment { get; set; } = 40;
+
+    public int BenignCrawlerScoreAdjustment { get; set; } = -5;
+
+    public int HumanScoreAdjustment { get; set; } = -15;
 }
 
 public sealed class TarpitOptions

@@ -74,6 +74,22 @@ public sealed class DefenseEventStoreTests
         Assert.NotNull(metrics.LatestDecisionAtUtc);
     }
 
+    [Fact]
+    public void Store_RoundTripsDecisionBreakdown()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var store = harness.CreateStore();
+        store.Add(CreateDecision("198.51.100.50", "/breakdown"));
+
+        var recent = store.GetRecent(1);
+
+        Assert.Single(recent);
+        var breakdown = recent[0].Breakdown;
+        Assert.NotNull(breakdown);
+        Assert.Equal(10, breakdown!.TotalScore);
+        Assert.Contains(breakdown.Contributions, contribution => contribution.Source == "test");
+    }
+
     private static DefenseDecision CreateDecision(string ipAddress, string path, string action = "observed")
     {
         var observedAt = DateTimeOffset.UtcNow;
@@ -86,7 +102,19 @@ public sealed class DefenseEventStoreTests
             ["signal"],
             "summary",
             observedAt,
-            observedAt);
+            observedAt,
+            new DefenseScoreBreakdown(
+                5,
+                5,
+                10,
+                false,
+                [
+                    new DefenseScoreContribution(
+                        "test",
+                        10,
+                        ["signal"],
+                        "Test contribution.")
+                ]));
     }
 
     private sealed class SqliteStoreHarness : IDisposable

@@ -79,7 +79,19 @@ public sealed class RedisBlocklistMiddleware
                 evaluation.Signals,
                 "Blocked immediately by edge heuristics.",
                 DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow,
+                new DefenseScoreBreakdown(
+                    100,
+                    0,
+                    100,
+                    true,
+                    [
+                        new DefenseScoreContribution(
+                            "edge_heuristics",
+                            100,
+                            evaluation.Signals,
+                            "Edge heuristics produced an immediate block verdict.")
+                    ])));
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsync("Access denied.");
