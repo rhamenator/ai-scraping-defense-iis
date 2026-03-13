@@ -23,6 +23,8 @@ public sealed class RedisOptions
 {
     public string ConnectionString { get; set; } = "localhost:6379";
 
+    public bool AllowLoopbackConnectionStringInProduction { get; set; }
+
     public string BlocklistKeyPrefix { get; set; } = "blocklist:ip:";
 
     public string FrequencyKeyPrefix { get; set; } = "frequency:ip:";

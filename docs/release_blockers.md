@@ -18,8 +18,8 @@ This document turns release readiness into a tracked execution queue. Each block
 | 2 | Done | Make proxy/client IP handling production-safe by default | Misconfigured forwarding can block reverse proxies or misattribute attacks. |
 | 3 | Done | Replace in-memory event storage with durable audit/event persistence | A security product needs restart-safe auditability and investigation history. |
 | 4 | Done | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
-| 5 | In Progress | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
-| 6 | Todo | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
+| 5 | Done | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
+| 6 | In Progress | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
 | 7 | Todo | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
 | 8 | Todo | Close parity gaps required for the first commercial scope | The repo still declares itself a foundation/WIP rather than a releasable product. |
 
@@ -89,3 +89,15 @@ The project now has a meaningful test baseline, but release confidence still dep
 - Automated tests cover tarpit routing behavior.
 - Automated tests cover auth and persistence behavior.
 - The release checklist can mark the testing blocker done.
+
+## Blocker 6
+
+### Problem
+
+The application still allows clearly development-only defaults like loopback Redis endpoints to boot in production. A market-facing release should fail fast when those unsafe defaults are still present.
+
+### Definition of Done
+
+- Startup fails fast in production when unsafe defaults are still configured.
+- The validation is documented.
+- The behavior is covered by automated tests.
