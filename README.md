@@ -13,6 +13,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
+- Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 
 ## Commercial v1 Scope
 
@@ -40,6 +41,7 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture, [
 Management endpoints:
 - `GET /defense/events?count=50`
 - `GET /defense/metrics`
+- `GET /defense/community-blocklist/status`
 - `GET /defense/blocklist?ip=203.0.113.10`
 - `POST /defense/blocklist?ip=203.0.113.10&reason=manual_block`
 - `DELETE /defense/blocklist?ip=203.0.113.10`
@@ -82,6 +84,7 @@ Key areas:
 - `DefenseEngine:Intake`
 - `DefenseEngine:Audit`
 - `DefenseEngine:Escalation`
+- `DefenseEngine:CommunityBlocklist`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
 

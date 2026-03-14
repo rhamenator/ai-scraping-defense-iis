@@ -13,7 +13,7 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 | Escalation Engine | Implemented with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and separate service boundary |
 | Tarpit API | Implemented as deterministic synthetic page endpoint | Add richer tarpit modes, streaming, and Markov/PostgreSQL-backed content |
 | Admin UI | Not implemented in .NET | Add operator dashboard on top of the authenticated admin API |
-| Community blocklist sync | Not implemented in .NET | Add background worker and contracts |
+| Community blocklist sync | Implemented as a configurable feed sync worker with admin-visible status | Add richer source trust, reporting parity, and deduplication policies |
 | Peer sync | Not implemented in .NET | Add background worker and peer trust model |
 | Metrics/observability | Implemented at operator-API level | Add structured metrics, traces, and richer telemetry export |
 

@@ -47,8 +47,21 @@ The app uses Redis for the same categories of fast-moving state as the upstream 
 
 - Blocklist state via [RedisBlocklistMiddlewareApp/Services/RedisBlocklistService.cs](../RedisBlocklistMiddlewareApp/Services/RedisBlocklistService.cs)
 - Short-window frequency tracking via [RedisBlocklistMiddlewareApp/Services/RedisRequestFrequencyTracker.cs](../RedisBlocklistMiddlewareApp/Services/RedisRequestFrequencyTracker.cs)
+- Community blocklist imports via [RedisBlocklistMiddlewareApp/Services/CommunityBlocklistSyncRunner.cs](../RedisBlocklistMiddlewareApp/Services/CommunityBlocklistSyncRunner.cs)
 
 This is the first step toward the upstream pattern where Redis holds blocklist, counters, and other operational signals.
+
+### Community Blocklist Sync
+
+The upstream public-blocklist sync role is now represented by [RedisBlocklistMiddlewareApp/Services/CommunityBlocklistSyncService.cs](../RedisBlocklistMiddlewareApp/Services/CommunityBlocklistSyncService.cs).
+
+Current behavior:
+
+- fetches one or more configured community feeds on a timer
+- accepts either a raw JSON array of IP strings or `{ \"ips\": [...] }`
+- rejects invalid, loopback, link-local, and private addresses
+- writes accepted entries into the existing Redis blocklist service
+- exposes last-run status through the authenticated management API
 
 ### Tarpit Surface
 

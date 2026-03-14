@@ -193,6 +193,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/community-blocklist/status");
     }
 
     [Fact]
