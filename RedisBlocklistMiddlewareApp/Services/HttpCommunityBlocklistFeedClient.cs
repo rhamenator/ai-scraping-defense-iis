@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -37,6 +38,13 @@ public sealed class HttpCommunityBlocklistFeedClient : ICommunityBlocklistFeedCl
         using var response = await client.SendAsync(request, timeoutCts.Token);
         response.EnsureSuccessStatusCode();
 
+        var contentType = response.Content.Headers.ContentType;
+        if (IsPlainText(contentType))
+        {
+            var text = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            return ReadPlainTextIps(text);
+        }
+
         await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
         using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: timeoutCts.Token);
         var root = document.RootElement;
@@ -55,6 +63,25 @@ public sealed class HttpCommunityBlocklistFeedClient : ICommunityBlocklistFeedCl
 
         _logger.LogWarning("Community blocklist feed {Url} returned an unexpected JSON payload.", source.Url);
         return [];
+    }
+
+    internal static bool IsPlainText(MediaTypeHeaderValue? contentType)
+    {
+        if (contentType is null)
+        {
+            return false;
+        }
+
+        return string.Equals(contentType.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static IReadOnlyList<string> ReadPlainTextIps(string text)
+    {
+        return text
+            .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
     }
 
     private static IReadOnlyList<string> ReadIpArray(JsonElement arrayElement)

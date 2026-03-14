@@ -55,8 +55,12 @@ public sealed class CommunityBlocklistSyncRunner
             {
                 var importedForSource = 0;
                 var rejectedForSource = 0;
+                var sourceName = GetSourceName(source);
                 var ips = await _feedClient.FetchAsync(source, cancellationToken);
-                foreach (var ip in ips.Take(Math.Max(1, _options.MaximumEntriesPerSource)))
+                var maxEntries = Math.Max(1, _options.MaximumEntriesPerSource);
+                var truncatedCount = Math.Max(0, ips.Count - maxEntries);
+
+                foreach (var ip in ips.Take(maxEntries))
                 {
                     if (!TryValidateImportIp(ip, out var normalizedIp))
                     {
@@ -67,16 +71,25 @@ public sealed class CommunityBlocklistSyncRunner
 
                     await _blocklistService.BlockAsync(
                         normalizedIp,
-                        $"community_blocklist:{GetSourceName(source)}",
-                        [$"community_blocklist:{GetSourceName(source)}"],
+                        $"community_blocklist:{sourceName}",
+                        [$"community_blocklist:{sourceName}"],
                         cancellationToken);
 
                     importedCount++;
                     importedForSource++;
                 }
 
-                rejectedForSource += Math.Max(0, ips.Count - Math.Max(1, _options.MaximumEntriesPerSource));
-                rejectedCount += Math.Max(0, ips.Count - Math.Max(1, _options.MaximumEntriesPerSource));
+                if (truncatedCount > 0)
+                {
+                    _logger.LogWarning(
+                        "Community blocklist source {SourceName} had {TruncatedCount} entries truncated by the MaximumEntriesPerSource limit ({MaxEntries}).",
+                        sourceName,
+                        truncatedCount,
+                        maxEntries);
+                }
+
+                rejectedForSource += truncatedCount;
+                rejectedCount += truncatedCount;
                 lastSuccessAtUtc = DateTimeOffset.UtcNow;
 
                 sourceStatuses.Add(new CommunityBlocklistSourceSyncStatus(
