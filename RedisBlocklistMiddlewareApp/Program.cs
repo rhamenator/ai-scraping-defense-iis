@@ -155,6 +155,13 @@ builder.Services
         options.Escalation.HttpReputation.ApiKey = options.Escalation.HttpReputation.ApiKey.Trim();
         options.Escalation.HttpReputation.TimeoutSeconds = Math.Max(1, options.Escalation.HttpReputation.TimeoutSeconds);
 
+        options.Escalation.LocalTrainedModel.ModelPath = options.Escalation.LocalTrainedModel.ModelPath.Trim();
+        options.Escalation.LocalTrainedModel.MetadataPath = options.Escalation.LocalTrainedModel.MetadataPath.Trim();
+        options.Escalation.LocalTrainedModel.RequiredModelVersion =
+            options.Escalation.LocalTrainedModel.RequiredModelVersion.Trim();
+        options.Escalation.LocalTrainedModel.MaliciousProbabilityThreshold =
+            Math.Clamp(options.Escalation.LocalTrainedModel.MaliciousProbabilityThreshold, 0.5f, 0.99f);
+
         options.Escalation.OpenAiCompatibleModel.Endpoint = options.Escalation.OpenAiCompatibleModel.Endpoint.Trim();
         options.Escalation.OpenAiCompatibleModel.ApiKey = options.Escalation.OpenAiCompatibleModel.ApiKey.Trim();
         options.Escalation.OpenAiCompatibleModel.Model = options.Escalation.OpenAiCompatibleModel.Model.Trim();
@@ -252,6 +259,7 @@ builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputationProvider>();
 builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
+builder.Services.AddSingleton<IThreatModelAdapter, LocalTrainedModelAdapter>();
 builder.Services.AddSingleton<IThreatModelAdapter, OpenAiCompatibleModelAdapter>();
 builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
 builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();

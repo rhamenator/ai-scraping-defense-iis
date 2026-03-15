@@ -9,6 +9,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Parity Matrix](parity_matrix.md)
 - [Post-v1 Parity Roadmap](dotnet_parity_roadmap.md)
 - [API References](api_references.md)
+- [Local Model Training](local_model_training.md)
 - [Release Blockers](release_blockers.md)
 - [Release Checklist](release_checklist.md)
 - [Release Artifacts](release_artifacts.md)

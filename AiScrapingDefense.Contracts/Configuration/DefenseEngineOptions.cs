@@ -149,6 +149,8 @@ public sealed class EscalationOptions
 
     public HttpReputationProviderOptions HttpReputation { get; set; } = new();
 
+    public LocalTrainedModelOptions LocalTrainedModel { get; set; } = new();
+
     public OpenAiCompatibleModelAdapterOptions OpenAiCompatibleModel { get; set; } = new();
 }
 
@@ -207,6 +209,23 @@ public sealed class OpenAiCompatibleModelAdapterOptions
     public int BenignCrawlerScoreAdjustment { get; set; } = -5;
 
     public int HumanScoreAdjustment { get; set; } = -15;
+}
+
+public sealed class LocalTrainedModelOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ModelPath { get; set; } = "models/local-bot-detector.zip";
+
+    public string MetadataPath { get; set; } = string.Empty;
+
+    public string RequiredModelVersion { get; set; } = string.Empty;
+
+    public float MaliciousProbabilityThreshold { get; set; } = 0.75f;
+
+    public int MaliciousScoreAdjustment { get; set; } = 35;
+
+    public int BenignScoreAdjustment { get; set; } = -10;
 }
 
 public sealed class CommunityBlocklistOptions
