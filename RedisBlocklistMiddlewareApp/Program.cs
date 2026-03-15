@@ -2,6 +2,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Prometheus;
 using RedisBlocklistMiddlewareApp;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
@@ -56,6 +60,13 @@ builder.Services
             ? "markov_sequences"
             : options.Tarpit.PostgresMarkov.SequencesTableName.Trim();
         options.Tarpit.PostgresMarkov.RefreshMinutes = Math.Max(1, options.Tarpit.PostgresMarkov.RefreshMinutes);
+        options.Observability.ServiceName = string.IsNullOrWhiteSpace(options.Observability.ServiceName)
+            ? "ai-scraping-defense-dotnet"
+            : options.Observability.ServiceName.Trim();
+        options.Observability.PrometheusEndpointPath = string.IsNullOrWhiteSpace(options.Observability.PrometheusEndpointPath)
+            ? "/metrics"
+            : NormalizeObservabilityPath(options.Observability.PrometheusEndpointPath);
+        options.Observability.OtlpEndpoint = options.Observability.OtlpEndpoint.Trim();
 
         options.Management.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.Management.ApiKeyHeaderName)
             ? "X-API-Key"
@@ -170,6 +181,29 @@ builder.Services
     });
 
 builder.Services.AddSingleton<IConfigureOptions<ForwardedHeadersOptions>, ForwardedHeadersOptionsSetup>();
+builder.Services.AddSingleton<DefenseTelemetry>();
+
+var observabilityOptions = builder.Configuration
+    .GetSection(DefenseEngineOptions.SectionName)
+    .Get<DefenseEngineOptions>()?.Observability ?? new ObservabilityOptions();
+var otlpEndpoint = observabilityOptions.OtlpEndpoint?.Trim() ?? string.Empty;
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(observabilityOptions.ServiceName))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddSource(DefenseTelemetry.ActivitySourceName)
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation();
+
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+            });
+        }
+    });
 
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
@@ -214,6 +248,12 @@ if (Program.ShouldUseForwardedHeaders(runtimeOptions))
 
 app.UseMiddleware<RedisBlocklistMiddleware>();
 
+if (runtimeOptions.Observability.EnablePrometheusEndpoint)
+{
+    app.UseHttpMetrics();
+    app.MapMetrics(runtimeOptions.Observability.PrometheusEndpointPath);
+}
+
 app.MapGet("/", () => Results.Ok(new
 {
     service = "ai-scraping-defense-dotnet",
@@ -255,6 +295,7 @@ app.MapGet(tarpitRoutePattern, async (
     string? path,
     ITarpitPageService tarpitPageService,
     IClientIpResolver clientIpResolver,
+    DefenseTelemetry telemetry,
     IOptions<DefenseEngineOptions> options,
     CancellationToken cancellationToken) =>
 {
@@ -267,10 +308,11 @@ app.MapGet(tarpitRoutePattern, async (
 
     var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
     var content = tarpitPageService.GeneratePage(path ?? string.Empty, clientIp);
+    telemetry.RecordTarpitRender();
     return Results.Content(content, "text/html");
 });
 
-app.Run(async context =>
+app.MapFallback(async context =>
 {
     context.Response.StatusCode = StatusCodes.Status404NotFound;
     await context.Response.WriteAsync("Endpoint not found.");
@@ -480,6 +522,7 @@ public partial class Program
         app.MapPost("/analyze", async (
             IntakeWebhookEvent webhookEvent,
             IWebhookEventInbox inbox,
+            [FromServices] DefenseTelemetry telemetry,
             CancellationToken cancellationToken) =>
         {
             if (!TryNormalizeIpAddress(webhookEvent.Details.IpAddress, out var normalizedIp))
@@ -499,6 +542,7 @@ public partial class Program
             };
 
             var itemId = await inbox.EnqueueAsync(normalizedEvent, cancellationToken);
+            telemetry.RecordWebhookAccepted();
 
             return Results.Accepted($"/analyze/{itemId}", new
             {
@@ -583,5 +627,12 @@ public partial class Program
 
         normalizedIp = address.ToString();
         return true;
+    }
+
+    private static string NormalizeObservabilityPath(string path)
+    {
+        return path.StartsWith("/", StringComparison.Ordinal)
+            ? path.TrimEnd('/')
+            : "/" + path.Trim().TrimEnd('/');
     }
 }

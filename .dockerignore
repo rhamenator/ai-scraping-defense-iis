@@ -1,0 +1,15 @@
+.git
+.github
+**/bin
+**/obj
+.venv
+env
+venv
+logs
+archives
+secrets
+*.db
+*.sqlite3
+*.log
+docker-compose.override.yml
+

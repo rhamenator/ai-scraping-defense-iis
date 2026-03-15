@@ -1,0 +1,31 @@
+name: dotnet-ci
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+      - copilot/**
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.104
+
+      - name: Restore
+        run: dotnet restore anti-scraping-defense-iis.sln
+
+      - name: Build
+        run: dotnet build anti-scraping-defense-iis.sln --no-restore
+
+      - name: Test
+        run: dotnet test anti-scraping-defense-iis.sln --no-build
+

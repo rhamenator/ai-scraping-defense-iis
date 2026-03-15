@@ -20,7 +20,7 @@ This document turns release readiness into a tracked execution queue. Each block
 | 4 | Done | Replace lossy queue behavior with durable or backpressure-aware intake | Dropping suspicious events under load undermines the product during attacks. |
 | 5 | Done | Add automated tests for edge filtering, tarpit routing, auth, and persistence | A successful build alone is not release confidence. |
 | 6 | Done | Add production configuration validation and startup fail-fast checks | Default localhost Redis and empty trusted-proxy config are not market-safe defaults. |
-| 7 | In Progress | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
+| 7 | Done | Add operational observability and admin controls | Release needs authenticated admin access, metrics, and actionable diagnostics. |
 | 8 | Done | Close parity gaps required for the first commercial scope | Commercial v1 scope, supported storage, and deferred features are now explicitly defined. |
 
 ## Blocker 1
@@ -114,6 +114,12 @@ The service still lacks a minimally complete authenticated operator API for obse
 - Authenticated manual blocklist inspection and update endpoints are exposed.
 - The behavior is documented.
 - The behavior is covered by automated tests.
+
+### Completion Notes
+
+- Authenticated operator metrics and blocklist controls are now implemented under `/defense/*`.
+- Prometheus and OTLP observability wiring is now available under `DefenseEngine:Observability`.
+- Automated tests now cover the operator API plus end-to-end request, intake, and tarpit flows.
 
 ## Blocker 8
 

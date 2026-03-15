@@ -17,6 +17,7 @@ public sealed class WebhookIntakeProcessingServiceTests
             inbox,
             blocklist,
             eventStore,
+            TestTelemetryFactory.Create(),
             NullLogger<WebhookIntakeProcessingService>.Instance);
 
         await inbox.EnqueueAsync(new WebhookInboxItem(

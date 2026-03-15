@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* Containerized deployment artifacts for the .NET runtime (`Dockerfile`, `compose.yaml`).
+* A GitHub Actions workflow that restores, builds, and tests the solution on every push and pull request.
+* A containerized integration-test project covering suspicious request handling, management blocklist operations, webhook intake, and PostgreSQL-backed tarpit rendering.
+* Prometheus/OTLP observability options and runtime instrumentation for defense decisions, tarpit responses, webhook intake, and sync activity.
+* Release documentation for parity, operator operations, and release validation.
+
+### Changed
+
+* Suspicious requests now render tarpit responses directly from middleware instead of relying on late path rewrites.
+* The fallback 404 path now uses `MapFallback` so routed endpoints remain reachable in real hosts and test hosts.
+* Operator and intake endpoints are explicitly bypassed by edge inspection to avoid tarpitting internal control surfaces.
+
 ## [0.0.3] - 2025-04-22
 
 ### Added

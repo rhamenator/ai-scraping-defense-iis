@@ -1,0 +1,59 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__RedisConnection: redis:6379
+      DefenseEngine__Redis__ConnectionString: redis:6379
+      DefenseEngine__Redis__AllowLoopbackConnectionStringInProduction: "true"
+      DefenseEngine__Management__ApiKey: change-me-management-key
+      DefenseEngine__Intake__ApiKey: change-me-intake-key
+      DefenseEngine__Audit__DatabasePath: /app/data/defense-events.db
+      DefenseEngine__Tarpit__ResponseDelayMilliseconds: "0"
+      DefenseEngine__Tarpit__PostgresMarkov__Enabled: "true"
+      DefenseEngine__Tarpit__PostgresMarkov__ConnectionString: Host=postgres;Database=markov;Username=postgres;Password=postgres
+      DefenseEngine__Observability__EnablePrometheusEndpoint: "true"
+      DefenseEngine__Observability__PrometheusEndpointPath: /metrics
+    ports:
+      - "8080:8080"
+    volumes:
+      - app-data:/app/data
+
+  redis:
+    image: redis:7.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: markov
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init_markov.sql:/docker-entrypoint-initdb.d/01-init_markov.sql:ro
+
+volumes:
+  app-data:
+  redis-data:
+  postgres-data:
+

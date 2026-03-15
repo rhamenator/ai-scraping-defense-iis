@@ -16,6 +16,8 @@ public sealed class RedisBlocklistMiddleware
     private readonly ISuspiciousRequestQueue _queue;
     private readonly IDefenseEventStore _eventStore;
     private readonly IClientIpResolver _clientIpResolver;
+    private readonly ITarpitPageService _tarpitPageService;
+    private readonly DefenseTelemetry _telemetry;
     private readonly DefenseEngineOptions _options;
 
     public RedisBlocklistMiddleware(
@@ -26,6 +28,8 @@ public sealed class RedisBlocklistMiddleware
         ISuspiciousRequestQueue queue,
         IDefenseEventStore eventStore,
         IClientIpResolver clientIpResolver,
+        ITarpitPageService tarpitPageService,
+        DefenseTelemetry telemetry,
         IOptions<DefenseEngineOptions> options)
     {
         _next = next;
@@ -35,6 +39,8 @@ public sealed class RedisBlocklistMiddleware
         _queue = queue;
         _eventStore = eventStore;
         _clientIpResolver = clientIpResolver;
+        _tarpitPageService = tarpitPageService;
+        _telemetry = telemetry;
         _options = options.Value;
     }
 
@@ -56,6 +62,7 @@ public sealed class RedisBlocklistMiddleware
         if (await _blocklistService.IsBlockedAsync(ipAddress, context.RequestAborted))
         {
             _logger.LogWarning("Blocking request from IP {IpAddress} via Redis blocklist.", ipAddress);
+            _telemetry.RecordDecision("blocked", "redis_blocklist");
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsync("Access denied.");
             return;
@@ -64,6 +71,10 @@ public sealed class RedisBlocklistMiddleware
         var evaluation = _signalEvaluator.Evaluate(context);
         if (evaluation.BlockImmediately)
         {
+            using var activity = _telemetry.StartActivity("edge.immediate_block");
+            activity?.SetTag("ip", ipAddress);
+            activity?.SetTag("reason", evaluation.BlockReason);
+
             await _blocklistService.BlockAsync(
                 ipAddress,
                 evaluation.BlockReason,
@@ -93,6 +104,7 @@ public sealed class RedisBlocklistMiddleware
                             "Edge heuristics produced an immediate block verdict.")
                     ])));
 
+            _telemetry.RecordDecision("blocked", "edge_heuristics");
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsync("Access denied.");
             return;
@@ -100,6 +112,7 @@ public sealed class RedisBlocklistMiddleware
 
         if (evaluation.Signals.Count > 0)
         {
+            _telemetry.RecordSuspiciousRequest(evaluation.Signals[0]);
             var queued = await _queue.QueueAsync(
                 new SuspiciousRequest(
                     ipAddress,
@@ -120,12 +133,14 @@ public sealed class RedisBlocklistMiddleware
 
             if (_options.Heuristics.TarpitSuspiciousRequests)
             {
-                var originalPath = context.Request.Path.HasValue
-                    ? context.Request.Path.Value!
-                    : "/";
-
+                var originalPath = context.Request.Path.HasValue ? context.Request.Path.Value! : "/";
                 context.Request.Headers["X-Tarpit-Reason"] = string.Join(';', evaluation.Signals);
-                context.Request.Path = new PathString($"{_options.Tarpit.PathPrefix}{originalPath}");
+                var content = _tarpitPageService.GeneratePage(originalPath, ipAddress);
+                _telemetry.RecordTarpitRender();
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                context.Response.ContentType = "text/html";
+                await context.Response.WriteAsync(content, context.RequestAborted);
+                return;
             }
         }
 
@@ -137,6 +152,8 @@ public sealed class RedisBlocklistMiddleware
         var value = path.Value ?? string.Empty;
         return value.StartsWith(_options.Tarpit.PathPrefix, StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
-               value.StartsWith("/defense", StringComparison.OrdinalIgnoreCase);
+               value.StartsWith("/defense", StringComparison.OrdinalIgnoreCase) ||
+               value.StartsWith("/analyze", StringComparison.OrdinalIgnoreCase) ||
+               value.StartsWith("/peer-sync", StringComparison.OrdinalIgnoreCase);
     }
 }
