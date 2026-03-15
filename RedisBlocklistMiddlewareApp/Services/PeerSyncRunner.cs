@@ -64,13 +64,9 @@ public sealed class PeerSyncRunner
                 var importedForPeer = 0;
                 var maxSignals = Math.Max(1, _options.MaximumSignalsPerPeer);
                 var envelope = await _feedClient.FetchAsync(peer, cancellationToken);
-                var uniqueSignals = envelope.Signals
-                    .GroupBy(signal => signal.IpAddress, StringComparer.OrdinalIgnoreCase)
-                    .Select(group => group.First())
-                    .Take(maxSignals)
-                    .ToArray();
+                var normalizedSignals = new List<(string NormalizedIp, PeerDefenseSignal Signal)>();
 
-                foreach (var signal in uniqueSignals)
+                foreach (var signal in envelope.Signals)
                 {
                     if (!CommunityBlocklistSyncRunner.TryValidateImportIp(signal.IpAddress, out var normalizedIp))
                     {
@@ -79,6 +75,17 @@ public sealed class PeerSyncRunner
                         continue;
                     }
 
+                    normalizedSignals.Add((normalizedIp, signal));
+                }
+
+                var uniqueSignals = normalizedSignals
+                    .GroupBy(signal => signal.NormalizedIp, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .ToArray();
+                var droppedCount = Math.Max(0, uniqueSignals.Length - maxSignals);
+
+                foreach (var (normalizedIp, signal) in uniqueSignals.Take(maxSignals))
+                {
                     importedCount++;
                     importedForPeer++;
                     var combinedSignals = signal.Signals
@@ -121,8 +128,8 @@ public sealed class PeerSyncRunner
                     }
                 }
 
-                rejectedForPeer += Math.Max(0, envelope.Signals.Count - maxSignals);
-                rejectedCount += Math.Max(0, envelope.Signals.Count - maxSignals);
+                rejectedForPeer += droppedCount;
+                rejectedCount += droppedCount;
                 lastSuccessAtUtc = DateTimeOffset.UtcNow;
 
                 peerStatuses.Add(new PeerSyncPeerStatus(

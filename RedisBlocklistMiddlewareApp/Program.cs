@@ -453,24 +453,33 @@ public partial class Program
             IDefenseEventStore store,
             IOptions<DefenseEngineOptions> options) =>
         {
-            var maxSignals = options.Value.PeerSync.MaximumExportSignals;
-            var safeCount = Math.Clamp(count <= 0 ? maxSignals : count, 1, maxSignals);
-            var signals = store.GetRecent(safeCount)
-                .Where(decision => string.Equals(decision.Action, "blocked", StringComparison.OrdinalIgnoreCase))
-                .Take(safeCount)
-                .Select(decision => new PeerDefenseSignal(
-                    decision.IpAddress,
-                    decision.Summary,
-                    decision.Signals,
-                    decision.ObservedAtUtc,
-                    decision.DecidedAtUtc))
-                .ToArray();
-
-            return Results.Ok(new PeerDefenseSignalEnvelope(
-                "ai-scraping-defense-dotnet",
-                signals));
+            return Results.Ok(GetPeerSignalsForExport(store, options.Value, count));
         })
         .AddEndpointFilter<PeerApiKeyEndpointFilter>();
+    }
+
+    public static PeerDefenseSignalEnvelope GetPeerSignalsForExport(
+        IDefenseEventStore store,
+        DefenseEngineOptions runtimeOptions,
+        int count)
+    {
+        var maxSignals = runtimeOptions.PeerSync.MaximumExportSignals;
+        var safeCount = Math.Clamp(count <= 0 ? maxSignals : count, 1, maxSignals);
+        var scanWindow = Math.Max(safeCount, runtimeOptions.Audit.MaxRecentEvents);
+        var signals = store.GetRecent(scanWindow)
+            .Where(decision => string.Equals(decision.Action, "blocked", StringComparison.OrdinalIgnoreCase))
+            .Take(safeCount)
+            .Select(decision => new PeerDefenseSignal(
+                decision.IpAddress,
+                decision.Summary,
+                decision.Signals,
+                decision.ObservedAtUtc,
+                decision.DecidedAtUtc))
+            .ToArray();
+
+        return new PeerDefenseSignalEnvelope(
+            "ai-scraping-defense-dotnet",
+            signals);
     }
 
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)

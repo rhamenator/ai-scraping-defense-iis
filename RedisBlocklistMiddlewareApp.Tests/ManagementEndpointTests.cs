@@ -159,6 +159,35 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void GetPeerSignalsForExport_ReturnsRequestedBlockedSignalsFromLargerRecentWindow()
+    {
+        var observedAt = DateTimeOffset.UtcNow;
+        var store = new ExportDefenseEventStore([
+            new DefenseDecision("198.51.100.1", "observed", 10, 1, "/a", ["a"], "summary", observedAt, observedAt),
+            new DefenseDecision("198.51.100.2", "observed", 10, 1, "/b", ["b"], "summary", observedAt, observedAt),
+            new DefenseDecision("198.51.100.3", "blocked", 90, 1, "/c", ["c"], "summary", observedAt, observedAt),
+            new DefenseDecision("198.51.100.4", "blocked", 90, 1, "/d", ["d"], "summary", observedAt, observedAt)
+        ]);
+        var options = new DefenseEngineOptions
+        {
+            Audit = new AuditOptions
+            {
+                MaxRecentEvents = 10
+            },
+            PeerSync = new PeerSyncOptions
+            {
+                MaximumExportSignals = 5
+            }
+        };
+
+        var result = Program.GetPeerSignalsForExport(store, options, 2);
+
+        Assert.Equal(2, result.Signals.Count);
+        Assert.Equal("198.51.100.3", result.Signals[0].IpAddress);
+        Assert.Equal("198.51.100.4", result.Signals[1].IpAddress);
+    }
+
+    [Fact]
     public void GetTarpitRoutePattern_UsesCatchAllUnderConfiguredPrefix()
     {
         var options = new DefenseEngineOptions
@@ -395,6 +424,30 @@ public sealed class ManagementEndpointTests
         public Models.DefenseEventMetrics GetMetrics()
         {
             return new Models.DefenseEventMetrics(0, 0, 0, null);
+        }
+    }
+
+    private sealed class ExportDefenseEventStore : IDefenseEventStore
+    {
+        private readonly IReadOnlyList<DefenseDecision> _decisions;
+
+        public ExportDefenseEventStore(IReadOnlyList<DefenseDecision> decisions)
+        {
+            _decisions = decisions;
+        }
+
+        public void Add(DefenseDecision decision)
+        {
+        }
+
+        public IReadOnlyList<DefenseDecision> GetRecent(int count)
+        {
+            return _decisions.Take(count).ToArray();
+        }
+
+        public DefenseEventMetrics GetMetrics()
+        {
+            return new DefenseEventMetrics(0, 0, 0, null);
         }
     }
 
