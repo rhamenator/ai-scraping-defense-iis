@@ -8,31 +8,59 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class WebhookIntakeProcessingServiceTests
 {
     [Fact]
-    public async Task ProcessingService_BlocklistsWebhookIp_AndRecordsDecision()
+    public async Task ProcessingService_BlocklistsWebhookIp_RecordsDecision_AndPersistsDeliveries()
     {
         var inbox = new TestWebhookEventInbox();
         var blocklist = new TestBlocklistService();
         var eventStore = new TestDefenseEventStore();
+        var alertDispatcher = new TestIntakeAlertDispatcher(
+            [
+                new IntakeDeliveryRecord(
+                    IntakeDeliveryTypes.Alert,
+                    IntakeDeliveryChannels.GenericWebhook,
+                    "198.51.100.20",
+                    "High Combined Score (0.95)",
+                    "https://alerts.example.test",
+                    IntakeDeliveryStatuses.Succeeded,
+                    "ok",
+                    DateTimeOffset.UtcNow)
+            ]);
+        var communityReporter = new TestCommunityReporter(
+            new IntakeDeliveryRecord(
+                IntakeDeliveryTypes.CommunityReport,
+                "AbuseIPDB",
+                "198.51.100.20",
+                "High Combined Score (0.95)",
+                "https://abuse.example.test",
+                IntakeDeliveryStatuses.Succeeded,
+                "ok",
+                DateTimeOffset.UtcNow));
+        var deliveryStore = new TestIntakeDeliveryStore();
         var service = new WebhookIntakeProcessingService(
             inbox,
             blocklist,
             eventStore,
+            alertDispatcher,
+            communityReporter,
+            deliveryStore,
             TestTelemetryFactory.Create(),
             NullLogger<WebhookIntakeProcessingService>.Instance);
 
+        var webhookEvent = new IntakeWebhookEvent(
+            "suspicious_activity_detected",
+            "High Combined Score (0.95)",
+            DateTimeOffset.UtcNow,
+            new IntakeWebhookDetails(
+                "198.51.100.20",
+                "GET",
+                "/upstream",
+                string.Empty,
+                "test-agent",
+                ["upstream_signal"]));
+
         await inbox.EnqueueAsync(new WebhookInboxItem(
             7,
-            new IntakeWebhookEvent(
-                "suspicious_activity_detected",
-                "High Combined Score (0.95)",
-                DateTimeOffset.UtcNow,
-                new IntakeWebhookDetails(
-                    "198.51.100.20",
-                    "GET",
-                    "/upstream",
-                    string.Empty,
-                    "test-agent",
-                    ["upstream_signal"]))), CancellationToken.None);
+            webhookEvent), CancellationToken.None);
 
         await service.StartAsync(CancellationToken.None);
         await inbox.WaitForCompletionAsync();
@@ -43,6 +71,13 @@ public sealed class WebhookIntakeProcessingServiceTests
         Assert.Single(eventStore.Decisions);
         Assert.Equal("blocked", eventStore.Decisions[0].Action);
         Assert.Equal("/upstream", eventStore.Decisions[0].Path);
+        Assert.Single(alertDispatcher.Events);
+        Assert.Same(webhookEvent, alertDispatcher.Events[0]);
+        Assert.Single(communityReporter.Events);
+        Assert.Same(webhookEvent, communityReporter.Events[0]);
+        Assert.Equal(2, deliveryStore.Records.Count);
+        Assert.Contains(deliveryStore.Records, record => record.DeliveryType == IntakeDeliveryTypes.Alert);
+        Assert.Contains(deliveryStore.Records, record => record.DeliveryType == IntakeDeliveryTypes.CommunityReport);
     }
 
     private sealed class TestWebhookEventInbox : IWebhookEventInbox
@@ -136,6 +171,73 @@ public sealed class WebhookIntakeProcessingServiceTests
                 Decisions.LongCount(decision => decision.Action == "observed"),
                 Decisions.OrderByDescending(decision => decision.DecidedAtUtc)
                     .Select(decision => (DateTimeOffset?)decision.DecidedAtUtc)
+                    .FirstOrDefault());
+        }
+    }
+
+    private sealed class TestIntakeAlertDispatcher : IIntakeAlertDispatcher
+    {
+        private readonly IReadOnlyList<IntakeDeliveryRecord> _deliveries;
+
+        public TestIntakeAlertDispatcher(IReadOnlyList<IntakeDeliveryRecord> deliveries)
+        {
+            _deliveries = deliveries;
+        }
+
+        public List<IntakeWebhookEvent> Events { get; } = [];
+
+        public Task<IReadOnlyList<IntakeDeliveryRecord>> DispatchAsync(
+            IntakeWebhookEvent webhookEvent,
+            CancellationToken cancellationToken)
+        {
+            Events.Add(webhookEvent);
+            return Task.FromResult(_deliveries);
+        }
+    }
+
+    private sealed class TestCommunityReporter : ICommunityReporter
+    {
+        private readonly IntakeDeliveryRecord? _delivery;
+
+        public TestCommunityReporter(IntakeDeliveryRecord? delivery)
+        {
+            _delivery = delivery;
+        }
+
+        public List<IntakeWebhookEvent> Events { get; } = [];
+
+        public Task<IntakeDeliveryRecord?> ReportAsync(
+            IntakeWebhookEvent webhookEvent,
+            CancellationToken cancellationToken)
+        {
+            Events.Add(webhookEvent);
+            return Task.FromResult(_delivery);
+        }
+    }
+
+    private sealed class TestIntakeDeliveryStore : IIntakeDeliveryStore
+    {
+        public List<IntakeDeliveryRecord> Records { get; } = [];
+
+        public void Add(IntakeDeliveryRecord record)
+        {
+            Records.Add(record);
+        }
+
+        public IReadOnlyList<IntakeDeliveryRecord> GetRecent(int count)
+        {
+            return Records.Take(count).ToArray();
+        }
+
+        public IntakeDeliveryMetrics GetMetrics()
+        {
+            return new IntakeDeliveryMetrics(
+                Records.Count,
+                Records.LongCount(record => record.Status == IntakeDeliveryStatuses.Succeeded),
+                Records.LongCount(record => record.Status == IntakeDeliveryStatuses.Failed),
+                Records.LongCount(record => record.Status == IntakeDeliveryStatuses.Skipped),
+                Records.OrderByDescending(record => record.AttemptedAtUtc)
+                    .Select(record => (DateTimeOffset?)record.AttemptedAtUtc)
                     .FirstOrDefault());
         }
     }

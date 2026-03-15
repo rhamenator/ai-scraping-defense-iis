@@ -65,6 +65,23 @@ public sealed record WebhookInboxItem(
     long Id,
     IntakeWebhookEvent Event);
 
+public sealed record IntakeDeliveryRecord(
+    string DeliveryType,
+    string Channel,
+    string IpAddress,
+    string Reason,
+    string Target,
+    string Status,
+    string Detail,
+    DateTimeOffset AttemptedAtUtc);
+
+public sealed record IntakeDeliveryMetrics(
+    long TotalAttempts,
+    long SucceededCount,
+    long FailedCount,
+    long SkippedCount,
+    DateTimeOffset? LatestAttemptAtUtc);
+
 public sealed record CommunityBlocklistSyncStatus(
     bool Enabled,
     DateTimeOffset? LastAttemptAtUtc,

@@ -15,6 +15,7 @@ Included in v1:
 - authenticated operator endpoints for events, metrics, and manual blocklist actions
 - protected operator dashboard on top of the authenticated management API
 - authenticated `/analyze` intake for externally confirmed malicious events
+- configurable alert dispatch and outbound community reporting for processed intake events
 - durable SQLite-backed audit and webhook inbox persistence
 - configurable community blocklist sync with operator-visible status
 - peer sync with authenticated export and explicit trust modes

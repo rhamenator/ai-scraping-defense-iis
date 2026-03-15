@@ -187,7 +187,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 
     .status-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }
 
@@ -354,7 +354,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       <div class="hero-grid">
         <div>
           <h1>Scraping defense command board.</h1>
-          <p>Recent decisions, edge metrics, peer and community sync health, and manual blocklist controls all live here. Every action still flows through the authenticated management API.</p>
+          <p>Recent decisions, edge metrics, intake delivery health, peer and community sync health, and manual blocklist controls all live here. Every action still flows through the authenticated management API.</p>
         </div>
         <aside class="login-panel">
           <div class="status-bar">
@@ -463,6 +463,11 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
           <p class="mono">No lookup performed yet.</p>
         </div>
         <div class="status-grid">
+          <section class="status-card">
+            <h3>Intake deliveries</h3>
+            <p id="intakeStatusCopy">Waiting for session.</p>
+            <p class="inline-note">Summary from `/defense/intake-delivery-metrics`; detailed attempts remain available at `/defense/intake-deliveries`.</p>
+          </section>
           <section class="status-card">
             <h3>Community feeds</h3>
             <p id="communityStatusCopy">Waiting for session.</p>
@@ -610,11 +615,13 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     }
 
     async function refreshStatuses() {
-      const [community, peer] = await Promise.all([
+      const [intake, community, peer] = await Promise.all([
+        fetchJson("/defense/intake-delivery-metrics"),
         fetchJson("/defense/community-blocklist/status"),
         fetchJson("/defense/peer-sync/status")
       ]);
 
+      document.getElementById("intakeStatusCopy").textContent = summarizeIntakeStatus(intake);
       document.getElementById("communityStatusCopy").textContent = summarizeStatus(community.enabled, community.importedCount, community.rejectedCount, community.lastSuccessAtUtc, community.lastError);
       document.getElementById("peerStatusCopy").textContent = summarizePeerStatus(peer);
     }
@@ -718,6 +725,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       document.getElementById("metricObserved").textContent = "0";
       document.getElementById("metricLatest").textContent = "none";
       eventsTableBody.innerHTML = '<tr><td colspan="6" class="empty">Sign in to load recent defense decisions.</td></tr>';
+      document.getElementById("intakeStatusCopy").textContent = "Waiting for session.";
       document.getElementById("communityStatusCopy").textContent = "Waiting for session.";
       document.getElementById("peerStatusCopy").textContent = "Waiting for session.";
       blocklistResult.innerHTML = '<h3>Blocklist result</h3><p class="mono">No lookup performed yet.</p>';
@@ -744,6 +752,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       }
 
       return `${number(imported)} imported, ${number(rejected)} rejected, last success ${lastSuccessAtUtc ? formatDate(lastSuccessAtUtc) : "never"}${lastError ? ", error: " + lastError : ""}`;
+    }
+
+    function summarizeIntakeStatus(intake) {
+      return `${number(intake.totalAttempts)} attempts, ${number(intake.succeededCount)} succeeded, ${number(intake.failedCount)} failed, ${number(intake.skippedCount)} skipped, latest ${intake.latestAttemptAtUtc ? formatDate(intake.latestAttemptAtUtc) : "never"}`;
     }
 
     function summarizePeerStatus(peer) {
