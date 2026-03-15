@@ -107,6 +107,20 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
   * **BenignCrawlerScoreAdjustment**: Score delta applied when the model classifies `BENIGN_CRAWLER`.
   * **HumanScoreAdjustment**: Score delta applied when the model classifies `HUMAN`.
 
+#### **DefenseEngine:CommunityBlocklist**
+
+* **Enabled**: Turns the community blocklist sync worker on or off.
+* **SyncIntervalMinutes**: Delay between sync cycles.
+* **RequestTimeoutSeconds**: Timeout applied when fetching a community feed.
+* **MaximumEntriesPerSource**: Safety cap applied to each feed during a single sync cycle.
+* **Sources**: List of feed definitions.
+  * **Name**: Friendly source label used in sync status and imported block reasons.
+  * **Url**: Full URL of the blocklist feed. The feed may return either a JSON array of strings or an object with an `ips` array, matching the upstream public blocklist API.
+  * **ApiKeyHeaderName**: Optional header name used when the source requires a shared secret.
+  * **ApiKey**: Optional shared secret sent to the source.
+
+Imported community entries are validated before they are applied. Invalid, loopback, link-local, and RFC1918/private addresses are rejected instead of being written into the Redis blocklist.
+
 #### **DefenseEngine:Queue**
 
 * **Capacity**: Maximum number of suspicious requests buffered for background analysis. When the queue is full, writers wait for capacity instead of dropping older suspicious requests.

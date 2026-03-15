@@ -64,3 +64,20 @@ public sealed record IntakeWebhookDetails(
 public sealed record WebhookInboxItem(
     long Id,
     IntakeWebhookEvent Event);
+
+public sealed record CommunityBlocklistSyncStatus(
+    bool Enabled,
+    DateTimeOffset? LastAttemptAtUtc,
+    DateTimeOffset? LastSuccessAtUtc,
+    int ImportedCount,
+    int RejectedCount,
+    string? LastError,
+    IReadOnlyList<CommunityBlocklistSourceSyncStatus> Sources);
+
+public sealed record CommunityBlocklistSourceSyncStatus(
+    string Name,
+    string Url,
+    int ImportedCount,
+    int RejectedCount,
+    DateTimeOffset? LastSuccessAtUtc,
+    string? LastError);

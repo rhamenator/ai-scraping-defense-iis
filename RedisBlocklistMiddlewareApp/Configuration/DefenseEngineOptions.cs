@@ -18,6 +18,8 @@ public sealed class DefenseEngineOptions
 
     public EscalationOptions Escalation { get; set; } = new();
 
+    public CommunityBlocklistOptions CommunityBlocklist { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -195,6 +197,30 @@ public sealed class OpenAiCompatibleModelAdapterOptions
     public int BenignCrawlerScoreAdjustment { get; set; } = -5;
 
     public int HumanScoreAdjustment { get; set; } = -15;
+}
+
+public sealed class CommunityBlocklistOptions
+{
+    public bool Enabled { get; set; }
+
+    public int SyncIntervalMinutes { get; set; } = 60;
+
+    public int RequestTimeoutSeconds { get; set; } = 10;
+
+    public int MaximumEntriesPerSource { get; set; } = 5000;
+
+    public CommunityBlocklistSourceOptions[] Sources { get; set; } = [];
+}
+
+public sealed class CommunityBlocklistSourceOptions
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Url { get; set; } = string.Empty;
+
+    public string ApiKeyHeaderName { get; set; } = "X-API-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
 }
 
 public sealed class TarpitOptions

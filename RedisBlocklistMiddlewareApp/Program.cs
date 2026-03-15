@@ -93,6 +93,22 @@ builder.Services
                 : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
         options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
 
+        options.CommunityBlocklist.SyncIntervalMinutes = Math.Max(1, options.CommunityBlocklist.SyncIntervalMinutes);
+        options.CommunityBlocklist.RequestTimeoutSeconds = Math.Max(1, options.CommunityBlocklist.RequestTimeoutSeconds);
+        options.CommunityBlocklist.MaximumEntriesPerSource = Math.Max(1, options.CommunityBlocklist.MaximumEntriesPerSource);
+        options.CommunityBlocklist.Sources = options.CommunityBlocklist.Sources
+            .Where(source => !string.IsNullOrWhiteSpace(source.Url))
+            .Select(source => new CommunityBlocklistSourceOptions
+            {
+                Name = string.IsNullOrWhiteSpace(source.Name) ? source.Url.Trim() : source.Name.Trim(),
+                Url = source.Url.Trim(),
+                ApiKeyHeaderName = string.IsNullOrWhiteSpace(source.ApiKeyHeaderName)
+                    ? "X-API-Key"
+                    : source.ApiKeyHeaderName.Trim(),
+                ApiKey = source.ApiKey.Trim()
+            })
+            .ToArray();
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -118,12 +134,16 @@ builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputati
 builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
 builder.Services.AddSingleton<IThreatModelAdapter, OpenAiCompatibleModelAdapter>();
 builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
+builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();
+builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, CommunityBlocklistSyncStatusStore>();
+builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 builder.Services.AddHostedService<WebhookIntakeProcessingService>();
+builder.Services.AddHostedService<CommunityBlocklistSyncService>();
 
 var app = builder.Build();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
@@ -247,6 +267,12 @@ public partial class Program
             IDefenseEventStore store) =>
         {
             return Results.Ok(store.GetMetrics());
+        });
+
+        management.MapGet("/community-blocklist/status", (
+            [FromServices] ICommunityBlocklistSyncStatusStore statusStore) =>
+        {
+            return Results.Ok(statusStore.GetStatus());
         });
 
         management.MapGet("/blocklist", async (
