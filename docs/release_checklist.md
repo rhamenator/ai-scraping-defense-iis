@@ -15,6 +15,7 @@ Use this checklist before cutting a commercial release candidate.
 - management dashboard login works
 - authenticated operator endpoints work
 - webhook intake accepts and processes a known-good sample event
+- configured webhook/SMTP/community-report deliveries succeed or fail observably during a sample intake event
 - suspicious traffic is tarpitted and can escalate to a block
 - Prometheus metrics are reachable when enabled
 - OTLP export is verified if configured
@@ -40,4 +41,3 @@ Use this checklist before cutting a commercial release candidate.
 - `docs/parity_matrix.md` reflects the current status honestly
 - `CHANGELOG.md` has an `Unreleased` entry summarizing the release-hardening work
 - remaining deferred parity items are tracked as GitHub issues, not hidden in review threads
-

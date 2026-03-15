@@ -9,6 +9,9 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
     private readonly IWebhookEventInbox _inbox;
     private readonly IBlocklistService _blocklistService;
     private readonly IDefenseEventStore _eventStore;
+    private readonly IIntakeAlertDispatcher _alertDispatcher;
+    private readonly ICommunityReporter _communityReporter;
+    private readonly IIntakeDeliveryStore _deliveryStore;
     private readonly DefenseTelemetry _telemetry;
     private readonly ILogger<WebhookIntakeProcessingService> _logger;
 
@@ -16,12 +19,18 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
         IWebhookEventInbox inbox,
         IBlocklistService blocklistService,
         IDefenseEventStore eventStore,
+        IIntakeAlertDispatcher alertDispatcher,
+        ICommunityReporter communityReporter,
+        IIntakeDeliveryStore deliveryStore,
         DefenseTelemetry telemetry,
         ILogger<WebhookIntakeProcessingService> logger)
     {
         _inbox = inbox;
         _blocklistService = blocklistService;
         _eventStore = eventStore;
+        _alertDispatcher = alertDispatcher;
+        _communityReporter = communityReporter;
+        _deliveryStore = deliveryStore;
         _telemetry = telemetry;
         _logger = logger;
     }
@@ -73,6 +82,23 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
                         ])));
 
                 _telemetry.RecordDecision("blocked", "webhook_intake");
+                var alertDeliveries = await _alertDispatcher.DispatchAsync(item.Event, stoppingToken);
+                foreach (var delivery in alertDeliveries)
+                {
+                    _deliveryStore.Add(delivery);
+                    _telemetry.RecordIntakeDelivery(delivery.DeliveryType, delivery.Channel, delivery.Status);
+                }
+
+                var communityDelivery = await _communityReporter.ReportAsync(item.Event, stoppingToken);
+                if (communityDelivery is not null)
+                {
+                    _deliveryStore.Add(communityDelivery);
+                    _telemetry.RecordIntakeDelivery(
+                        communityDelivery.DeliveryType,
+                        communityDelivery.Channel,
+                        communityDelivery.Status);
+                }
+
                 await _inbox.CompleteAsync(item.Id, stoppingToken);
             }
             catch (Exception ex)

@@ -80,6 +80,41 @@ builder.Services
             : options.Intake.ApiKeyHeaderName.Trim();
 
         options.Intake.ApiKey = options.Intake.ApiKey.Trim();
+        options.Intake.Alerting.GenericWebhook.Url = options.Intake.Alerting.GenericWebhook.Url.Trim();
+        options.Intake.Alerting.GenericWebhook.AuthorizationHeaderValue =
+            options.Intake.Alerting.GenericWebhook.AuthorizationHeaderValue.Trim();
+        options.Intake.Alerting.GenericWebhook.TimeoutSeconds =
+            Math.Max(1, options.Intake.Alerting.GenericWebhook.TimeoutSeconds);
+        options.Intake.Alerting.Smtp.Host = options.Intake.Alerting.Smtp.Host.Trim();
+        options.Intake.Alerting.Smtp.Port = Math.Max(1, options.Intake.Alerting.Smtp.Port);
+        options.Intake.Alerting.Smtp.Username = options.Intake.Alerting.Smtp.Username.Trim();
+        options.Intake.Alerting.Smtp.Password = options.Intake.Alerting.Smtp.Password.Trim();
+        options.Intake.Alerting.Smtp.From = options.Intake.Alerting.Smtp.From.Trim();
+        options.Intake.Alerting.Smtp.To = options.Intake.Alerting.Smtp.To
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        options.Intake.CommunityReporting.ProviderName =
+            string.IsNullOrWhiteSpace(options.Intake.CommunityReporting.ProviderName)
+                ? "AbuseIPDB"
+                : options.Intake.CommunityReporting.ProviderName.Trim();
+        options.Intake.CommunityReporting.Endpoint = options.Intake.CommunityReporting.Endpoint.Trim();
+        options.Intake.CommunityReporting.ApiKeyHeaderName =
+            string.IsNullOrWhiteSpace(options.Intake.CommunityReporting.ApiKeyHeaderName)
+                ? "Key"
+                : options.Intake.CommunityReporting.ApiKeyHeaderName.Trim();
+        options.Intake.CommunityReporting.ApiKey = options.Intake.CommunityReporting.ApiKey.Trim();
+        options.Intake.CommunityReporting.TimeoutSeconds =
+            Math.Max(1, options.Intake.CommunityReporting.TimeoutSeconds);
+        options.Intake.CommunityReporting.DefaultCategories =
+            string.IsNullOrWhiteSpace(options.Intake.CommunityReporting.DefaultCategories)
+                ? "19"
+                : options.Intake.CommunityReporting.DefaultCategories.Trim();
+        options.Intake.CommunityReporting.CommentPrefix =
+            string.IsNullOrWhiteSpace(options.Intake.CommunityReporting.CommentPrefix)
+                ? "AI Defense Stack detection"
+                : options.Intake.CommunityReporting.CommentPrefix.Trim();
 
         options.Networking.ClientIpResolutionMode = string.IsNullOrWhiteSpace(options.Networking.ClientIpResolutionMode)
             ? ClientIpResolutionModes.Direct
@@ -209,6 +244,7 @@ builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
 builder.Services.AddSingleton<IDefenseEventStore, SqliteDefenseEventStore>();
+builder.Services.AddSingleton<IIntakeDeliveryStore, SqliteIntakeDeliveryStore>();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
@@ -230,6 +266,9 @@ builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
+builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
+builder.Services.AddSingleton<ICommunityReporter, CommunityReporter>();
+builder.Services.AddSingleton<ISmtpAlertSender, SmtpAlertSender>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 builder.Services.AddHostedService<WebhookIntakeProcessingService>();
@@ -412,6 +451,19 @@ public partial class Program
 
         management.MapGet("/metrics", (
             IDefenseEventStore store) =>
+        {
+            return Results.Ok(store.GetMetrics());
+        });
+
+        management.MapGet("/intake-deliveries", (
+            [FromServices] IIntakeDeliveryStore store,
+            int count = 50) =>
+        {
+            return Results.Ok(store.GetRecent(count));
+        });
+
+        management.MapGet("/intake-delivery-metrics", (
+            [FromServices] IIntakeDeliveryStore store) =>
         {
             return Results.Ok(store.GetMetrics());
         });

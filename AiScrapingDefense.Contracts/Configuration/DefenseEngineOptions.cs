@@ -125,6 +125,10 @@ public sealed class IntakeOptions
     public string ApiKeyHeaderName { get; set; } = "X-Webhook-Key";
 
     public string ApiKey { get; set; } = string.Empty;
+
+    public IntakeAlertingOptions Alerting { get; set; } = new();
+
+    public CommunityReportingOptions CommunityReporting { get; set; } = new();
 }
 
 public sealed class QueueOptions
@@ -301,6 +305,62 @@ public sealed class ObservabilityOptions
     public string PrometheusEndpointPath { get; set; } = "/metrics";
 
     public string OtlpEndpoint { get; set; } = string.Empty;
+}
+
+public sealed class IntakeAlertingOptions
+{
+    public GenericWebhookAlertOptions GenericWebhook { get; set; } = new();
+
+    public SmtpAlertOptions Smtp { get; set; } = new();
+}
+
+public sealed class GenericWebhookAlertOptions
+{
+    public bool Enabled { get; set; }
+
+    public string Url { get; set; } = string.Empty;
+
+    public string AuthorizationHeaderValue { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+}
+
+public sealed class SmtpAlertOptions
+{
+    public bool Enabled { get; set; }
+
+    public string Host { get; set; } = string.Empty;
+
+    public int Port { get; set; } = 587;
+
+    public string Username { get; set; } = string.Empty;
+
+    public string Password { get; set; } = string.Empty;
+
+    public bool UseTls { get; set; } = true;
+
+    public string From { get; set; } = string.Empty;
+
+    public string[] To { get; set; } = [];
+}
+
+public sealed class CommunityReportingOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ProviderName { get; set; } = "AbuseIPDB";
+
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string ApiKeyHeaderName { get; set; } = "Key";
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    public string DefaultCategories { get; set; } = "19";
+
+    public string CommentPrefix { get; set; } = "AI Defense Stack detection";
 }
 
 public sealed class PostgresMarkovOptions

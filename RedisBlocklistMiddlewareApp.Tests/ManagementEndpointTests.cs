@@ -278,6 +278,8 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/dashboard/session");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-deliveries");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-delivery-metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/community-blocklist/status");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/peer-sync/status");
@@ -293,6 +295,8 @@ public sealed class ManagementEndpointTests
         Assert.Contains("/defense/dashboard/session", html);
         Assert.Contains("/defense/events", html);
         Assert.Contains("/defense/metrics", html);
+        Assert.Contains("/defense/intake-deliveries", html);
+        Assert.Contains("/defense/intake-delivery-metrics", html);
         Assert.Contains("/defense/blocklist", html);
     }
 
@@ -397,6 +401,7 @@ public sealed class ManagementEndpointTests
         builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
+        builder.Services.AddSingleton<IIntakeDeliveryStore, TestIntakeDeliveryStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
         builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
         builder.Services.AddSingleton<IPeerSyncStatusStore, TestPeerSyncStatusStore>();
@@ -514,6 +519,23 @@ public sealed class ManagementEndpointTests
         public DefenseEventMetrics GetMetrics()
         {
             return new DefenseEventMetrics(0, 0, 0, null);
+        }
+    }
+
+    private sealed class TestIntakeDeliveryStore : IIntakeDeliveryStore
+    {
+        public void Add(IntakeDeliveryRecord record)
+        {
+        }
+
+        public IReadOnlyList<IntakeDeliveryRecord> GetRecent(int count)
+        {
+            return [];
+        }
+
+        public IntakeDeliveryMetrics GetMetrics()
+        {
+            return new IntakeDeliveryMetrics(0, 0, 0, 0, null);
         }
     }
 

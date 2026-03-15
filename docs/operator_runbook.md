@@ -27,6 +27,8 @@ At minimum, set:
 - `DefenseEngine:Redis:ConnectionString`
 - `DefenseEngine:Management:ApiKey`
 - `DefenseEngine:Intake:ApiKey` if webhook intake is required
+- `DefenseEngine:Intake:Alerting:*` if webhook or SMTP alerts are required
+- `DefenseEngine:Intake:CommunityReporting:*` if outbound community reporting is required
 - `DefenseEngine:Audit:DatabasePath`
 - `DefenseEngine:Networking:ClientIpResolutionMode`
 
@@ -53,6 +55,12 @@ Check authenticated metrics:
 
 ```bash
 curl -H 'X-API-Key: <management-key>' http://localhost:8080/defense/metrics
+```
+
+Check intake delivery metrics:
+
+```bash
+curl -H 'X-API-Key: <management-key>' http://localhost:8080/defense/intake-delivery-metrics
 ```
 
 ## Dashboard Access
@@ -114,6 +122,13 @@ curl -X POST \
   }'
 ```
 
+Inspect recent intake delivery attempts:
+
+```bash
+curl -H 'X-API-Key: <management-key>' \
+  'http://localhost:8080/defense/intake-deliveries?count=20'
+```
+
 ## Community and Peer Sync Checks
 
 Community blocklist status:
@@ -158,5 +173,5 @@ If `DefenseEngine:Observability:OtlpEndpoint` is configured, traces are exported
 - `503 /health`: Redis is unreachable or misconfigured
 - startup failure in `Production`: loopback Redis or unsafe proxy config is still present
 - missing real client IPs: proxy/CDN trust mode is not configured correctly
+- intake delivery failures: inspect `/defense/intake-deliveries` for failed webhook, SMTP, or community-report attempts
 - empty Markov tarpit output changes: PostgreSQL corpus is empty or unavailable, so synthetic fallback content is being used
-

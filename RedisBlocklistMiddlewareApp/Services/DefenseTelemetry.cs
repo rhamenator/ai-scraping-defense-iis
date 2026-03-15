@@ -37,6 +37,13 @@ public sealed class DefenseTelemetry
     private static readonly Counter WebhookAccepted = Metrics.CreateCounter(
         "ai_scraping_defense_webhook_intake_total",
         "Webhook intake events accepted for durable processing.");
+    private static readonly Counter IntakeDeliveryAttempts = Metrics.CreateCounter(
+        "ai_scraping_defense_intake_delivery_total",
+        "Intake alert/report delivery outcomes.",
+        new CounterConfiguration
+        {
+            LabelNames = ["delivery_type", "channel", "status"]
+        });
     private static readonly Counter CommunityImports = Metrics.CreateCounter(
         "ai_scraping_defense_community_imports_total",
         "Community-blocklist import outcomes.",
@@ -90,6 +97,13 @@ public sealed class DefenseTelemetry
     public void RecordWebhookAccepted()
     {
         WebhookAccepted.Inc();
+    }
+
+    public void RecordIntakeDelivery(string deliveryType, string channel, string status)
+    {
+        IntakeDeliveryAttempts
+            .WithLabels(SanitizeLabel(deliveryType), SanitizeLabel(channel), SanitizeLabel(status))
+            .Inc();
     }
 
     public void RecordCommunitySync(int importedCount, int rejectedCount)

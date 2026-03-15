@@ -21,6 +21,8 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - A protected operator dashboard at `/defense/dashboard` backed by the same management API.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
+- Configurable webhook and SMTP alert dispatch for processed intake events.
+- Configurable outbound community reporting for processed intake events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
 - Optional PostgreSQL-backed Markov tarpit content with deterministic render variants.
@@ -33,6 +35,7 @@ The first commercial release is a single deployable ASP.NET Core service that pr
 - tarpit suspicious traffic
 - persist defense decisions and operator-visible events
 - accept authenticated webhook intake for confirmed malicious traffic
+- dispatch operator alerts and optional community reports from confirmed malicious intake events
 - block and unblock IPs through authenticated operator endpoints
 
 This is intentionally a single-deployable, multi-project .NET stack for v1. It preserves the upstream functional roles, but keeps them in one runtime deployment until separate service contracts and operational behavior settle.
@@ -56,6 +59,8 @@ Management endpoints:
 - `DELETE /defense/dashboard/session`
 - `GET /defense/events?count=50`
 - `GET /defense/metrics`
+- `GET /defense/intake-deliveries?count=50`
+- `GET /defense/intake-delivery-metrics`
 - `GET /defense/community-blocklist/status`
 - `GET /defense/peer-sync/status`
 - `GET /defense/blocklist?ip=203.0.113.10`
@@ -109,6 +114,9 @@ Key areas:
 - `DefenseEngine:Management`
   - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
 - `DefenseEngine:Intake`
+  - `Alerting:GenericWebhook` controls optional outbound webhook alerts for processed intake events.
+  - `Alerting:Smtp` controls optional operator email alerts for processed intake events.
+  - `CommunityReporting` controls optional outbound reporting to providers like AbuseIPDB.
 - `DefenseEngine:Audit`
 - `DefenseEngine:Escalation`
 - `DefenseEngine:CommunityBlocklist`
