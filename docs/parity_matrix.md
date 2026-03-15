@@ -19,10 +19,10 @@ Status legend:
 | Peer sync | Implemented | Timed imports, authenticated exports, and `ObserveOnly`/`BlockList` trust modes are implemented. | Add richer trust scoring and coordination. |
 | PostgreSQL-backed Markov tarpit | Implemented | The tarpit can load a Markov corpus from PostgreSQL and falls back safely when no snapshot exists. | Expand deeper decoy modes. See issue `#55`. |
 | Advanced tarpit decoys | Implemented | The tarpit now serves rotating ZIP decoy archives with deterministic fake JavaScript payloads in addition to deterministic HTML modes. | Expand artifact families only when they add measurable crawler cost. |
-| Reputation providers and classifier hooks | Implemented | Configured ranges, HTTP reputation, .NET-native local trained models, and OpenAI-compatible model adapters exist. | Add richer dataset-building and retraining ergonomics. See issue `#64`. |
+| Reputation providers and classifier hooks | Implemented | Configured ranges, HTTP reputation, .NET-native local trained models, OpenAI-compatible model adapters, and a log/export dataset-builder path for local retraining exist. | Keep improving feature quality and retraining workflows against real operator feedback. |
 | Alerting and operator/community reporting | Implemented | Confirmed malicious intake events can dispatch generic webhook alerts, Slack Incoming Webhook alerts, SMTP alerts, and configurable community reports with durable delivery visibility. | Add provider-specific enrichments only when operators show real demand. |
 | Structured telemetry export | Implemented | Prometheus metrics, OTLP trace export, packaged scrape/alert config, and a bundled Grafana dashboard are included. | Tune thresholds and dashboard panels against production traffic after deployment. |
 | Independent multi-service deployment | Deferred | v1 intentionally ships as a single deployable ASP.NET Core runtime. | Split into independently deployed roles only when operations justify it. |
 | SQL Server support | Deferred | Redis + SQLite + PostgreSQL are the supported data stores for v1. | Revisit only if customer demand justifies the extra provider surface. |
 
-Commercial v1 is feature-complete enough to package and validate, but fuller upstream parity still depends on closing issue `#64`.
+Commercial v1 now covers the defined commercial parity scope. Additional work should be driven by measured operator demand rather than inherited backlog assumptions.
