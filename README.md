@@ -42,6 +42,7 @@ This is intentionally a single-deployable, multi-project .NET stack for v1. It p
 
 See [docs/architecture.md](docs/architecture.md) for the current architecture, [docs/commercial_scope.md](docs/commercial_scope.md) for the v1 definition, and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the post-v1 parity queue.
 Operational release documentation now lives in [docs/parity_matrix.md](docs/parity_matrix.md), [docs/operator_runbook.md](docs/operator_runbook.md), and [docs/release_checklist.md](docs/release_checklist.md).
+Release artifact policy now lives in [docs/release_artifacts.md](docs/release_artifacts.md).
 
 ## Implemented Endpoints
 
@@ -143,6 +144,8 @@ The repository now includes:
 - a local smoke/deployment [compose.yaml](compose.yaml)
 - an observability overlay at [compose.observability.yaml](compose.observability.yaml)
 - a GitHub Actions CI workflow at [.github/workflows/dotnet-ci.yml](.github/workflows/dotnet-ci.yml)
+- a tagged-release image workflow at [.github/workflows/release-images.yml](.github/workflows/release-images.yml)
 
 Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.
 Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.
+Tagged releases publish signed GHCR images with provenance as documented in [docs/release_artifacts.md](docs/release_artifacts.md).
