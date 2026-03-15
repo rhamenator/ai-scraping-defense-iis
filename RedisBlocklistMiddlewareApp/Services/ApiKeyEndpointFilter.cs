@@ -1,47 +1,23 @@
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
-using RedisBlocklistMiddlewareApp.Configuration;
-
 namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class ApiKeyEndpointFilter : IEndpointFilter
 {
-    private readonly string _headerName;
-    private readonly byte[] _expectedApiKeyBytes;
+    private readonly ManagementAuthenticationService _authenticationService;
 
-    public ApiKeyEndpointFilter(IOptions<DefenseEngineOptions> options)
+    public ApiKeyEndpointFilter(ManagementAuthenticationService authenticationService)
     {
-        _headerName = options.Value.Management.ApiKeyHeaderName;
-        _expectedApiKeyBytes = Encoding.UTF8.GetBytes(options.Value.Management.ApiKey);
+        _authenticationService = authenticationService;
     }
 
     public ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context,
         EndpointFilterDelegate next)
     {
-        if (!context.HttpContext.Request.Headers.TryGetValue(_headerName, out var suppliedApiKey))
-        {
-            return ValueTask.FromResult<object?>(Results.Unauthorized());
-        }
-
-        var suppliedApiKeyBytes = Encoding.UTF8.GetBytes(suppliedApiKey.ToString());
-        if (!FixedTimeEquals(_expectedApiKeyBytes, suppliedApiKeyBytes))
+        if (!_authenticationService.IsAuthenticated(context.HttpContext))
         {
             return ValueTask.FromResult<object?>(Results.Unauthorized());
         }
 
         return next(context);
-    }
-
-    private static bool FixedTimeEquals(byte[] expected, byte[] supplied)
-    {
-        if (expected.Length != supplied.Length)
-        {
-            return false;
-        }
-
-        return CryptographicOperations.FixedTimeEquals(expected, supplied);
     }
 }

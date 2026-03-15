@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,29 @@ public sealed class ManagementEndpointTests
         var filter = CreateFilter();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-API-Key"] = "test-management-key";
+        var context = new TestEndpointFilterInvocationContext(httpContext);
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task ApiKeyFilter_AllowsRequest_WhenDashboardSessionCookieMatches()
+    {
+        var services = CreateServiceProvider();
+        var authenticationService = services.GetRequiredService<ManagementAuthenticationService>();
+        var filter = services.GetRequiredService<ApiKeyEndpointFilter>();
+        var responseContext = new DefaultHttpContext();
+        authenticationService.AppendSessionCookie(responseContext.Response, authenticationService.CreateSessionValue());
+        var setCookie = responseContext.Response.Headers.SetCookie.ToString();
+        var sessionValue = ExtractCookieValue(setCookie, ManagementAuthenticationService.SessionCookieName);
+
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = services
+        };
+        httpContext.Request.Headers.Cookie = $"{ManagementAuthenticationService.SessionCookieName}={sessionValue}";
         var context = new TestEndpointFilterInvocationContext(httpContext);
 
         var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
@@ -106,6 +130,7 @@ public sealed class ManagementEndpointTests
 
         var endpoints = Program.GetAdvertisedEndpoints(options);
 
+        Assert.Equal("/defense/dashboard", endpoints["dashboard"]);
         Assert.Equal("/defense/events", endpoints["events"]);
         Assert.Equal("/defense/metrics", endpoints["metrics"]);
     }
@@ -249,11 +274,26 @@ public sealed class ManagementEndpointTests
         Program.MapManagementEndpoints(app, options);
         var endpoints = GetRouteEndpoints(app);
 
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/dashboard");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/dashboard/session");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/community-blocklist/status");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/peer-sync/status");
+    }
+
+    [Fact]
+    public void OperatorDashboardPageService_RendersManagementApiSurface()
+    {
+        var pageService = new OperatorDashboardPageService();
+
+        var html = pageService.Render();
+
+        Assert.Contains("/defense/dashboard/session", html);
+        Assert.Contains("/defense/events", html);
+        Assert.Contains("/defense/metrics", html);
+        Assert.Contains("/defense/blocklist", html);
     }
 
     [Fact]
@@ -316,16 +356,7 @@ public sealed class ManagementEndpointTests
 
     private static ApiKeyEndpointFilter CreateFilter()
     {
-        var options = Options.Create(new DefenseEngineOptions
-        {
-            Management = new ManagementOptions
-            {
-                ApiKeyHeaderName = "X-API-Key",
-                ApiKey = "test-management-key"
-            }
-        });
-
-        return new ApiKeyEndpointFilter(options);
+        return CreateServiceProvider().GetRequiredService<ApiKeyEndpointFilter>();
     }
 
     private static IntakeApiKeyEndpointFilter CreateIntakeFilter()
@@ -359,16 +390,42 @@ public sealed class ManagementEndpointTests
     private static WebApplication CreateApp()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddDataProtection();
+        builder.Services.AddSingleton<ManagementAuthenticationService>();
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
         builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
+        builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
         builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
         builder.Services.AddSingleton<IPeerSyncStatusStore, TestPeerSyncStatusStore>();
         builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, TestCommunityBlocklistSyncStatusStore>();
-        builder.Services.AddSingleton(Options.Create(new DefenseEngineOptions()));
+        builder.Services.AddSingleton(Options.Create(CreateOptions()));
         return builder.Build();
+    }
+
+    private static ServiceProvider CreateServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddDataProtection();
+        services.AddSingleton(Options.Create(CreateOptions()));
+        services.AddSingleton<ManagementAuthenticationService>();
+        services.AddSingleton<ApiKeyEndpointFilter>();
+        return services.BuildServiceProvider();
+    }
+
+    private static DefenseEngineOptions CreateOptions()
+    {
+        return new DefenseEngineOptions
+        {
+            Management = new ManagementOptions
+            {
+                ApiKeyHeaderName = "X-API-Key",
+                ApiKey = "test-management-key",
+                DashboardSessionHours = 8
+            }
+        };
     }
 
     private static IReadOnlyList<RouteEndpoint> GetRouteEndpoints(WebApplication app)
@@ -391,6 +448,15 @@ public sealed class ManagementEndpointTests
         await typedResult.ExecuteAsync(httpContext);
 
         Assert.Equal(expectedStatusCode, httpContext.Response.StatusCode);
+    }
+
+    private static string ExtractCookieValue(string setCookieHeader, string cookieName)
+    {
+        var cookieSegment = setCookieHeader
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .First(segment => segment.StartsWith(cookieName + "=", StringComparison.Ordinal));
+
+        return cookieSegment[(cookieName.Length + 1)..];
     }
 
     private sealed class TestEndpointFilterInvocationContext : EndpointFilterInvocationContext
