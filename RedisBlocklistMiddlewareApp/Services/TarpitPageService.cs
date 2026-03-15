@@ -43,10 +43,14 @@ public sealed class TarpitPageService : ITarpitPageService
     ];
 
     private readonly TarpitOptions _options;
+    private readonly ITarpitMarkovStore _markovStore;
 
-    public TarpitPageService(IOptions<DefenseEngineOptions> options)
+    public TarpitPageService(
+        IOptions<DefenseEngineOptions> options,
+        ITarpitMarkovStore markovStore)
     {
         _options = options.Value.Tarpit;
+        _markovStore = markovStore;
     }
 
     public string GeneratePage(string path, string clientIpAddress)
@@ -55,6 +59,7 @@ public sealed class TarpitPageService : ITarpitPageService
         var random = new Random(GetDeterministicSeed(normalizedPath, clientIpAddress));
         var encodedPathText = WebUtility.HtmlEncode("/" + normalizedPath);
         var encodedPathForUrl = EncodePathForUrl(normalizedPath);
+        var renderMode = PickRenderMode(random);
         var builder = new StringBuilder();
 
         builder.AppendLine("<!doctype html>");
@@ -75,9 +80,58 @@ public sealed class TarpitPageService : ITarpitPageService
         builder.AppendLine($"  <h1>{Pick(Topics, random)}</h1>");
         builder.AppendLine($"  <p>Session path: {encodedPathText}</p>");
 
+        RenderBody(builder, renderMode, encodedPathForUrl, random);
+        builder.AppendLine("</main>");
+        builder.AppendLine("</body>");
+        builder.AppendLine("</html>");
+
+        return builder.ToString();
+    }
+
+    private int GetDeterministicSeed(string path, string clientIpAddress)
+    {
+        var bytes = SHA256.HashData(
+            Encoding.UTF8.GetBytes($"{_options.Seed}|{path}|{clientIpAddress}"));
+        return BitConverter.ToInt32(bytes, 0);
+    }
+
+    private void RenderBody(
+        StringBuilder builder,
+        string renderMode,
+        string encodedPathForUrl,
+        Random random)
+    {
         for (var i = 0; i < Math.Max(1, _options.ParagraphCount); i++)
         {
             builder.AppendLine($"  <p>{BuildParagraph(random)}</p>");
+        }
+
+        if (string.Equals(renderMode, TarpitRenderModes.ArchiveIndex, StringComparison.Ordinal))
+        {
+            builder.AppendLine("  <h2>Archive manifests</h2>");
+            builder.AppendLine("  <ul>");
+            for (var i = 0; i < Math.Max(1, _options.LinkCount); i++)
+            {
+                var slug = BuildSlug(random);
+                builder.AppendLine(
+                    $"    <li><a href=\"{_options.PathPrefix}/{encodedPathForUrl}/archive/{Uri.EscapeDataString(slug)}.zip\">{WebUtility.HtmlEncode(slug)}.zip</a></li>");
+            }
+            builder.AppendLine("  </ul>");
+            return;
+        }
+
+        if (string.Equals(renderMode, TarpitRenderModes.ApiCatalog, StringComparison.Ordinal))
+        {
+            builder.AppendLine("  <h2>API mirrors</h2>");
+            builder.AppendLine("  <ul>");
+            for (var i = 0; i < Math.Max(1, _options.LinkCount); i++)
+            {
+                var slug = BuildSlug(random);
+                builder.AppendLine(
+                    $"    <li><a href=\"{_options.PathPrefix}/{encodedPathForUrl}/api/{Uri.EscapeDataString(slug)}.json\">/{WebUtility.HtmlEncode(slug)}/status</a></li>");
+            }
+            builder.AppendLine("  </ul>");
+            return;
         }
 
         builder.AppendLine("  <h2>Related indexes</h2>");
@@ -93,22 +147,18 @@ public sealed class TarpitPageService : ITarpitPageService
         }
 
         builder.AppendLine("  </ul>");
-        builder.AppendLine("</main>");
-        builder.AppendLine("</body>");
-        builder.AppendLine("</html>");
-
-        return builder.ToString();
     }
 
-    private int GetDeterministicSeed(string path, string clientIpAddress)
+    private string BuildParagraph(Random random)
     {
-        var bytes = SHA256.HashData(
-            Encoding.UTF8.GetBytes($"{_options.Seed}|{path}|{clientIpAddress}"));
-        return BitConverter.ToInt32(bytes, 0);
-    }
+        var snapshot = _markovStore.GetSnapshot();
+        if (snapshot is not null &&
+            snapshot.Transitions.Count > 0 &&
+            snapshot.AvailableWords.Count > 0)
+        {
+            return BuildMarkovParagraph(snapshot, random);
+        }
 
-    private static string BuildParagraph(Random random)
-    {
         var sentenceCount = random.Next(3, 6);
         var sentences = new List<string>(sentenceCount);
 
@@ -124,6 +174,72 @@ public sealed class TarpitPageService : ITarpitPageService
     private static string BuildSlug(Random random)
     {
         return $"{Pick(Nouns, random)}-{Pick(Nouns, random)}-{random.Next(1000, 9999)}";
+    }
+
+    private string BuildMarkovParagraph(TarpitMarkovSnapshot snapshot, Random random)
+    {
+        var words = new List<string>(Math.Max(8, _options.MarkovWordsPerParagraph));
+        var previousOne = string.Empty;
+        var previousTwo = string.Empty;
+
+        for (var index = 0; index < Math.Max(8, _options.MarkovWordsPerParagraph); index++)
+        {
+            var stateKey = BuildStateKey(previousOne, previousTwo);
+            if (!snapshot.Transitions.TryGetValue(stateKey, out var candidates) || candidates.Length == 0)
+            {
+                var fallback = snapshot.AvailableWords[random.Next(snapshot.AvailableWords.Count)];
+                if (string.IsNullOrWhiteSpace(fallback))
+                {
+                    continue;
+                }
+
+                words.Add(fallback);
+                previousOne = previousTwo;
+                previousTwo = fallback;
+                continue;
+            }
+
+            var nextWord = candidates[random.Next(candidates.Length)];
+            if (string.IsNullOrWhiteSpace(nextWord))
+            {
+                previousOne = string.Empty;
+                previousTwo = string.Empty;
+                continue;
+            }
+
+            words.Add(nextWord);
+            previousOne = previousTwo;
+            previousTwo = nextWord;
+        }
+
+        if (words.Count == 0)
+        {
+            return "Archive manifests normalize synthetic crawl indexes.";
+        }
+
+        var paragraph = string.Join(' ', words);
+        if (!paragraph.EndsWith(".", StringComparison.Ordinal) &&
+            !paragraph.EndsWith("!", StringComparison.Ordinal) &&
+            !paragraph.EndsWith("?", StringComparison.Ordinal))
+        {
+            paragraph += ".";
+        }
+
+        return Capitalize(paragraph);
+    }
+
+    private string PickRenderMode(Random random)
+    {
+        var modes = _options.Modes.Length == 0
+            ? new[] { TarpitRenderModes.Standard }
+            : _options.Modes;
+
+        return modes[random.Next(modes.Length)];
+    }
+
+    private static string BuildStateKey(string previousOne, string previousTwo)
+    {
+        return $"{previousOne}\u001f{previousTwo}";
     }
 
     private static string EncodePathForUrl(string path)

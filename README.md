@@ -15,6 +15,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
+- Optional PostgreSQL-backed Markov tarpit content with deterministic render variants.
 
 ## Commercial v1 Scope
 
@@ -64,7 +65,7 @@ Peer export endpoint:
 
 - `Redis`: required for hot operational state such as blocklists and short-window frequency counters.
 - `SQLite`: supported for local development, demos, and single-node/lightweight production installs as the durable audit and webhook intake store.
-- `PostgreSQL`: planned as the primary production relational backend for richer tarpit content, sync features, and larger-scale persistence.
+- `PostgreSQL`: supported for the Markov-backed tarpit corpus and remains the primary production relational direction for richer content and larger-scale persistence.
 - `SQL Server`: deferred. It is not a commercial v1 target unless customer demand justifies the extra provider and test surface.
 
 ## Escalation Extensions
@@ -78,6 +79,10 @@ Queued suspicious-request analysis now persists a score breakdown with named con
 - an optional OpenAI-compatible classifier endpoint
 
 The default configuration keeps the external reputation/model hooks disabled. They are exposed under `DefenseEngine:Escalation` so production deployments can opt in without changing the rest of the request pipeline.
+
+## PostgreSQL Tarpit
+
+The tarpit can now switch from fixed synthetic paragraphs to a PostgreSQL-backed Markov corpus under `DefenseEngine:Tarpit:PostgresMarkov`. When enabled, the app reads `markov_words` and `markov_sequences` tables and uses the durable corpus to generate deterministic crawl-wasting paragraphs. The base schema is in [init_markov.sql](/home/rich/dev/ai-scraping-defense-iis/db/init_markov.sql).
 
 ## Configuration
 

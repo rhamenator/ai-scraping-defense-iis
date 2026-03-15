@@ -150,6 +150,14 @@ Imported community entries are validated before they are applied. Invalid, loopb
 * **LinkCount**: Number of recursive links rendered in each tarpit page.
 * **ParagraphCount**: Number of generated paragraphs rendered in each tarpit page.
 * **ResponseDelayMilliseconds**: Artificial delay applied before returning tarpit content.
+* **Modes**: Deterministic tarpit render variants. Supported values are `Standard`, `ArchiveIndex`, and `ApiCatalog`.
+* **MarkovWordsPerParagraph**: Approximate word budget for each PostgreSQL-backed Markov paragraph.
+* **PostgresMarkov**: PostgreSQL-backed corpus options.
+  * **Enabled**: Turns PostgreSQL-backed tarpit content on or off.
+  * **ConnectionString**: PostgreSQL connection string used to load the Markov corpus.
+  * **WordsTableName**: Table name for token rows. Defaults to `markov_words`.
+  * **SequencesTableName**: Table name for Markov transitions. Defaults to `markov_sequences`.
+  * **RefreshMinutes**: Cache refresh interval for reloading the corpus.
 
 ## **Overrides**
 

@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.15" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.15" />
+    <PackageReference Include="Npgsql" Version="8.0.3" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
