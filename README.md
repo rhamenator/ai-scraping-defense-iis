@@ -99,7 +99,7 @@ Queued suspicious-request analysis now persists a score breakdown with named con
 - an optional OpenAI-compatible classifier endpoint
 
 The default configuration keeps the external reputation/model hooks disabled. They are exposed under `DefenseEngine:Escalation` so production deployments can opt in without changing the rest of the request pipeline.
-See [docs/local_model_training.md](docs/local_model_training.md) for the local model artifact format and trainer CLI.
+See [docs/local_model_training.md](docs/local_model_training.md) for the local model artifact format, dataset-builder inputs, and trainer CLI.
 
 ## PostgreSQL Tarpit
 

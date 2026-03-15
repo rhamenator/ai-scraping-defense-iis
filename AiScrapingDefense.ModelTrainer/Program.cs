@@ -1,40 +1,114 @@
 using System.Text.Json;
 using RedisBlocklistMiddlewareApp.Services;
 
-var arguments = ParseArguments(args);
-if (!arguments.TryGetValue("--input", out var inputPath) ||
-    !arguments.TryGetValue("--output", out var outputPath) ||
-    !arguments.TryGetValue("--version", out var modelVersion))
+var exitCode = Execute(args);
+return exitCode;
+
+static int Execute(string[] args)
 {
-    WriteUsage();
-    return 1;
+    var commandArguments = args;
+    var command = "train";
+
+    if (args.Length > 0 &&
+        !args[0].StartsWith("--", StringComparison.Ordinal) &&
+        (string.Equals(args[0], "train", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(args[0], "build-dataset", StringComparison.OrdinalIgnoreCase)))
+    {
+        command = args[0].ToLowerInvariant();
+        commandArguments = args[1..];
+    }
+
+    var arguments = ParseArguments(commandArguments);
+    return command switch
+    {
+        "build-dataset" => ExecuteBuildDataset(arguments),
+        _ => ExecuteTrain(arguments)
+    };
 }
 
-var threshold = 0.75f;
-if (arguments.TryGetValue("--threshold", out var thresholdValue) &&
-    !float.TryParse(thresholdValue, out threshold))
+static int ExecuteTrain(IReadOnlyDictionary<string, string> arguments)
 {
-    Console.Error.WriteLine("The --threshold value must be a floating-point number.");
-    return 1;
+    if (!arguments.TryGetValue("--input", out var inputPath) ||
+        !arguments.TryGetValue("--output", out var outputPath) ||
+        !arguments.TryGetValue("--version", out var modelVersion))
+    {
+        WriteUsage();
+        return 1;
+    }
+
+    var threshold = 0.75f;
+    if (arguments.TryGetValue("--threshold", out var thresholdValue) &&
+        !float.TryParse(thresholdValue, out threshold))
+    {
+        Console.Error.WriteLine("The --threshold value must be a floating-point number.");
+        return 1;
+    }
+
+    threshold = Math.Clamp(threshold, 0.5f, 0.99f);
+
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"Training input file '{inputPath}' was not found.");
+        return 1;
+    }
+
+    var documents = LoadTrainingDocuments(inputPath);
+    var trainer = new LocalTrainedModelTrainer();
+    var artifacts = trainer.TrainAndSave(documents, outputPath, modelVersion, threshold);
+
+    Console.WriteLine($"Model written to {artifacts.ModelPath}");
+    Console.WriteLine($"Metadata written to {artifacts.MetadataPath}");
+    Console.WriteLine($"Model version: {artifacts.Metadata.ModelVersion}");
+    Console.WriteLine($"Training examples: {artifacts.Metadata.TrainingExampleCount}");
+    return 0;
 }
 
-threshold = Math.Clamp(threshold, 0.5f, 0.99f);
-
-if (!File.Exists(inputPath))
+static int ExecuteBuildDataset(IReadOnlyDictionary<string, string> arguments)
 {
-    Console.Error.WriteLine($"Training input file '{inputPath}' was not found.");
-    return 1;
+    if (!arguments.TryGetValue("--input-format", out var inputFormat) ||
+        !arguments.TryGetValue("--input", out var inputPath) ||
+        !arguments.TryGetValue("--output", out var outputPath))
+    {
+        WriteUsage();
+        return 1;
+    }
+
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine($"Dataset input file '{inputPath}' was not found.");
+        return 1;
+    }
+
+    var builder = new LocalModelDatasetBuilder();
+    IReadOnlyList<LocalModelDatasetSourceRecord> sourceRecords = inputFormat.ToLowerInvariant() switch
+    {
+        "request-jsonl" => builder.LoadRequestRecordsFromJsonl(inputPath),
+        "w3c" => builder.LoadRequestRecordsFromW3cLog(inputPath),
+        _ => throw new InvalidOperationException("Unsupported --input-format. Use 'request-jsonl' or 'w3c'.")
+    };
+
+    IReadOnlyList<LocalModelFeedbackRecord>? feedbackRecords = null;
+    if (arguments.TryGetValue("--feedback", out var feedbackPath) && !string.IsNullOrWhiteSpace(feedbackPath))
+    {
+        if (!File.Exists(feedbackPath))
+        {
+            Console.Error.WriteLine($"Feedback file '{feedbackPath}' was not found.");
+            return 1;
+        }
+
+        feedbackRecords = builder.LoadFeedbackRecordsFromJsonl(feedbackPath);
+    }
+
+    var result = builder.Build(sourceRecords, feedbackRecords);
+    builder.WriteDocumentsAsJsonl(result.Documents, outputPath);
+
+    Console.WriteLine($"Dataset written to {outputPath}");
+    Console.WriteLine($"Training examples: {result.Documents.Count}");
+    Console.WriteLine($"Feedback labels applied: {result.FeedbackLabelsApplied}");
+    Console.WriteLine($"Heuristic labels applied: {result.HeuristicLabelsApplied}");
+    Console.WriteLine($"Skipped records: {result.SkippedRecords}");
+    return 0;
 }
-
-var documents = LoadDocuments(inputPath);
-var trainer = new LocalTrainedModelTrainer();
-var artifacts = trainer.TrainAndSave(documents, outputPath, modelVersion, threshold);
-
-Console.WriteLine($"Model written to {artifacts.ModelPath}");
-Console.WriteLine($"Metadata written to {artifacts.MetadataPath}");
-Console.WriteLine($"Model version: {artifacts.Metadata.ModelVersion}");
-Console.WriteLine($"Training examples: {artifacts.Metadata.TrainingExampleCount}");
-return 0;
 
 static Dictionary<string, string> ParseArguments(string[] args)
 {
@@ -60,7 +134,7 @@ static Dictionary<string, string> ParseArguments(string[] args)
     return results;
 }
 
-static IReadOnlyList<LocalModelTrainingDocument> LoadDocuments(string inputPath)
+static IReadOnlyList<LocalModelTrainingDocument> LoadTrainingDocuments(string inputPath)
 {
     var lines = File.ReadAllLines(inputPath)
         .Where(line => !string.IsNullOrWhiteSpace(line))
@@ -84,6 +158,9 @@ static IReadOnlyList<LocalModelTrainingDocument> LoadDocuments(string inputPath)
 static void WriteUsage()
 {
     Console.Error.WriteLine(
-        "Usage: dotnet run --project AiScrapingDefense.ModelTrainer -- " +
-        "--input <training.jsonl> --output <model.zip> --version <model-version> [--threshold 0.75]");
+        "Usage:\n" +
+        "  dotnet run --project AiScrapingDefense.ModelTrainer -- " +
+        "train --input <training.jsonl> --output <model.zip> --version <model-version> [--threshold 0.75]\n" +
+        "  dotnet run --project AiScrapingDefense.ModelTrainer -- " +
+        "build-dataset --input-format <request-jsonl|w3c> --input <requests-file> --output <training.jsonl> [--feedback <feedback.jsonl>]");
 }
