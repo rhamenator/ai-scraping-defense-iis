@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* No unreleased changes yet.
+
+## [1.0.0] - 2026-03-15
+
+### Added
+
 * Containerized deployment artifacts for the .NET runtime (`Dockerfile`, `compose.yaml`).
 * An observability overlay with Prometheus, Grafana provisioning, alert rules, and an OTLP collector example (`compose.observability.yaml`, `deploy/observability/*`).
 * A GitHub Actions workflow that restores, builds, and tests the solution on every push and pull request.

@@ -25,7 +25,6 @@ Included in v1:
 
 Explicitly deferred from v1:
 
-- richer reputation providers and optional LLM-backed scoring
 - separate runtime deployments for `EdgeGateway`, `EscalationEngine`, and `TarpitApi`
 - SQL Server support
 
@@ -40,8 +39,8 @@ Commercial v1 supports these deployment modes:
 Commercial v1 does not yet claim:
 
 - multi-node relational consistency
-- cross-instance signal sync
-- operator UI parity with the upstream project
+- full-fidelity multi-node coordination beyond the shipped peer-sync exchange model
+- complete operator UI parity with the upstream project
 
 ## Database Strategy
 
