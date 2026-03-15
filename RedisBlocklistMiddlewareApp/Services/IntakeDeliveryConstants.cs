@@ -11,6 +11,8 @@ public static class IntakeDeliveryChannels
 {
     public const string GenericWebhook = "generic_webhook";
 
+    public const string Slack = "slack";
+
     public const string Smtp = "smtp";
 }
 
@@ -22,4 +24,3 @@ public static class IntakeDeliveryStatuses
 
     public const string Skipped = "skipped";
 }
-
