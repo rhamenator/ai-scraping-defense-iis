@@ -45,7 +45,7 @@ public sealed class DefenseStackFixture : IAsyncLifetime
         await _redisContainer.DisposeAsync();
     }
 
-    public async Task<IntegrationTestHost> CreateHostAsync()
+    public async Task<IntegrationTestHost> CreateHostAsync(IReadOnlyDictionary<string, string?>? overrides = null)
     {
         const int redisDatabaseBase = 0;
         var auditDirectory = Path.Combine(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
@@ -77,6 +77,22 @@ public sealed class DefenseStackFixture : IAsyncLifetime
             ["DefenseEngine:Observability:EnablePrometheusEndpoint"] = "false"
         };
 
+        if (overrides is not null)
+        {
+            foreach (var pair in overrides)
+            {
+                settings[pair.Key] = pair.Value;
+            }
+        }
+
+        var enablePrometheusEndpoint = string.Equals(
+            settings["DefenseEngine:Observability:EnablePrometheusEndpoint"],
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+        var otlpEndpoint = settings.TryGetValue("DefenseEngine:Observability:OtlpEndpoint", out var configuredOtlpEndpoint)
+            ? configuredOtlpEndpoint ?? string.Empty
+            : string.Empty;
+
         var factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -106,7 +122,8 @@ public sealed class DefenseStackFixture : IAsyncLifetime
                         options.Tarpit.PostgresMarkov.ConnectionString = _postgresContainer.GetConnectionString();
                         options.PeerSync.Enabled = false;
                         options.CommunityBlocklist.Enabled = false;
-                        options.Observability.EnablePrometheusEndpoint = false;
+                        options.Observability.EnablePrometheusEndpoint = enablePrometheusEndpoint;
+                        options.Observability.OtlpEndpoint = otlpEndpoint;
                     });
                 });
             });

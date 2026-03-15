@@ -60,7 +60,7 @@ public sealed class SuspiciousRequestQueueTests
             {
                 Capacity = capacity
             }
-        }));
+        }), TestTelemetryFactory.Create());
     }
 
     private static SuspiciousRequest CreateRequest(string ipAddress, string path)

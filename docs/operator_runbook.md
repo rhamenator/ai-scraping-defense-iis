@@ -20,6 +20,12 @@ docker compose up --build
 
 The app will be available on `http://localhost:8080`.
 
+To include the bundled monitoring stack:
+
+```bash
+docker compose -f compose.yaml -f compose.observability.yaml up --build
+```
+
 ## Required Production Configuration
 
 At minimum, set:
@@ -161,6 +167,14 @@ curl http://localhost:8080/metrics
 ```
 
 If `DefenseEngine:Observability:OtlpEndpoint` is configured, traces are exported to that collector.
+
+The bundled observability overlay provisions:
+
+- Prometheus at `http://localhost:9090`
+- Grafana at `http://localhost:3000`
+- an OpenTelemetry Collector with OTLP on `4317` and `4318`
+
+See [observability_pack.md](observability_pack.md) for the packaged monitoring assets and default alert rules.
 
 ## Backup and Recovery
 

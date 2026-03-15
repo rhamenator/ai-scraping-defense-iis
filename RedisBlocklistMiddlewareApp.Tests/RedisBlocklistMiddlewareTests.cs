@@ -61,6 +61,35 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_BypassesPrometheusMetricsEndpoint_WhenEnabled()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.15"),
+            options =>
+            {
+                options.Observability.EnablePrometheusEndpoint = true;
+                options.Observability.PrometheusEndpointPath = "/metrics";
+            });
+        var context = CreateContext("/metrics");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
+    }
+
+    [Fact]
     public async Task InvokeAsync_BypassesIntakeEndpoints()
     {
         var blocklist = new FakeBlocklistService { IsBlockedResult = true };

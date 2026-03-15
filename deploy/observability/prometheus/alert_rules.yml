@@ -1,0 +1,38 @@
+groups:
+  - name: ai-scraping-defense
+    rules:
+      - alert: AiScrapingDefenseBlockSpike
+        expr: sum(increase(ai_scraping_defense_block_decisions_total[5m])) > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Block decisions are spiking
+          description: The defense stack has blocked more than 25 requests in the last 5 minutes.
+
+      - alert: AiScrapingDefenseQueuePressure
+        expr: max(ai_scraping_defense_queue_depth / clamp_min(ai_scraping_defense_queue_capacity, 1)) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Suspicious-request queue is under sustained pressure
+          description: The queued analysis backlog is above 80 percent of configured capacity for 10 minutes.
+
+      - alert: AiScrapingDefenseSyncFailures
+        expr: sum(increase(ai_scraping_defense_community_imports_total{result="rejected"}[15m])) + sum(increase(ai_scraping_defense_peer_imports_total{result="rejected"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Community or peer sync failures detected
+          description: The defense stack has rejected community-feed or peer-sync records in the last 15 minutes.
+
+      - alert: AiScrapingDefenseIntakeDeliveryFailures
+        expr: sum(increase(ai_scraping_defense_intake_delivery_total{status="failed"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Intake alert or reporting deliveries are failing
+          description: One or more webhook, SMTP, or community-report deliveries failed in the last 15 minutes.

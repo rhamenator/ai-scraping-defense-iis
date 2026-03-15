@@ -21,7 +21,7 @@ Status legend:
 | Advanced tarpit decoys | Partial | Current tarpit modes cover deterministic HTML, archive, and API-catalog variants. | Port rotating archives and JavaScript ZIP honeypots. See issue `#55`. |
 | Reputation providers and classifier hooks | Partial | Configured ranges, HTTP reputation, and OpenAI-compatible model adapters exist. | Port trained ML lifecycle and richer provider orchestration. See issue `#54`. |
 | Alerting and operator/community reporting | Partial | Confirmed malicious intake events can dispatch generic webhook alerts, SMTP alerts, and configurable community reports with durable delivery visibility. | Slack-specific alert channel parity still remains. See issue `#60`. |
-| Structured telemetry export | Partial | Prometheus metrics and OTLP trace export are wired into the app. | Add dashboard examples, alert rules, and richer release telemetry guidance. |
+| Structured telemetry export | Implemented | Prometheus metrics, OTLP trace export, packaged scrape/alert config, and a bundled Grafana dashboard are included. | Tune thresholds and dashboard panels against production traffic after deployment. |
 | Independent multi-service deployment | Deferred | v1 intentionally ships as a single deployable ASP.NET Core runtime. | Split into independently deployed roles only when operations justify it. |
 | SQL Server support | Deferred | Redis + SQLite + PostgreSQL are the supported data stores for v1. | Revisit only if customer demand justifies the extra provider surface. |
 

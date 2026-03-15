@@ -152,6 +152,8 @@ public sealed class RedisBlocklistMiddleware
         var value = path.Value ?? string.Empty;
         return value.StartsWith(_options.Tarpit.PathPrefix, StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
+               (_options.Observability.EnablePrometheusEndpoint &&
+                value.StartsWith(_options.Observability.PrometheusEndpointPath, StringComparison.OrdinalIgnoreCase)) ||
                value.StartsWith("/defense", StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/analyze", StringComparison.OrdinalIgnoreCase) ||
                value.StartsWith("/peer-sync", StringComparison.OrdinalIgnoreCase);
