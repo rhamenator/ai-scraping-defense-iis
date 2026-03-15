@@ -11,7 +11,7 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 | Nginx/Lua edge filter | Implemented as ASP.NET Core middleware | Split into a dedicated edge gateway project |
 | AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and separate service boundary |
 | Escalation Engine | Implemented with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and separate service boundary |
-| Tarpit API | Implemented as deterministic synthetic page endpoint | Add richer tarpit modes, streaming, and Markov/PostgreSQL-backed content |
+| Tarpit API | Implemented as deterministic page generation with PostgreSQL-backed Markov support and multiple render variants | Add streaming/archive rotation parity and deeper crawl-wasting content sources |
 | Admin UI | Not implemented in .NET | Add operator dashboard on top of the authenticated admin API |
 | Community blocklist sync | Implemented as a configurable feed sync worker with admin-visible status | Add richer source trust, reporting parity, and deduplication policies |
 | Peer sync | Implemented with authenticated signal export, timed import, and explicit trust modes | Add richer trust scoring, deduplication policy, and multi-node coordination |

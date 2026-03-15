@@ -275,4 +275,37 @@ public sealed class TarpitOptions
     public int ParagraphCount { get; set; } = 5;
 
     public int ResponseDelayMilliseconds { get; set; } = 200;
+
+    public string[] Modes { get; set; } =
+    [
+        TarpitRenderModes.Standard,
+        TarpitRenderModes.ArchiveIndex,
+        TarpitRenderModes.ApiCatalog
+    ];
+
+    public int MarkovWordsPerParagraph { get; set; } = 36;
+
+    public PostgresMarkovOptions PostgresMarkov { get; set; } = new();
+}
+
+public sealed class PostgresMarkovOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ConnectionString { get; set; } = string.Empty;
+
+    public string WordsTableName { get; set; } = "markov_words";
+
+    public string SequencesTableName { get; set; } = "markov_sequences";
+
+    public int RefreshMinutes { get; set; } = 30;
+}
+
+public static class TarpitRenderModes
+{
+    public const string Standard = "Standard";
+
+    public const string ArchiveIndex = "ArchiveIndex";
+
+    public const string ApiCatalog = "ApiCatalog";
 }

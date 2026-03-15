@@ -83,7 +83,9 @@ Requests rewritten to `/anti-scrape-tarpit/{path}` are served by the minimal API
 
 Current behavior:
 
-- Deterministic synthetic HTML based on request path and seed.
+- Deterministic HTML based on request path and seed.
+- Optional PostgreSQL-backed Markov paragraphs loaded through [RedisBlocklistMiddlewareApp/Services/PostgresTarpitMarkovStore.cs](../RedisBlocklistMiddlewareApp/Services/PostgresTarpitMarkovStore.cs).
+- Deterministic render variants for archive manifests and API catalogs.
 - Recursive synthetic links to keep crawlers occupied.
 - Configurable response delay to simulate low-value slow streaming.
 

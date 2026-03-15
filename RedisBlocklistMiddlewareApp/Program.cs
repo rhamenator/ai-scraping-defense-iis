@@ -32,6 +32,29 @@ builder.Services
         }
 
         options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
+        options.Tarpit.Modes = options.Tarpit.Modes
+            .Where(mode => !string.IsNullOrWhiteSpace(mode))
+            .Select(mode => mode.Trim())
+            .Where(mode =>
+                string.Equals(mode, TarpitRenderModes.Standard, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(mode, TarpitRenderModes.ArchiveIndex, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(mode, TarpitRenderModes.ApiCatalog, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (options.Tarpit.Modes.Length == 0)
+        {
+            options.Tarpit.Modes = [TarpitRenderModes.Standard];
+        }
+
+        options.Tarpit.MarkovWordsPerParagraph = Math.Max(8, options.Tarpit.MarkovWordsPerParagraph);
+        options.Tarpit.PostgresMarkov.ConnectionString = options.Tarpit.PostgresMarkov.ConnectionString.Trim();
+        options.Tarpit.PostgresMarkov.WordsTableName = string.IsNullOrWhiteSpace(options.Tarpit.PostgresMarkov.WordsTableName)
+            ? "markov_words"
+            : options.Tarpit.PostgresMarkov.WordsTableName.Trim();
+        options.Tarpit.PostgresMarkov.SequencesTableName = string.IsNullOrWhiteSpace(options.Tarpit.PostgresMarkov.SequencesTableName)
+            ? "markov_sequences"
+            : options.Tarpit.PostgresMarkov.SequencesTableName.Trim();
+        options.Tarpit.PostgresMarkov.RefreshMinutes = Math.Max(1, options.Tarpit.PostgresMarkov.RefreshMinutes);
 
         options.Management.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.Management.ApiKeyHeaderName)
             ? "X-API-Key"
@@ -152,6 +175,7 @@ builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTra
 builder.Services.AddSingleton<IDefenseEventStore, SqliteDefenseEventStore>();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
+builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputationProvider>();
