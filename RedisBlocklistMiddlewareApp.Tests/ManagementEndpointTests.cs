@@ -73,6 +73,30 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public async Task PeerApiKeyFilter_ReturnsUnauthorized_WhenHeaderIsMissing()
+    {
+        var filter = CreatePeerFilter();
+        var context = new TestEndpointFilterInvocationContext(new DefaultHttpContext());
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task PeerApiKeyFilter_ReturnsUnauthorized_WhenHeaderIsWrong()
+    {
+        var filter = CreatePeerFilter();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Peer-Key"] = "wrong-key";
+        var context = new TestEndpointFilterInvocationContext(httpContext);
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
     public async Task PeerApiKeyFilter_AllowsRequest_WhenHeaderMatches()
     {
         var filter = CreatePeerFilter();

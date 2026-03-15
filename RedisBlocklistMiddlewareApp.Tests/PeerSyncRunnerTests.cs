@@ -101,6 +101,51 @@ public sealed class PeerSyncRunnerTests
         Assert.Single(blocklist.BlockCalls);
     }
 
+    [Fact]
+    public async Task RunOnceAsync_RejectsSignalsBeyondMaxPerPeer_BasedOnUniqueCount()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            PeerSync = new PeerSyncOptions
+            {
+                Enabled = true,
+                MaximumSignalsPerPeer = 2,
+                Peers =
+                [
+                    new PeerSyncPeerOptions
+                    {
+                        Name = "peer-a",
+                        Url = "https://peer.example.test/peer-sync/signals",
+                        TrustMode = PeerTrustModes.ObserveOnly
+                    }
+                ]
+            }
+        });
+
+        // 3 unique IPs + 2 duplicates of the first IP = 5 total signals
+        var runner = new PeerSyncRunner(
+            options,
+            new TestPeerSignalFeedClient(new PeerDefenseSignalEnvelope(
+                "peer-a",
+                [
+                    new PeerDefenseSignal("198.51.100.20", "first", [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                    new PeerDefenseSignal("198.51.100.20", "duplicate1", [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                    new PeerDefenseSignal("198.51.100.20", "duplicate2", [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                    new PeerDefenseSignal("198.51.100.21", "second", [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                    new PeerDefenseSignal("198.51.100.22", "third", [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                ])),
+            new TestBlocklistService(),
+            new TestDefenseEventStore(),
+            new PeerSyncStatusStore(options),
+            NullLogger<PeerSyncRunner>.Instance);
+
+        var status = await runner.RunOnceAsync(CancellationToken.None);
+
+        // 3 unique IPs, max 2 → 2 imported, 1 rejected (not 3 = 5 - 2)
+        Assert.Equal(2, status.ImportedCount);
+        Assert.Equal(1, status.RejectedCount);
+    }
+
     private static IOptions<DefenseEngineOptions> CreateOptions(string trustMode)
     {
         return Options.Create(new DefenseEngineOptions

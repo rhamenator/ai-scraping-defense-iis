@@ -64,11 +64,11 @@ public sealed class PeerSyncRunner
                 var importedForPeer = 0;
                 var maxSignals = Math.Max(1, _options.MaximumSignalsPerPeer);
                 var envelope = await _feedClient.FetchAsync(peer, cancellationToken);
-                var uniqueSignals = envelope.Signals
+                var deduplicatedSignals = envelope.Signals
                     .GroupBy(signal => signal.IpAddress, StringComparer.OrdinalIgnoreCase)
                     .Select(group => group.First())
-                    .Take(maxSignals)
                     .ToArray();
+                var uniqueSignals = deduplicatedSignals.Take(maxSignals).ToArray();
 
                 foreach (var signal in uniqueSignals)
                 {
@@ -121,8 +121,8 @@ public sealed class PeerSyncRunner
                     }
                 }
 
-                rejectedForPeer += Math.Max(0, envelope.Signals.Count - maxSignals);
-                rejectedCount += Math.Max(0, envelope.Signals.Count - maxSignals);
+                rejectedForPeer += Math.Max(0, deduplicatedSignals.Length - maxSignals);
+                rejectedCount += Math.Max(0, deduplicatedSignals.Length - maxSignals);
                 lastSuccessAtUtc = DateTimeOffset.UtcNow;
 
                 peerStatuses.Add(new PeerSyncPeerStatus(
