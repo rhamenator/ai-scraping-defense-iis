@@ -61,6 +61,54 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_BypassesIntakeEndpoints()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.13"));
+        var context = CreateContext("/analyze");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_BypassesPeerSyncEndpoints()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.14"));
+        var context = CreateContext("/peer-sync/signals");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
+    }
+
+    [Fact]
     public async Task InvokeAsync_BypassesTarpitEndpoints()
     {
         var blocklist = new FakeBlocklistService { IsBlockedResult = true };
@@ -134,7 +182,7 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_QueuesSuspiciousRequests_AndRewritesIntoTarpit()
+    public async Task InvokeAsync_QueuesSuspiciousRequests_AndRendersTarpit()
     {
         var queue = new FakeSuspiciousRequestQueue();
         var nextState = new NextDelegateState();
@@ -153,8 +201,9 @@ public sealed class RedisBlocklistMiddlewareTests
 
         await middleware.InvokeAsync(context);
 
-        Assert.True(nextState.WasCalled);
-        Assert.Equal("/anti-scrape-tarpit/probe", nextState.PathSeenByNext);
+        Assert.False(nextState.WasCalled);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Equal("text/html", context.Response.ContentType);
         Assert.Single(queue.Requests);
         Assert.Equal("/probe", queue.Requests[0].Path);
         Assert.Equal("missing_accept_language", context.Request.Headers["X-Tarpit-Reason"].ToString());
@@ -214,6 +263,8 @@ public sealed class RedisBlocklistMiddlewareTests
             queue,
             eventStore,
             clientIpResolver,
+            new FakeTarpitPageService(),
+            TestTelemetryFactory.Create(),
             Options.Create(options));
     }
 
@@ -333,6 +384,14 @@ public sealed class RedisBlocklistMiddlewareTests
         public string? Resolve(HttpContext context)
         {
             return _ipAddress;
+        }
+    }
+
+    private sealed class FakeTarpitPageService : ITarpitPageService
+    {
+        public string GeneratePage(string path, string clientIp)
+        {
+            return $"<html><body>{path}:{clientIp}</body></html>";
         }
     }
 }

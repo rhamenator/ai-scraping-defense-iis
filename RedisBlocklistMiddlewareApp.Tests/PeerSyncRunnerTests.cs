@@ -29,6 +29,7 @@ public sealed class PeerSyncRunnerTests
             blocklist,
             eventStore,
             new PeerSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<PeerSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -62,6 +63,7 @@ public sealed class PeerSyncRunnerTests
             blocklist,
             eventStore,
             new PeerSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<PeerSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -92,6 +94,7 @@ public sealed class PeerSyncRunnerTests
             blocklist,
             eventStore,
             new PeerSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<PeerSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -118,6 +121,7 @@ public sealed class PeerSyncRunnerTests
             blocklist,
             eventStore,
             new PeerSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<PeerSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -162,6 +166,7 @@ public sealed class PeerSyncRunnerTests
             blocklist,
             new TestDefenseEventStore(),
             new PeerSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<PeerSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);

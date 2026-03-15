@@ -11,6 +11,7 @@ public sealed class PeerSyncRunner
     private readonly IBlocklistService _blocklistService;
     private readonly IDefenseEventStore _eventStore;
     private readonly IPeerSyncStatusStore _statusStore;
+    private readonly DefenseTelemetry _telemetry;
     private readonly ILogger<PeerSyncRunner> _logger;
 
     public PeerSyncRunner(
@@ -19,6 +20,7 @@ public sealed class PeerSyncRunner
         IBlocklistService blocklistService,
         IDefenseEventStore eventStore,
         IPeerSyncStatusStore statusStore,
+        DefenseTelemetry telemetry,
         ILogger<PeerSyncRunner> logger)
     {
         _options = options.Value.PeerSync;
@@ -26,6 +28,7 @@ public sealed class PeerSyncRunner
         _blocklistService = blocklistService;
         _eventStore = eventStore;
         _statusStore = statusStore;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -47,6 +50,8 @@ public sealed class PeerSyncRunner
         var rejectedCount = 0;
         string? lastError = null;
         DateTimeOffset? lastSuccessAtUtc = null;
+
+        using var activity = _telemetry.StartActivity("sync.peer");
 
         foreach (var peer in _options.Peers)
         {
@@ -174,6 +179,7 @@ public sealed class PeerSyncRunner
             rejectedCount,
             lastError,
             peerStatuses.ToArray());
+        _telemetry.RecordPeerSync(blockedCount, observedCount, rejectedCount);
         _statusStore.Update(status);
         return status;
     }

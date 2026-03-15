@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiScrapingDefense.EdgeGateway", "RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj", "{4A336096-1DA9-4AAA-B974-D563B1CECEBC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisBlocklistMiddlewareApp", "RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj", "{4A336096-1DA9-4AAA-B974-D563B1CECEBC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisBlocklistMiddlewareApp.Tests", "RedisBlocklistMiddlewareApp.Tests\RedisBlocklistMiddlewareApp.Tests.csproj", "{89AFAC57-9886-4C6D-A883-7947967447D6}"
 EndProject
@@ -12,6 +12,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiScrapingDefense.EscalationEngine", "AiScrapingDefense.EscalationEngine\AiScrapingDefense.EscalationEngine.csproj", "{EABCF0B7-FBF2-42FD-BF7F-710879AA6A57}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiScrapingDefense.TarpitApi", "AiScrapingDefense.TarpitApi\AiScrapingDefense.TarpitApi.csproj", "{E5AED81A-BDCE-48FE-9D78-62575BA0934C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiScrapingDefense.IntegrationTests", "AiScrapingDefense.IntegrationTests\AiScrapingDefense.IntegrationTests.csproj", "{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -83,6 +85,18 @@ Global
 		{E5AED81A-BDCE-48FE-9D78-62575BA0934C}.Release|x64.Build.0 = Release|Any CPU
 		{E5AED81A-BDCE-48FE-9D78-62575BA0934C}.Release|x86.ActiveCfg = Release|Any CPU
 		{E5AED81A-BDCE-48FE-9D78-62575BA0934C}.Release|x86.Build.0 = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|x64.Build.0 = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Debug|x86.Build.0 = Debug|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|x64.ActiveCfg = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|x64.Build.0 = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|x86.ActiveCfg = Release|Any CPU
+		{ABCE4D47-C19A-4DB2-91B5-5AAE9C4F9B75}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

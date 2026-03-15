@@ -33,6 +33,7 @@ public sealed class CommunityBlocklistSyncRunnerTests
             new TestFeedClient(["198.51.100.10", "127.0.0.1", "not-an-ip"]),
             blocklist,
             statusStore,
+            TestTelemetryFactory.Create(),
             NullLogger<CommunityBlocklistSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -64,6 +65,7 @@ public sealed class CommunityBlocklistSyncRunnerTests
             new TestFeedClient([]),
             new TestBlocklistService(),
             new CommunityBlocklistSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<CommunityBlocklistSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);
@@ -97,6 +99,7 @@ public sealed class CommunityBlocklistSyncRunnerTests
             new CancelingFeedClient(),
             new TestBlocklistService(),
             new CommunityBlocklistSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<CommunityBlocklistSyncRunner>.Instance);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => runner.RunOnceAsync(cancellationTokenSource.Token));
@@ -127,6 +130,7 @@ public sealed class CommunityBlocklistSyncRunnerTests
             new TestFeedClient(["198.51.100.1", "198.51.100.2", "198.51.100.3", "198.51.100.4"]),
             blocklist,
             new CommunityBlocklistSyncStatusStore(options),
+            TestTelemetryFactory.Create(),
             NullLogger<CommunityBlocklistSyncRunner>.Instance);
 
         var status = await runner.RunOnceAsync(CancellationToken.None);

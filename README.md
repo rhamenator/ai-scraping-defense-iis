@@ -38,6 +38,7 @@ The first commercial release is a single deployable ASP.NET Core service that pr
 This is intentionally a single-deployable, multi-project .NET stack for v1. It preserves the upstream functional roles, but keeps them in one runtime deployment until separate service contracts and operational behavior settle.
 
 See [docs/architecture.md](docs/architecture.md) for the current architecture, [docs/commercial_scope.md](docs/commercial_scope.md) for the v1 definition, and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the post-v1 parity queue.
+Operational release documentation now lives in [docs/parity_matrix.md](docs/parity_matrix.md), [docs/operator_runbook.md](docs/operator_runbook.md), and [docs/release_checklist.md](docs/release_checklist.md).
 
 ## Implemented Endpoints
 
@@ -114,6 +115,7 @@ Key areas:
 - `DefenseEngine:PeerSync`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
+- `DefenseEngine:Observability`
 
 For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
 
@@ -124,3 +126,13 @@ In `Production`, startup now fails fast if Redis still points at a loopback endp
 ## Status
 
 The project now has an explicit commercial-v1 target, but release readiness still depends on closing the remaining items in [docs/release_blockers.md](docs/release_blockers.md) and the post-v1 parity queue in [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md).
+
+## Packaging
+
+The repository now includes:
+
+- a production-oriented multi-stage [Dockerfile](Dockerfile)
+- a local smoke/deployment [compose.yaml](compose.yaml)
+- a GitHub Actions CI workflow at [.github/workflows/dotnet-ci.yml](.github/workflows/dotnet-ci.yml)
+
+Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.

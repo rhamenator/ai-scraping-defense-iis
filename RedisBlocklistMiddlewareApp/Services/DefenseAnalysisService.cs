@@ -12,6 +12,7 @@ public sealed class DefenseAnalysisService : BackgroundService
     private readonly IThreatAssessmentService _threatAssessmentService;
     private readonly IBlocklistService _blocklistService;
     private readonly IDefenseEventStore _eventStore;
+    private readonly DefenseTelemetry _telemetry;
     private readonly ILogger<DefenseAnalysisService> _logger;
 
     public DefenseAnalysisService(
@@ -19,12 +20,14 @@ public sealed class DefenseAnalysisService : BackgroundService
         IThreatAssessmentService threatAssessmentService,
         IBlocklistService blocklistService,
         IDefenseEventStore eventStore,
+        DefenseTelemetry telemetry,
         ILogger<DefenseAnalysisService> logger)
     {
         _queue = queue;
         _threatAssessmentService = threatAssessmentService;
         _blocklistService = blocklistService;
         _eventStore = eventStore;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -34,6 +37,9 @@ public sealed class DefenseAnalysisService : BackgroundService
         {
             try
             {
+                using var activity = _telemetry.StartActivity("analysis.queued_request");
+                activity?.SetTag("ip", request.IpAddress);
+                activity?.SetTag("path", request.Path);
                 var assessment = await _threatAssessmentService.AssessAsync(request, stoppingToken);
                 var action = assessment.ShouldBlock ? "blocked" : "observed";
 
@@ -71,6 +77,7 @@ public sealed class DefenseAnalysisService : BackgroundService
                     request.ObservedAtUtc,
                     DateTimeOffset.UtcNow,
                     assessment.Breakdown));
+                _telemetry.RecordDecision(action, "queued_analysis");
             }
             catch (Exception ex)
             {

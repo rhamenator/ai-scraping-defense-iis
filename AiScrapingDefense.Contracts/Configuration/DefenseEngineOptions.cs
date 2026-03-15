@@ -25,6 +25,8 @@ public sealed class DefenseEngineOptions
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
+
+    public ObservabilityOptions Observability { get; set; } = new();
 }
 
 public sealed class RedisOptions
@@ -288,6 +290,17 @@ public sealed class TarpitOptions
     public int MarkovWordsPerParagraph { get; set; } = 36;
 
     public PostgresMarkovOptions PostgresMarkov { get; set; } = new();
+}
+
+public sealed class ObservabilityOptions
+{
+    public string ServiceName { get; set; } = "ai-scraping-defense-dotnet";
+
+    public bool EnablePrometheusEndpoint { get; set; } = true;
+
+    public string PrometheusEndpointPath { get; set; } = "/metrics";
+
+    public string OtlpEndpoint { get; set; } = string.Empty;
 }
 
 public sealed class PostgresMarkovOptions

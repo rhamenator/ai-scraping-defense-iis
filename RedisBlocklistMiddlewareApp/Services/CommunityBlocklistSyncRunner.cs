@@ -11,6 +11,7 @@ public sealed class CommunityBlocklistSyncRunner
     private readonly ICommunityBlocklistFeedClient _feedClient;
     private readonly IBlocklistService _blocklistService;
     private readonly ICommunityBlocklistSyncStatusStore _statusStore;
+    private readonly DefenseTelemetry _telemetry;
     private readonly ILogger<CommunityBlocklistSyncRunner> _logger;
 
     public CommunityBlocklistSyncRunner(
@@ -18,12 +19,14 @@ public sealed class CommunityBlocklistSyncRunner
         ICommunityBlocklistFeedClient feedClient,
         IBlocklistService blocklistService,
         ICommunityBlocklistSyncStatusStore statusStore,
+        DefenseTelemetry telemetry,
         ILogger<CommunityBlocklistSyncRunner> logger)
     {
         _options = options.Value.CommunityBlocklist;
         _feedClient = feedClient;
         _blocklistService = blocklistService;
         _statusStore = statusStore;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -43,6 +46,8 @@ public sealed class CommunityBlocklistSyncRunner
         var rejectedCount = 0;
         string? lastError = null;
         DateTimeOffset? lastSuccessAtUtc = null;
+
+        using var activity = _telemetry.StartActivity("sync.community_blocklist");
 
         foreach (var source in _options.Sources)
         {
@@ -126,6 +131,7 @@ public sealed class CommunityBlocklistSyncRunner
             rejectedCount,
             lastError,
             sourceStatuses.ToArray());
+        _telemetry.RecordCommunitySync(importedCount, rejectedCount);
         _statusStore.Update(status);
         return status;
     }
