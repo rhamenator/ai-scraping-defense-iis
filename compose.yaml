@@ -23,7 +23,9 @@ services:
       DefenseEngine__Observability__EnablePrometheusEndpoint: "true"
       DefenseEngine__Observability__PrometheusEndpointPath: /metrics
     ports:
-      - "8080:8080"
+      # Expose the app on 18080 so local smoke runs do not collide with other
+      # services that commonly occupy host port 8080.
+      - "18080:8080"
     volumes:
       - app-data:/app/data
 
@@ -36,7 +38,9 @@ services:
       timeout: 3s
       retries: 5
     ports:
-      - "6379:6379"
+      # Bind Redis to 16379 instead of the default 6379 because developer
+      # machines often already have a local or Docker-managed Redis on 6379.
+      - "16379:6379"
     volumes:
       - redis-data:/data
 
@@ -47,7 +51,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Bind PostgreSQL to 15432 so the stack can run alongside an existing
+      # local Postgres instance that already uses host port 5432.
+      - "15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init_markov.sql:/docker-entrypoint-initdb.d/01-init_markov.sql:ro
@@ -56,4 +62,3 @@ volumes:
   app-data:
   redis-data:
   postgres-data:
-
