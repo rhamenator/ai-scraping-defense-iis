@@ -11,6 +11,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [API References](api_references.md)
 - [Release Blockers](release_blockers.md)
 - [Release Checklist](release_checklist.md)
+- [Release Artifacts](release_artifacts.md)
 - [Operator Runbook](operator_runbook.md)
 - [Observability Pack](observability_pack.md)
 

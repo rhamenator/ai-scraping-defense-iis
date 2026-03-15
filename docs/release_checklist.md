@@ -41,5 +41,8 @@ Use this checklist before cutting a commercial release candidate.
 
 - `README.md` matches the shipped behavior
 - `docs/parity_matrix.md` reflects the current status honestly
+- `docs/release_artifacts.md` matches the tag and image policy implemented in CI
 - `CHANGELOG.md` has an `Unreleased` entry summarizing the release-hardening work
+- the tagged release workflow publishes to GHCR and emits both signature and provenance metadata
+- image provenance verification succeeds with `gh attestation verify`
 - remaining deferred parity items are tracked as GitHub issues, not hidden in review threads
