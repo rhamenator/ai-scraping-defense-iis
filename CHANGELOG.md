@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * A tagged release workflow that publishes signed GHCR images with provenance (`.github/workflows/release-images.yml`).
 * A containerized integration-test project covering suspicious request handling, management blocklist operations, webhook intake, and PostgreSQL-backed tarpit rendering.
 * A .NET-native local trained-model path plus trainer CLI for the escalation engine (`AiScrapingDefense.ModelTrainer`, `DefenseEngine:Escalation:LocalTrainedModel`).
+* Rotating ZIP decoy archives with deterministic fake JavaScript payloads in the tarpit path.
 * Prometheus/OTLP observability options and runtime instrumentation for defense decisions, tarpit responses, webhook intake, and sync activity.
 * Queue depth and capacity telemetry for queued suspicious-request pressure monitoring.
 * Release documentation for parity, operator operations, and release validation.

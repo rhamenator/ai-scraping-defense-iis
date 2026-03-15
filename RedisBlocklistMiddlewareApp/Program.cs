@@ -37,6 +37,15 @@ builder.Services
         }
 
         options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
+        options.Tarpit.ArchiveDirectory = string.IsNullOrWhiteSpace(options.Tarpit.ArchiveDirectory)
+            ? "data/tarpit-archives"
+            : options.Tarpit.ArchiveDirectory.Trim();
+        options.Tarpit.ArchiveRotationMinutes = Math.Max(1, options.Tarpit.ArchiveRotationMinutes);
+        options.Tarpit.MaximumArchivesToKeep = Math.Max(1, options.Tarpit.MaximumArchivesToKeep);
+        options.Tarpit.JavaScriptDecoyFileCount = Math.Max(1, options.Tarpit.JavaScriptDecoyFileCount);
+        options.Tarpit.MinJavaScriptDecoyFileSizeKb = Math.Max(1, options.Tarpit.MinJavaScriptDecoyFileSizeKb);
+        options.Tarpit.MaxJavaScriptDecoyFileSizeKb =
+            Math.Max(options.Tarpit.MinJavaScriptDecoyFileSizeKb, options.Tarpit.MaxJavaScriptDecoyFileSizeKb);
         options.Tarpit.Modes = options.Tarpit.Modes
             .Where(mode => !string.IsNullOrWhiteSpace(mode))
             .Select(mode => mode.Trim())
@@ -256,6 +265,7 @@ builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>()
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
+builder.Services.AddSingleton<ITarpitArtifactService, TarpitArtifactService>();
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputationProvider>();
 builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
@@ -273,6 +283,7 @@ builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
 builder.Services.AddSingleton<ICommunityReporter, CommunityReporter>();
@@ -341,6 +352,7 @@ app.MapGet(tarpitRoutePattern, async (
     HttpContext context,
     string? path,
     ITarpitPageService tarpitPageService,
+    ITarpitArtifactService tarpitArtifactService,
     IClientIpResolver clientIpResolver,
     DefenseTelemetry telemetry,
     IOptions<DefenseEngineOptions> options,
@@ -354,7 +366,15 @@ app.MapGet(tarpitRoutePattern, async (
     }
 
     var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
-    var content = tarpitPageService.GeneratePage(path ?? string.Empty, clientIp);
+    var normalizedPath = path ?? string.Empty;
+    var artifact = await tarpitArtifactService.TryGetArtifactAsync(normalizedPath, cancellationToken);
+    if (artifact is not null)
+    {
+        telemetry.RecordTarpitRender();
+        return Results.File(artifact.Content, artifact.ContentType, artifact.FileName);
+    }
+
+    var content = tarpitPageService.GeneratePage(normalizedPath, clientIp);
     telemetry.RecordTarpitRender();
     return Results.Content(content, "text/html");
 });

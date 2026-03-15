@@ -297,11 +297,23 @@ public sealed class TarpitOptions
 
     public string Seed { get; set; } = "ai-scraping-defense-dotnet";
 
+    public string ArchiveDirectory { get; set; } = "data/tarpit-archives";
+
     public int LinkCount { get; set; } = 6;
 
     public int ParagraphCount { get; set; } = 5;
 
     public int ResponseDelayMilliseconds { get; set; } = 200;
+
+    public int ArchiveRotationMinutes { get; set; } = 60;
+
+    public int MaximumArchivesToKeep { get; set; } = 5;
+
+    public int JavaScriptDecoyFileCount { get; set; } = 12;
+
+    public int MinJavaScriptDecoyFileSizeKb { get; set; } = 5;
+
+    public int MaxJavaScriptDecoyFileSizeKb { get; set; } = 24;
 
     public string[] Modes { get; set; } =
     [

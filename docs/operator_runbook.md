@@ -189,3 +189,4 @@ See [observability_pack.md](observability_pack.md) for the packaged monitoring a
 - missing real client IPs: proxy/CDN trust mode is not configured correctly
 - intake delivery failures: inspect `/defense/intake-deliveries` for failed webhook, SMTP, or community-report attempts
 - empty Markov tarpit output changes: PostgreSQL corpus is empty or unavailable, so synthetic fallback content is being used
+- ZIP decoy archive churn looks wrong: inspect `DefenseEngine:Tarpit:ArchiveDirectory` and the archive-retention settings
