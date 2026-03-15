@@ -12,6 +12,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
+- A protected operator dashboard at `/defense/dashboard` backed by the same management API.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
@@ -36,11 +37,15 @@ See [docs/architecture.md](docs/architecture.md) for the current architecture, [
 - `GET /health`
 - `GET /anti-scrape-tarpit/{path}`
 
-`GET /defense/events` is only exposed when `DefenseEngine:Management:ApiKey` is configured.
-`GET /defense/metrics` and the blocklist management endpoints follow the same API-key protection via the configured `DefenseEngine:Management:ApiKeyHeaderName` header.
+`GET /defense/dashboard` and the dashboard session endpoints are only exposed when `DefenseEngine:Management:ApiKey` is configured.
+`GET /defense/events`, `GET /defense/metrics`, and the blocklist management endpoints follow the same management authentication. They accept the configured `DefenseEngine:Management:ApiKeyHeaderName` header or a dashboard session cookie created at `/defense/dashboard/session`.
 `POST /analyze` is only exposed when `DefenseEngine:Intake:ApiKey` is configured and expects the configured `DefenseEngine:Intake:ApiKeyHeaderName` header.
 
 Management endpoints:
+- `GET /defense/dashboard`
+- `GET /defense/dashboard/session`
+- `POST /defense/dashboard/session`
+- `DELETE /defense/dashboard/session`
 - `GET /defense/events?count=50`
 - `GET /defense/metrics`
 - `GET /defense/community-blocklist/status`
@@ -94,6 +99,7 @@ Key areas:
 - `DefenseEngine:Heuristics`
 - `DefenseEngine:Networking`
 - `DefenseEngine:Management`
+  - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
 - `DefenseEngine:Intake`
 - `DefenseEngine:Audit`
 - `DefenseEngine:Escalation`

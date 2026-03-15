@@ -114,6 +114,8 @@ public sealed class ManagementOptions
     public string ApiKeyHeaderName { get; set; } = "X-API-Key";
 
     public string ApiKey { get; set; } = string.Empty;
+
+    public int DashboardSessionHours { get; set; } = 8;
 }
 
 public sealed class IntakeOptions

@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
 
 builder.Services.AddHttpClient();
+builder.Services.AddDataProtection();
 builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
 builder.Services.AddSingleton<ProductionConfigurationValidator>();
 builder.Services
@@ -61,6 +62,7 @@ builder.Services
             : options.Management.ApiKeyHeaderName.Trim();
 
         options.Management.ApiKey = options.Management.ApiKey.Trim();
+        options.Management.DashboardSessionHours = Math.Max(1, options.Management.DashboardSessionHours);
 
         options.Intake.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.Intake.ApiKeyHeaderName)
             ? "X-Webhook-Key"
@@ -188,9 +190,11 @@ builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
 builder.Services.AddSingleton<IPeerSignalFeedClient, HttpPeerSignalFeedClient>();
 builder.Services.AddSingleton<IPeerSyncStatusStore, PeerSyncStatusStore>();
 builder.Services.AddSingleton<PeerSyncRunner>();
+builder.Services.AddSingleton<ManagementAuthenticationService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
+builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
@@ -286,6 +290,7 @@ public partial class Program
 
         if (ShouldExposeManagementEndpoints(runtimeOptions))
         {
+            endpoints["dashboard"] = "/defense/dashboard";
             endpoints["events"] = "/defense/events";
             endpoints["metrics"] = "/defense/metrics";
         }
@@ -311,6 +316,47 @@ public partial class Program
         {
             return;
         }
+
+        app.MapGet("/defense/dashboard", (
+            IOperatorDashboardPageService pageService) =>
+        {
+            return Results.Content(pageService.Render(), "text/html");
+        });
+
+        app.MapGet("/defense/dashboard/session", (
+            ManagementAuthenticationService authenticationService,
+            HttpContext httpContext) =>
+        {
+            return Results.Ok(new
+            {
+                authenticated = authenticationService.IsAuthenticated(httpContext)
+            });
+        });
+
+        app.MapPost("/defense/dashboard/session", (
+            DashboardSessionLoginRequest request,
+            ManagementAuthenticationService authenticationService,
+            HttpContext httpContext) =>
+        {
+            if (!authenticationService.IsApiKeyValid(request.ApiKey))
+            {
+                return Results.Unauthorized();
+            }
+
+            authenticationService.AppendSessionCookie(
+                httpContext.Response,
+                authenticationService.CreateSessionValue());
+
+            return Results.NoContent();
+        });
+
+        app.MapDelete("/defense/dashboard/session", (
+            ManagementAuthenticationService authenticationService,
+            HttpContext httpContext) =>
+        {
+            authenticationService.ClearSessionCookie(httpContext.Response);
+            return Results.NoContent();
+        });
 
         var management = app.MapGroup("/defense")
             .AddEndpointFilter<ApiKeyEndpointFilter>();

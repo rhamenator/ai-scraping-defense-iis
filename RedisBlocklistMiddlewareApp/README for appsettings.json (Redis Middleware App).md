@@ -68,7 +68,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 #### **DefenseEngine:Management**
 
 * **ApiKeyHeaderName**: Header name required for authenticated management endpoints.
-* **ApiKey**: Shared secret required to access `/defense/events`. If blank, the endpoint is not exposed.
+* **ApiKey**: Shared secret required to access the management API and `/defense/dashboard`. If blank, the dashboard and management endpoints are not exposed.
+* **DashboardSessionHours**: Lifetime of the browser session cookie created by the operator dashboard after a successful sign-in.
 
 #### **DefenseEngine:Intake**
 
