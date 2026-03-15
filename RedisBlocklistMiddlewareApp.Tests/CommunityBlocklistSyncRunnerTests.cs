@@ -102,6 +102,42 @@ public sealed class CommunityBlocklistSyncRunnerTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => runner.RunOnceAsync(cancellationTokenSource.Token));
     }
 
+    [Fact]
+    public async Task RunOnceAsync_TruncatesAndCountsExcessEntriesAsRejected()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            CommunityBlocklist = new CommunityBlocklistOptions
+            {
+                Enabled = true,
+                MaximumEntriesPerSource = 2,
+                Sources =
+                [
+                    new CommunityBlocklistSourceOptions
+                    {
+                        Name = "community-b",
+                        Url = "https://community.example.test/list"
+                    }
+                ]
+            }
+        });
+        var blocklist = new TestBlocklistService();
+        var runner = new CommunityBlocklistSyncRunner(
+            options,
+            new TestFeedClient(["198.51.100.1", "198.51.100.2", "198.51.100.3", "198.51.100.4"]),
+            blocklist,
+            new CommunityBlocklistSyncStatusStore(options),
+            NullLogger<CommunityBlocklistSyncRunner>.Instance);
+
+        var status = await runner.RunOnceAsync(CancellationToken.None);
+
+        Assert.Equal(2, status.ImportedCount);
+        Assert.Equal(2, status.RejectedCount);
+        Assert.Equal(2, blocklist.BlockCalls.Count);
+        Assert.Equal(2, status.Sources[0].ImportedCount);
+        Assert.Equal(2, status.Sources[0].RejectedCount);
+    }
+
     private sealed class TestFeedClient : ICommunityBlocklistFeedClient
     {
         private readonly IReadOnlyList<string> _ips;
