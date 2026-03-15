@@ -14,7 +14,7 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 | Tarpit API | Implemented as deterministic synthetic page endpoint | Add richer tarpit modes, streaming, and Markov/PostgreSQL-backed content |
 | Admin UI | Not implemented in .NET | Add operator dashboard on top of the authenticated admin API |
 | Community blocklist sync | Implemented as a configurable feed sync worker with admin-visible status | Add richer source trust, reporting parity, and deduplication policies |
-| Peer sync | Not implemented in .NET | Add background worker and peer trust model |
+| Peer sync | Implemented with authenticated signal export, timed import, and explicit trust modes | Add richer trust scoring, deduplication policy, and multi-node coordination |
 | Metrics/observability | Implemented at operator-API level | Add structured metrics, traces, and richer telemetry export |
 
 ## Post-v1 Parity Queue

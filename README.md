@@ -14,6 +14,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
+- Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
 
 ## Commercial v1 Scope
 
@@ -42,6 +43,7 @@ Management endpoints:
 - `GET /defense/events?count=50`
 - `GET /defense/metrics`
 - `GET /defense/community-blocklist/status`
+- `GET /defense/peer-sync/status`
 - `GET /defense/blocklist?ip=203.0.113.10`
 - `POST /defense/blocklist?ip=203.0.113.10&reason=manual_block`
 - `DELETE /defense/blocklist?ip=203.0.113.10`
@@ -51,6 +53,12 @@ Webhook intake endpoint:
   - body shape mirrors the legacy AI service webhook: `event_type`, `reason`, `timestamp_utc`, `details`
   - `details.ip` is required and must be a valid IP address
   - accepted events are written durably before background processing
+
+Peer export endpoint:
+- `GET /peer-sync/signals?count=200`
+  - only exposed when `DefenseEngine:PeerSync:ExportApiKey` is configured
+  - requires the configured `DefenseEngine:PeerSync:ExportApiKeyHeaderName` header
+  - exports recent blocked defense decisions as peer-shareable signals
 
 ## Supported Data Stores
 
@@ -85,6 +93,7 @@ Key areas:
 - `DefenseEngine:Audit`
 - `DefenseEngine:Escalation`
 - `DefenseEngine:CommunityBlocklist`
+- `DefenseEngine:PeerSync`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
 

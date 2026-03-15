@@ -20,6 +20,8 @@ public sealed class DefenseEngineOptions
 
     public CommunityBlocklistOptions CommunityBlocklist { get; set; } = new();
 
+    public PeerSyncOptions PeerSync { get; set; } = new();
+
     public QueueOptions Queue { get; set; } = new();
 
     public TarpitOptions Tarpit { get; set; } = new();
@@ -221,6 +223,45 @@ public sealed class CommunityBlocklistSourceOptions
     public string ApiKeyHeaderName { get; set; } = "X-API-Key";
 
     public string ApiKey { get; set; } = string.Empty;
+}
+
+public sealed class PeerSyncOptions
+{
+    public bool Enabled { get; set; }
+
+    public int SyncIntervalMinutes { get; set; } = 60;
+
+    public int RequestTimeoutSeconds { get; set; } = 10;
+
+    public int MaximumSignalsPerPeer { get; set; } = 500;
+
+    public int MaximumExportSignals { get; set; } = 500;
+
+    public string ExportApiKeyHeaderName { get; set; } = "X-Peer-Key";
+
+    public string ExportApiKey { get; set; } = string.Empty;
+
+    public PeerSyncPeerOptions[] Peers { get; set; } = [];
+}
+
+public sealed class PeerSyncPeerOptions
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Url { get; set; } = string.Empty;
+
+    public string ApiKeyHeaderName { get; set; } = "X-Peer-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public string TrustMode { get; set; } = PeerTrustModes.ObserveOnly;
+}
+
+public static class PeerTrustModes
+{
+    public const string ObserveOnly = "ObserveOnly";
+
+    public const string BlockList = "BlockList";
 }
 
 public sealed class TarpitOptions

@@ -121,6 +121,24 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 Imported community entries are validated before they are applied. Invalid, loopback, link-local, and RFC1918/private addresses are rejected instead of being written into the Redis blocklist.
 
+#### **DefenseEngine:PeerSync**
+
+* **Enabled**: Turns peer sync on or off.
+* **SyncIntervalMinutes**: Delay between peer import cycles.
+* **RequestTimeoutSeconds**: Timeout applied when fetching peer signals.
+* **MaximumSignalsPerPeer**: Safety cap applied to each peer import cycle.
+* **MaximumExportSignals**: Maximum number of blocked decisions exported from `/peer-sync/signals`.
+* **ExportApiKeyHeaderName**: Header name required by the peer-export endpoint.
+* **ExportApiKey**: Shared secret required to access `/peer-sync/signals`. If blank, the endpoint is not exposed.
+* **Peers**: List of explicitly trusted peers.
+  * **Name**: Friendly peer label used in imported signal summaries and status output.
+  * **Url**: Full URL of the remote peer signal endpoint.
+  * **ApiKeyHeaderName**: Header name used when calling the remote peer.
+  * **ApiKey**: Shared secret sent to the remote peer.
+  * **TrustMode**: Either `ObserveOnly` or `BlockList`.
+
+`ObserveOnly` records imported peer signals in the local audit trail without blocking. `BlockList` imports valid signals directly into the Redis blocklist and records a blocked decision locally. Invalid, loopback, link-local, and RFC1918/private addresses are rejected in either mode.
+
 #### **DefenseEngine:Queue**
 
 * **Capacity**: Maximum number of suspicious requests buffered for background analysis. When the queue is full, writers wait for capacity instead of dropping older suspicious requests.

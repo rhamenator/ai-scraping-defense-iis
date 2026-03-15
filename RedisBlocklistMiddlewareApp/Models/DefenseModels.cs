@@ -81,3 +81,36 @@ public sealed record CommunityBlocklistSourceSyncStatus(
     int RejectedCount,
     DateTimeOffset? LastSuccessAtUtc,
     string? LastError);
+
+public sealed record PeerDefenseSignal(
+    string IpAddress,
+    string Summary,
+    IReadOnlyList<string> Signals,
+    DateTimeOffset ObservedAtUtc,
+    DateTimeOffset DecidedAtUtc);
+
+public sealed record PeerDefenseSignalEnvelope(
+    string Source,
+    IReadOnlyList<PeerDefenseSignal> Signals);
+
+public sealed record PeerSyncStatus(
+    bool Enabled,
+    DateTimeOffset? LastAttemptAtUtc,
+    DateTimeOffset? LastSuccessAtUtc,
+    int ImportedCount,
+    int BlockedCount,
+    int ObservedCount,
+    int RejectedCount,
+    string? LastError,
+    IReadOnlyList<PeerSyncPeerStatus> Peers);
+
+public sealed record PeerSyncPeerStatus(
+    string Name,
+    string Url,
+    string TrustMode,
+    int ImportedCount,
+    int BlockedCount,
+    int ObservedCount,
+    int RejectedCount,
+    DateTimeOffset? LastSuccessAtUtc,
+    string? LastError);

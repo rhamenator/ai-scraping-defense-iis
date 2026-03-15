@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
+using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
 
 namespace RedisBlocklistMiddlewareApp.Tests;
@@ -72,6 +73,19 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public async Task PeerApiKeyFilter_AllowsRequest_WhenHeaderMatches()
+    {
+        var filter = CreatePeerFilter();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Peer-Key"] = "test-peer-key";
+        var context = new TestEndpointFilterInvocationContext(httpContext);
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status200OK);
+    }
+
+    [Fact]
     public void GetAdvertisedEndpoints_HidesEvents_WhenManagementApiKeyIsMissing()
     {
         var endpoints = Program.GetAdvertisedEndpoints(new DefenseEngineOptions());
@@ -110,6 +124,22 @@ public sealed class ManagementEndpointTests
         var endpoints = Program.GetAdvertisedEndpoints(options);
 
         Assert.Equal("/analyze", endpoints["analyze"]);
+    }
+
+    [Fact]
+    public void GetAdvertisedEndpoints_IncludesPeerSignals_WhenPeerApiKeyIsConfigured()
+    {
+        var options = new DefenseEngineOptions
+        {
+            PeerSync = new PeerSyncOptions
+            {
+                ExportApiKey = "test-peer-key"
+            }
+        };
+
+        var endpoints = Program.GetAdvertisedEndpoints(options);
+
+        Assert.Equal("/peer-sync/signals", endpoints["peerSignals"]);
     }
 
     [Fact]
@@ -194,6 +224,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/community-blocklist/status");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/peer-sync/status");
     }
 
     [Fact]
@@ -225,6 +256,35 @@ public sealed class ManagementEndpointTests
         Assert.DoesNotContain(endpoints, endpoint => endpoint.RoutePattern.RawText == "/analyze");
     }
 
+    [Fact]
+    public void MapPeerSyncEndpoints_RegistersPeerSignals_WhenPeerApiKeyIsConfigured()
+    {
+        var app = CreateApp();
+        var options = new DefenseEngineOptions
+        {
+            PeerSync = new PeerSyncOptions
+            {
+                ExportApiKey = "test-peer-key"
+            }
+        };
+
+        Program.MapPeerSyncEndpoints(app, options);
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/peer-sync/signals");
+    }
+
+    [Fact]
+    public void MapPeerSyncEndpoints_DoesNotRegisterPeerSignals_WhenPeerApiKeyIsMissing()
+    {
+        var app = CreateApp();
+
+        Program.MapPeerSyncEndpoints(app, new DefenseEngineOptions());
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.DoesNotContain(endpoints, endpoint => endpoint.RoutePattern.RawText == "/peer-sync/signals");
+    }
+
     private static ApiKeyEndpointFilter CreateFilter()
     {
         var options = Options.Create(new DefenseEngineOptions
@@ -253,14 +313,32 @@ public sealed class ManagementEndpointTests
         return new IntakeApiKeyEndpointFilter(options);
     }
 
+    private static PeerApiKeyEndpointFilter CreatePeerFilter()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            PeerSync = new PeerSyncOptions
+            {
+                ExportApiKeyHeaderName = "X-Peer-Key",
+                ExportApiKey = "test-peer-key"
+            }
+        });
+
+        return new PeerApiKeyEndpointFilter(options);
+    }
+
     private static WebApplication CreateApp()
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
+        builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
         builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
+        builder.Services.AddSingleton<IPeerSyncStatusStore, TestPeerSyncStatusStore>();
+        builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, TestCommunityBlocklistSyncStatusStore>();
+        builder.Services.AddSingleton(Options.Create(new DefenseEngineOptions()));
         return builder.Build();
     }
 
@@ -368,6 +446,30 @@ public sealed class ManagementEndpointTests
         {
             await Task.CompletedTask;
             yield break;
+        }
+    }
+
+    private sealed class TestPeerSyncStatusStore : IPeerSyncStatusStore
+    {
+        public PeerSyncStatus GetStatus()
+        {
+            return new PeerSyncStatus(false, null, null, 0, 0, 0, 0, null, []);
+        }
+
+        public void Update(PeerSyncStatus status)
+        {
+        }
+    }
+
+    private sealed class TestCommunityBlocklistSyncStatusStore : ICommunityBlocklistSyncStatusStore
+    {
+        public CommunityBlocklistSyncStatus GetStatus()
+        {
+            return new CommunityBlocklistSyncStatus(false, null, null, 0, 0, null, []);
+        }
+
+        public void Update(CommunityBlocklistSyncStatus status)
+        {
         }
     }
 }
