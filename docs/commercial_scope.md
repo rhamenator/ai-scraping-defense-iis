@@ -4,7 +4,7 @@ This document defines the first commercial release of the .NET stack. Its purpos
 
 ## v1 Product Definition
 
-Commercial v1 is a single deployable ASP.NET Core service with authenticated operator endpoints and durable local persistence.
+Commercial v1 is a single deployable, multi-project ASP.NET Core solution with authenticated operator endpoints and durable local persistence.
 
 Included in v1:
 
@@ -13,18 +13,19 @@ Included in v1:
 - rewrite of suspicious traffic into the tarpit surface
 - asynchronous defense analysis with Redis-backed request frequency tracking
 - authenticated operator endpoints for events, metrics, and manual blocklist actions
+- protected operator dashboard on top of the authenticated management API
 - authenticated `/analyze` intake for externally confirmed malicious events
 - durable SQLite-backed audit and webhook inbox persistence
+- configurable community blocklist sync with operator-visible status
+- peer sync with authenticated export and explicit trust modes
+- PostgreSQL-backed Markov tarpit content and deterministic render variants
+- explicit solution boundaries for `EdgeGateway`, `EscalationEngine`, `TarpitApi`, and shared contracts
 - automated unit and integration-style tests covering the core pipeline
 
 Explicitly deferred from v1:
 
-- multi-project service split into dedicated `EdgeGateway`, `EscalationEngine`, and `TarpitApi` processes
-- peer sync and trust policy
-- community blocklist sync
 - richer reputation providers and optional LLM-backed scoring
-- PostgreSQL-backed Markov tarpit content generation
-- operator dashboard UI
+- separate runtime deployments for `EdgeGateway`, `EscalationEngine`, and `TarpitApi`
 - SQL Server support
 
 ## Supported Deployment Model

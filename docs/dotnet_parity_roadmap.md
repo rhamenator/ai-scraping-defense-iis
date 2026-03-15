@@ -8,19 +8,19 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 
 | Upstream role | Current .NET status | Next target |
 | --- | --- | --- |
-| Nginx/Lua edge filter | Implemented as ASP.NET Core middleware | Split into a dedicated edge gateway project |
-| AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and separate service boundary |
-| Escalation Engine | Implemented with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and separate service boundary |
+| Nginx/Lua edge filter | Implemented as ASP.NET Core middleware in the `AiScrapingDefense.EdgeGateway` host | Separate runtime deployment only if production topology justifies it |
+| AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and optional isolated runtime boundary |
+| Escalation Engine | Implemented in its own solution project with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and optional isolated runtime boundary |
 | Tarpit API | Implemented as deterministic page generation with PostgreSQL-backed Markov support and multiple render variants | Add streaming/archive rotation parity and deeper crawl-wasting content sources |
-| Admin UI | Not implemented in .NET | Add operator dashboard on top of the authenticated admin API |
+| Admin UI | Implemented as the protected `/defense/dashboard` operator console | Add richer workflows, search, and operator ergonomics |
 | Community blocklist sync | Implemented as a configurable feed sync worker with admin-visible status | Add richer source trust, reporting parity, and deduplication policies |
 | Peer sync | Implemented with authenticated signal export, timed import, and explicit trust modes | Add richer trust scoring, deduplication policy, and multi-node coordination |
 | Metrics/observability | Implemented at operator-API level | Add structured metrics, traces, and richer telemetry export |
 
 ## Post-v1 Parity Queue
 
-1. Split the current app into `EdgeGateway`, `EscalationEngine`, and `TarpitApi` projects under the solution while keeping shared contracts in a common library.
+1. Promote the project-level split into optional independent runtime deployments when production constraints justify it.
 2. Add richer escalation scoring, reputation providers, and optional LLM adapters.
-3. Port the upstream tarpit content generation strategy into a .NET service backed by PostgreSQL.
-4. Add community blocklist sync and peer sync.
-5. Build an operator dashboard UI on top of the authenticated admin API.
+3. Expand the tarpit content strategy with streaming/archive rotation and deeper content sources.
+4. Add richer community-blocklist trust policy, reporting, and peer coordination.
+5. Add structured metrics, traces, and richer operator telemetry export.

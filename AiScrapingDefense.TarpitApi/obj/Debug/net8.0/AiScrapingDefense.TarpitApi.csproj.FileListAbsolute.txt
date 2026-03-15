@@ -1,0 +1,16 @@
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.csproj.AssemblyReference.cache
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.GeneratedMSBuildEditorConfig.editorconfig
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.AssemblyInfoInputs.cache
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.AssemblyInfo.cs
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.csproj.CoreCompileInputs.cache
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.sourcelink.json
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/bin/Debug/net8.0/AiScrapingDefense.TarpitApi.deps.json
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/bin/Debug/net8.0/AiScrapingDefense.TarpitApi.dll
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/bin/Debug/net8.0/AiScrapingDefense.TarpitApi.pdb
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/bin/Debug/net8.0/AiScrapingDefense.Contracts.dll
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/bin/Debug/net8.0/AiScrapingDefense.Contracts.pdb
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapi.29D4F300.Up2Date
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.dll
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/refint/AiScrapingDefense.TarpitApi.dll
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/AiScrapingDefense.TarpitApi.pdb
+/home/rich/dev/ai-scraping-defense-iis/AiScrapingDefense.TarpitApi/obj/Debug/net8.0/ref/AiScrapingDefense.TarpitApi.dll
