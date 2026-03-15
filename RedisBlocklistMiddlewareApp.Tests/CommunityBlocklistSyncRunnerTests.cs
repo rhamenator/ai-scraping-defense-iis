@@ -72,6 +72,36 @@ public sealed class CommunityBlocklistSyncRunnerTests
         Assert.Equal(0, status.ImportedCount);
     }
 
+    [Fact]
+    public async Task RunOnceAsync_PropagatesCancellation()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            CommunityBlocklist = new CommunityBlocklistOptions
+            {
+                Enabled = true,
+                Sources =
+                [
+                    new CommunityBlocklistSourceOptions
+                    {
+                        Name = "community-a",
+                        Url = "https://community.example.test/list"
+                    }
+                ]
+            }
+        });
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+        var runner = new CommunityBlocklistSyncRunner(
+            options,
+            new CancelingFeedClient(),
+            new TestBlocklistService(),
+            new CommunityBlocklistSyncStatusStore(options),
+            NullLogger<CommunityBlocklistSyncRunner>.Instance);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => runner.RunOnceAsync(cancellationTokenSource.Token));
+    }
+
     private sealed class TestFeedClient : ICommunityBlocklistFeedClient
     {
         private readonly IReadOnlyList<string> _ips;
@@ -84,6 +114,14 @@ public sealed class CommunityBlocklistSyncRunnerTests
         public Task<IReadOnlyList<string>> FetchAsync(CommunityBlocklistSourceOptions source, CancellationToken cancellationToken)
         {
             return Task.FromResult(_ips);
+        }
+    }
+
+    private sealed class CancelingFeedClient : ICommunityBlocklistFeedClient
+    {
+        public Task<IReadOnlyList<string>> FetchAsync(CommunityBlocklistSourceOptions source, CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
     }
 

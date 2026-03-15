@@ -87,6 +87,10 @@ public sealed class CommunityBlocklistSyncRunner
                     lastSuccessAtUtc,
                     null));
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 lastError = ex.Message;
@@ -108,7 +112,7 @@ public sealed class CommunityBlocklistSyncRunner
             importedCount,
             rejectedCount,
             lastError,
-            sourceStatuses);
+            sourceStatuses.ToArray());
         _statusStore.Update(status);
         return status;
     }
