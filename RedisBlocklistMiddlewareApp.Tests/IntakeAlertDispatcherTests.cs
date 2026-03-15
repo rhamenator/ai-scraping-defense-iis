@@ -61,6 +61,65 @@ public sealed class IntakeAlertDispatcherTests
         Assert.Contains("network down", webhookResult.Detail);
     }
 
+    [Fact]
+    public async Task DispatchAsync_SendsSlackAlert_WithSlackFormattedPayload()
+    {
+        var handler = new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+        var options = CreateOptions();
+        options.Intake.Alerting.GenericWebhook.Enabled = false;
+        options.Intake.Alerting.Smtp.Enabled = false;
+        options.Intake.Alerting.Slack = new SlackAlertOptions
+        {
+            Enabled = true,
+            WebhookUrl = "https://hooks.slack.example.test/services/test",
+            TimeoutSeconds = 5
+        };
+        var dispatcher = new IntakeAlertDispatcher(
+            Options.Create(options),
+            new FakeHttpClientFactory(handler),
+            new RecordingSmtpAlertSender());
+
+        var results = await dispatcher.DispatchAsync(CreateEvent(), CancellationToken.None);
+
+        var slackResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.Slack);
+        Assert.Equal(IntakeDeliveryStatuses.Succeeded, slackResult.Status);
+        Assert.NotNull(handler.Request);
+        Assert.Equal(HttpMethod.Post, handler.Request!.Method);
+        Assert.Equal("https://hooks.slack.example.test/services/test", handler.Request.RequestUri!.ToString());
+
+        var requestJson = await handler.Request.Content!.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(requestJson);
+        var text = json.RootElement.GetProperty("text").GetString();
+        Assert.Contains("*AI Defense Alert*", text);
+        Assert.Contains("198.51.100.30", text);
+        Assert.True(json.RootElement.TryGetProperty("blocks", out var blocks));
+        Assert.NotEmpty(blocks.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ReturnsFailedSlackRecord_WhenSlackCallThrows()
+    {
+        var options = CreateOptions();
+        options.Intake.Alerting.GenericWebhook.Enabled = false;
+        options.Intake.Alerting.Smtp.Enabled = false;
+        options.Intake.Alerting.Slack = new SlackAlertOptions
+        {
+            Enabled = true,
+            WebhookUrl = "https://hooks.slack.example.test/services/test",
+            TimeoutSeconds = 5
+        };
+        var dispatcher = new IntakeAlertDispatcher(
+            Options.Create(options),
+            new FakeHttpClientFactory(new ThrowingHttpMessageHandler(new HttpRequestException("slack down"))),
+            new RecordingSmtpAlertSender());
+
+        var results = await dispatcher.DispatchAsync(CreateEvent(), CancellationToken.None);
+
+        var slackResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.Slack);
+        Assert.Equal(IntakeDeliveryStatuses.Failed, slackResult.Status);
+        Assert.Contains("slack down", slackResult.Detail);
+    }
+
     private static DefenseEngineOptions CreateOptions()
     {
         return new DefenseEngineOptions

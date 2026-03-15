@@ -21,7 +21,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - A protected operator dashboard at `/defense/dashboard` backed by the same management API.
 - An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
-- Configurable webhook and SMTP alert dispatch for processed intake events.
+- Configurable webhook, Slack, and SMTP alert dispatch for processed intake events.
 - Configurable outbound community reporting for processed intake events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
@@ -118,6 +118,7 @@ Key areas:
   - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
 - `DefenseEngine:Intake`
   - `Alerting:GenericWebhook` controls optional outbound webhook alerts for processed intake events.
+  - `Alerting:Slack` controls optional Slack Incoming Webhook alerts for processed intake events.
   - `Alerting:Smtp` controls optional operator email alerts for processed intake events.
   - `CommunityReporting` controls optional outbound reporting to providers like AbuseIPDB.
 - `DefenseEngine:Audit`

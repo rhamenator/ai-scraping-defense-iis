@@ -27,11 +27,17 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
         IntakeWebhookEvent webhookEvent,
         CancellationToken cancellationToken)
     {
-        var results = new List<IntakeDeliveryRecord>(2);
+        var results = new List<IntakeDeliveryRecord>(3);
         var webhookResult = await SendGenericWebhookAsync(webhookEvent, cancellationToken);
         if (webhookResult is not null)
         {
             results.Add(webhookResult);
+        }
+
+        var slackResult = await SendSlackAsync(webhookEvent, cancellationToken);
+        if (slackResult is not null)
+        {
+            results.Add(slackResult);
         }
 
         var smtpResult = await SendSmtpAsync(webhookEvent, cancellationToken);
@@ -106,6 +112,56 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
         }
     }
 
+    private async Task<IntakeDeliveryRecord?> SendSlackAsync(
+        IntakeWebhookEvent webhookEvent,
+        CancellationToken cancellationToken)
+    {
+        var options = _options.Slack;
+        if (!options.Enabled || string.IsNullOrWhiteSpace(options.WebhookUrl))
+        {
+            return null;
+        }
+
+        var attemptedAtUtc = DateTimeOffset.UtcNow;
+        try
+        {
+            using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, options.WebhookUrl)
+            {
+                Content = JsonContent.Create(BuildSlackPayload(webhookEvent))
+            };
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            var detail = response.IsSuccessStatusCode
+                ? "Alert delivered successfully."
+                : $"Alert delivery failed with status {(int)response.StatusCode}.";
+
+            return new IntakeDeliveryRecord(
+                IntakeDeliveryTypes.Alert,
+                IntakeDeliveryChannels.Slack,
+                webhookEvent.Details.IpAddress,
+                webhookEvent.Reason,
+                options.WebhookUrl,
+                response.IsSuccessStatusCode ? IntakeDeliveryStatuses.Succeeded : IntakeDeliveryStatuses.Failed,
+                detail,
+                attemptedAtUtc);
+        }
+        catch (Exception ex)
+        {
+            return new IntakeDeliveryRecord(
+                IntakeDeliveryTypes.Alert,
+                IntakeDeliveryChannels.Slack,
+                webhookEvent.Details.IpAddress,
+                webhookEvent.Reason,
+                options.WebhookUrl,
+                IntakeDeliveryStatuses.Failed,
+                ex.Message,
+                attemptedAtUtc);
+        }
+    }
+
     private async Task<IntakeDeliveryRecord?> SendSmtpAsync(
         IntakeWebhookEvent webhookEvent,
         CancellationToken cancellationToken)
@@ -172,5 +228,70 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
         builder.AppendLine($"Signals: {string.Join(", ", detail.Signals ?? [])}");
         return builder.ToString();
     }
-}
 
+    private static object BuildSlackPayload(IntakeWebhookEvent webhookEvent)
+    {
+        var detail = webhookEvent.Details;
+        var userAgent = string.IsNullOrWhiteSpace(detail.UserAgent) ? "N/A" : detail.UserAgent;
+        var method = string.IsNullOrWhiteSpace(detail.Method) ? "N/A" : detail.Method;
+        var path = string.IsNullOrWhiteSpace(detail.Path) ? "/" : detail.Path;
+        var queryString = string.IsNullOrWhiteSpace(detail.QueryString) ? string.Empty : detail.QueryString;
+        var signals = detail.Signals is { Count: > 0 } ? string.Join(", ", detail.Signals) : "None";
+        var pathDisplay = string.IsNullOrEmpty(queryString) ? path : $"{path}{queryString}";
+        var message = $":shield: *AI Defense Alert*\n" +
+                      $"> *Reason:* {webhookEvent.Reason}\n" +
+                      $"> *IP Address:* `{detail.IpAddress}`\n" +
+                      $"> *Method:* `{method}`\n" +
+                      $"> *Path:* `{pathDisplay}`\n" +
+                      $"> *User Agent:* `{userAgent}`\n" +
+                      $"> *Signals:* {signals}\n" +
+                      $"> *Timestamp (UTC):* {webhookEvent.TimestampUtc:O}";
+
+        return new
+        {
+            text = message,
+            blocks = new object[]
+            {
+                new
+                {
+                    type = "section",
+                    text = new
+                    {
+                        type = "mrkdwn",
+                        text = "*AI Defense Alert*\nConfirmed malicious traffic was processed by the intake pipeline."
+                    }
+                },
+                new
+                {
+                    type = "section",
+                    fields = new object[]
+                    {
+                        new { type = "mrkdwn", text = $"*Reason:*\n{EscapeSlack(webhookEvent.Reason)}" },
+                        new { type = "mrkdwn", text = $"*IP Address:*\n`{EscapeSlack(detail.IpAddress)}`" },
+                        new { type = "mrkdwn", text = $"*Method:*\n`{EscapeSlack(method)}`" },
+                        new { type = "mrkdwn", text = $"*Path:*\n`{EscapeSlack(pathDisplay)}`" },
+                        new { type = "mrkdwn", text = $"*User Agent:*\n`{EscapeSlack(userAgent)}`" },
+                        new { type = "mrkdwn", text = $"*Timestamp (UTC):*\n{webhookEvent.TimestampUtc:O}" }
+                    }
+                },
+                new
+                {
+                    type = "section",
+                    text = new
+                    {
+                        type = "mrkdwn",
+                        text = $"*Signals:*\n{EscapeSlack(signals)}"
+                    }
+                }
+            }
+        };
+    }
+
+    private static string EscapeSlack(string value)
+    {
+        return value
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
+    }
+}

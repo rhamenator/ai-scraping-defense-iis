@@ -342,6 +342,8 @@ public sealed class IntakeAlertingOptions
 {
     public GenericWebhookAlertOptions GenericWebhook { get; set; } = new();
 
+    public SlackAlertOptions Slack { get; set; } = new();
+
     public SmtpAlertOptions Smtp { get; set; } = new();
 }
 
@@ -373,6 +375,15 @@ public sealed class SmtpAlertOptions
     public string From { get; set; } = string.Empty;
 
     public string[] To { get; set; } = [];
+}
+
+public sealed class SlackAlertOptions
+{
+    public bool Enabled { get; set; }
+
+    public string WebhookUrl { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
 }
 
 public sealed class CommunityReportingOptions

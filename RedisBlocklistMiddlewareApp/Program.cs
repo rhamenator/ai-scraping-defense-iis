@@ -94,6 +94,9 @@ builder.Services
             options.Intake.Alerting.GenericWebhook.AuthorizationHeaderValue.Trim();
         options.Intake.Alerting.GenericWebhook.TimeoutSeconds =
             Math.Max(1, options.Intake.Alerting.GenericWebhook.TimeoutSeconds);
+        options.Intake.Alerting.Slack.WebhookUrl = options.Intake.Alerting.Slack.WebhookUrl.Trim();
+        options.Intake.Alerting.Slack.TimeoutSeconds =
+            Math.Max(1, options.Intake.Alerting.Slack.TimeoutSeconds);
         options.Intake.Alerting.Smtp.Host = options.Intake.Alerting.Smtp.Host.Trim();
         options.Intake.Alerting.Smtp.Port = Math.Max(1, options.Intake.Alerting.Smtp.Port);
         options.Intake.Alerting.Smtp.Username = options.Intake.Alerting.Smtp.Username.Trim();
