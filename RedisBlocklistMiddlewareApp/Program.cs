@@ -109,6 +109,30 @@ builder.Services
             })
             .ToArray();
 
+        options.PeerSync.SyncIntervalMinutes = Math.Max(1, options.PeerSync.SyncIntervalMinutes);
+        options.PeerSync.RequestTimeoutSeconds = Math.Max(1, options.PeerSync.RequestTimeoutSeconds);
+        options.PeerSync.MaximumSignalsPerPeer = Math.Max(1, options.PeerSync.MaximumSignalsPerPeer);
+        options.PeerSync.MaximumExportSignals = Math.Max(1, options.PeerSync.MaximumExportSignals);
+        options.PeerSync.ExportApiKeyHeaderName = string.IsNullOrWhiteSpace(options.PeerSync.ExportApiKeyHeaderName)
+            ? "X-Peer-Key"
+            : options.PeerSync.ExportApiKeyHeaderName.Trim();
+        options.PeerSync.ExportApiKey = options.PeerSync.ExportApiKey.Trim();
+        options.PeerSync.Peers = options.PeerSync.Peers
+            .Where(peer => !string.IsNullOrWhiteSpace(peer.Url))
+            .Select(peer => new PeerSyncPeerOptions
+            {
+                Name = string.IsNullOrWhiteSpace(peer.Name) ? peer.Url.Trim() : peer.Name.Trim(),
+                Url = peer.Url.Trim(),
+                ApiKeyHeaderName = string.IsNullOrWhiteSpace(peer.ApiKeyHeaderName)
+                    ? "X-Peer-Key"
+                    : peer.ApiKeyHeaderName.Trim(),
+                ApiKey = peer.ApiKey.Trim(),
+                TrustMode = string.Equals(peer.TrustMode, PeerTrustModes.BlockList, StringComparison.OrdinalIgnoreCase)
+                    ? PeerTrustModes.BlockList
+                    : PeerTrustModes.ObserveOnly
+            })
+            .ToArray();
+
         if (!options.Redis.BlocklistKeyPrefix.EndsWith(':'))
         {
             options.Redis.BlocklistKeyPrefix += ":";
@@ -137,13 +161,18 @@ builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>
 builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();
 builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, CommunityBlocklistSyncStatusStore>();
 builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
+builder.Services.AddSingleton<IPeerSignalFeedClient, HttpPeerSignalFeedClient>();
+builder.Services.AddSingleton<IPeerSyncStatusStore, PeerSyncStatusStore>();
+builder.Services.AddSingleton<PeerSyncRunner>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
+builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 builder.Services.AddHostedService<WebhookIntakeProcessingService>();
 builder.Services.AddHostedService<CommunityBlocklistSyncService>();
+builder.Services.AddHostedService<PeerSyncService>();
 
 var app = builder.Build();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value;
@@ -191,6 +220,7 @@ app.MapGet("/health", async (
 
 Program.MapManagementEndpoints(app, runtimeOptions);
 Program.MapIntakeEndpoints(app, runtimeOptions);
+Program.MapPeerSyncEndpoints(app, runtimeOptions);
 
 app.MapGet(tarpitRoutePattern, async (
     HttpContext context,
@@ -241,6 +271,11 @@ public partial class Program
             endpoints["analyze"] = "/analyze";
         }
 
+        if (ShouldExposePeerSyncEndpoints(runtimeOptions))
+        {
+            endpoints["peerSignals"] = "/peer-sync/signals";
+        }
+
         return endpoints;
     }
 
@@ -271,6 +306,12 @@ public partial class Program
 
         management.MapGet("/community-blocklist/status", (
             [FromServices] ICommunityBlocklistSyncStatusStore statusStore) =>
+        {
+            return Results.Ok(statusStore.GetStatus());
+        });
+
+        management.MapGet("/peer-sync/status", (
+            [FromServices] IPeerSyncStatusStore statusStore) =>
         {
             return Results.Ok(statusStore.GetStatus());
         });
@@ -398,6 +439,49 @@ public partial class Program
         .AddEndpointFilter<IntakeApiKeyEndpointFilter>();
     }
 
+    public static void MapPeerSyncEndpoints(
+        IEndpointRouteBuilder app,
+        DefenseEngineOptions runtimeOptions)
+    {
+        if (!ShouldExposePeerSyncEndpoints(runtimeOptions))
+        {
+            return;
+        }
+
+        app.MapGet("/peer-sync/signals", (
+            [FromQuery] int count,
+            IDefenseEventStore store,
+            IOptions<DefenseEngineOptions> options) =>
+        {
+            return Results.Ok(GetPeerSignalsForExport(store, options.Value, count));
+        })
+        .AddEndpointFilter<PeerApiKeyEndpointFilter>();
+    }
+
+    public static PeerDefenseSignalEnvelope GetPeerSignalsForExport(
+        IDefenseEventStore store,
+        DefenseEngineOptions runtimeOptions,
+        int count)
+    {
+        var maxSignals = runtimeOptions.PeerSync.MaximumExportSignals;
+        var safeCount = Math.Clamp(count <= 0 ? maxSignals : count, 1, maxSignals);
+        var scanWindow = Math.Max(safeCount, runtimeOptions.Audit.MaxRecentEvents);
+        var signals = store.GetRecent(scanWindow)
+            .Where(decision => string.Equals(decision.Action, "blocked", StringComparison.OrdinalIgnoreCase))
+            .Take(safeCount)
+            .Select(decision => new PeerDefenseSignal(
+                decision.IpAddress,
+                decision.Summary,
+                decision.Signals,
+                decision.ObservedAtUtc,
+                decision.DecidedAtUtc))
+            .ToArray();
+
+        return new PeerDefenseSignalEnvelope(
+            "ai-scraping-defense-dotnet",
+            signals);
+    }
+
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)
     {
         return $"{runtimeOptions.Tarpit.PathPrefix}/{{**path}}";
@@ -406,6 +490,11 @@ public partial class Program
     public static bool ShouldExposeIntakeEndpoints(DefenseEngineOptions runtimeOptions)
     {
         return !string.IsNullOrWhiteSpace(runtimeOptions.Intake.ApiKey);
+    }
+
+    public static bool ShouldExposePeerSyncEndpoints(DefenseEngineOptions runtimeOptions)
+    {
+        return !string.IsNullOrWhiteSpace(runtimeOptions.PeerSync.ExportApiKey);
     }
 
     public static bool TryNormalizeIpAddress(string value, out string normalizedIp)
