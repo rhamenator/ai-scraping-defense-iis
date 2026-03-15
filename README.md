@@ -15,7 +15,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Heuristic request inspection for known bad user agents, malformed headers, and suspicious paths.
 - A bounded suspicious-request queue with a background analysis worker.
 - Redis-backed request-frequency tracking for simple escalation decisions.
-- Pluggable escalation via configured CIDR reputation ranges, optional HTTP reputation checks, and an optional OpenAI-compatible classifier hook.
+- Pluggable escalation via configured CIDR reputation ranges, an optional local trained model, optional HTTP reputation checks, and an optional OpenAI-compatible classifier hook.
 - A deterministic tarpit endpoint that returns synthetic HTML and recursive links.
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
@@ -94,10 +94,12 @@ Queued suspicious-request analysis now persists a score breakdown with named con
 - base edge heuristics
 - short-window request frequency
 - configured CIDR reputation ranges
+- an optional local trained model
 - optional HTTP reputation providers
 - an optional OpenAI-compatible classifier endpoint
 
 The default configuration keeps the external reputation/model hooks disabled. They are exposed under `DefenseEngine:Escalation` so production deployments can opt in without changing the rest of the request pipeline.
+See [docs/local_model_training.md](docs/local_model_training.md) for the local model artifact format and trainer CLI.
 
 ## PostgreSQL Tarpit
 
@@ -120,6 +122,7 @@ Key areas:
   - `CommunityReporting` controls optional outbound reporting to providers like AbuseIPDB.
 - `DefenseEngine:Audit`
 - `DefenseEngine:Escalation`
+  - `LocalTrainedModel` enables the .NET-native local model adapter and points at the saved model artifact.
 - `DefenseEngine:CommunityBlocklist`
 - `DefenseEngine:PeerSync`
 - `DefenseEngine:Queue`
