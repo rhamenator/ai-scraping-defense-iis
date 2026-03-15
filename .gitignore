@@ -1,5 +1,7 @@
 .venv
 # Byte-compiled / optimized / DLL files
+**/bin/
+**/obj/
 RedisBlocklistMiddlewareApp/bin
 RedisBlocklistMiddlewareApp/obj
 RedisBlocklistMiddlewareApp.Tests/bin

@@ -2,6 +2,13 @@
 
 This repository is being repositioned toward the original goal: a pure-.NET implementation of the `ai-scraping-defense` stack rather than an IIS-to-Linux control-plane adapter.
 
+The solution is now split into role-oriented .NET projects while still shipping as a single deployable for v1:
+
+- `AiScrapingDefense.EdgeGateway` for the ASP.NET Core host, middleware, operator API, webhook intake, and Redis-backed enforcement
+- `AiScrapingDefense.Contracts` for shared options and cross-service models/interfaces
+- `AiScrapingDefense.EscalationEngine` for threat scoring, reputation providers, and model adapters
+- `AiScrapingDefense.TarpitApi` for tarpit page generation and PostgreSQL-backed Markov content
+
 The current codebase now contains the first .NET-native defense slice inside [RedisBlocklistMiddlewareApp/Program.cs](RedisBlocklistMiddlewareApp/Program.cs):
 
 - Redis-backed IP blocklist enforcement at the edge.
@@ -28,7 +35,7 @@ The first commercial release is a single deployable ASP.NET Core service that pr
 - accept authenticated webhook intake for confirmed malicious traffic
 - block and unblock IPs through authenticated operator endpoints
 
-This is intentionally a modular monolith for v1. It preserves the upstream functional roles, but keeps them in one deployable until the .NET contracts and production behavior settle.
+This is intentionally a single-deployable, multi-project .NET stack for v1. It preserves the upstream functional roles, but keeps them in one runtime deployment until separate service contracts and operational behavior settle.
 
 See [docs/architecture.md](docs/architecture.md) for the current architecture, [docs/commercial_scope.md](docs/commercial_scope.md) for the v1 definition, and [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) for the post-v1 parity queue.
 

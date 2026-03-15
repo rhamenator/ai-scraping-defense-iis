@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using RedisBlocklistMiddlewareApp.Configuration;
 

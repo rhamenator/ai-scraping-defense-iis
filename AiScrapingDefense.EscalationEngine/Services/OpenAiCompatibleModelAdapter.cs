@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using RedisBlocklistMiddlewareApp.Configuration;
 
 namespace RedisBlocklistMiddlewareApp.Services;
