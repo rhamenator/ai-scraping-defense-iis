@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Containerized deployment artifacts for the .NET runtime (`Dockerfile`, `compose.yaml`).
+* An observability overlay with Prometheus, Grafana provisioning, alert rules, and an OTLP collector example (`compose.observability.yaml`, `deploy/observability/*`).
 * A GitHub Actions workflow that restores, builds, and tests the solution on every push and pull request.
 * A containerized integration-test project covering suspicious request handling, management blocklist operations, webhook intake, and PostgreSQL-backed tarpit rendering.
 * Prometheus/OTLP observability options and runtime instrumentation for defense decisions, tarpit responses, webhook intake, and sync activity.
+* Queue depth and capacity telemetry for queued suspicious-request pressure monitoring.
 * Release documentation for parity, operator operations, and release validation.
 
 ### Changed

@@ -8,6 +8,7 @@ Use this checklist before cutting a commercial release candidate.
 - `dotnet test anti-scraping-defense-iis.sln`
 - `docker build -t ai-scraping-defense-dotnet .`
 - `docker compose up --build` smoke run succeeds
+- `docker compose -f compose.yaml -f compose.observability.yaml config` validates the packaged monitoring overlay
 
 ## Runtime Validation
 
@@ -19,6 +20,7 @@ Use this checklist before cutting a commercial release candidate.
 - suspicious traffic is tarpitted and can escalate to a block
 - Prometheus metrics are reachable when enabled
 - OTLP export is verified if configured
+- Grafana loads the bundled dashboard against the packaged Prometheus data source
 
 ## Security and Configuration
 

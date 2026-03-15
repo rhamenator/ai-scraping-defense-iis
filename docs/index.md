@@ -12,11 +12,13 @@ This documentation index is for the current .NET implementation in this reposito
 - [Release Blockers](release_blockers.md)
 - [Release Checklist](release_checklist.md)
 - [Operator Runbook](operator_runbook.md)
+- [Observability Pack](observability_pack.md)
 
 ## Deployment
 
 - [Dockerfile](../Dockerfile)
 - [Compose Stack](../compose.yaml)
+- [Observability Overlay](../compose.observability.yaml)
 - [IIS Deployment Guide](iis_deployment_guide.md)
 
 ## Project and policy

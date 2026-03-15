@@ -141,6 +141,8 @@ The repository now includes:
 
 - a production-oriented multi-stage [Dockerfile](Dockerfile)
 - a local smoke/deployment [compose.yaml](compose.yaml)
+- an observability overlay at [compose.observability.yaml](compose.observability.yaml)
 - a GitHub Actions CI workflow at [.github/workflows/dotnet-ci.yml](.github/workflows/dotnet-ci.yml)
 
 Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.
+Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.

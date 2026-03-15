@@ -44,6 +44,12 @@ public sealed class DefenseTelemetry
         {
             LabelNames = ["delivery_type", "channel", "status"]
         });
+    private static readonly Gauge QueueDepth = Metrics.CreateGauge(
+        "ai_scraping_defense_queue_depth",
+        "Current number of suspicious requests waiting in the analysis queue.");
+    private static readonly Gauge QueueCapacity = Metrics.CreateGauge(
+        "ai_scraping_defense_queue_capacity",
+        "Configured maximum number of suspicious requests that can wait in the analysis queue.");
     private static readonly Counter CommunityImports = Metrics.CreateCounter(
         "ai_scraping_defense_community_imports_total",
         "Community-blocklist import outcomes.",
@@ -104,6 +110,12 @@ public sealed class DefenseTelemetry
         IntakeDeliveryAttempts
             .WithLabels(SanitizeLabel(deliveryType), SanitizeLabel(channel), SanitizeLabel(status))
             .Inc();
+    }
+
+    public void UpdateQueueDepth(int depth, int capacity)
+    {
+        QueueDepth.Set(Math.Max(0, depth));
+        QueueCapacity.Set(Math.Max(1, capacity));
     }
 
     public void RecordCommunitySync(int importedCount, int rejectedCount)
