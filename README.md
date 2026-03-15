@@ -25,7 +25,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Configurable outbound community reporting for processed intake events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
-- Optional PostgreSQL-backed Markov tarpit content with deterministic render variants.
+- Optional PostgreSQL-backed Markov tarpit content with deterministic render variants and rotating ZIP decoy archives.
 
 ## Commercial v1 Scope
 
@@ -127,6 +127,8 @@ Key areas:
 - `DefenseEngine:PeerSync`
 - `DefenseEngine:Queue`
 - `DefenseEngine:Tarpit`
+  - `ArchiveDirectory`, `ArchiveRotationMinutes`, and `MaximumArchivesToKeep` control rotating ZIP decoy retention.
+  - `JavaScriptDecoyFileCount`, `MinJavaScriptDecoyFileSizeKb`, and `MaxJavaScriptDecoyFileSizeKb` control generated JavaScript archive contents.
 - `DefenseEngine:Observability`
 
 For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
