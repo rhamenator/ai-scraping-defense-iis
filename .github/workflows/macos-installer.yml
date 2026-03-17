@@ -30,13 +30,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          prerelease=false
           if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
             version="${GITHUB_REF_NAME#v}"
+            if [[ "${version}" == *-* ]]; then
+              prerelease=true
+            fi
           else
             version="0.0.0-ci.${GITHUB_RUN_NUMBER}"
           fi
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
 
       - name: Build macOS Packages
         shell: bash
@@ -95,11 +100,23 @@ jobs:
             artifacts/macos-installer/output/*.sha256
           if-no-files-found: error
 
-      - name: Publish macOS Installers To GitHub Release
-        if: github.ref_type == 'tag'
+      - name: Publish Stable macOS Installers To GitHub Release
+        if: github.ref_type == 'tag' && steps.version.outputs.prerelease != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/macos-installer/output/*.pkg
             artifacts/macos-installer/output/*.sha256
           generate_release_notes: true
+          make_latest: true
+
+      - name: Publish Prerelease macOS Installers To GitHub Release
+        if: github.ref_type == 'tag' && steps.version.outputs.prerelease == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/macos-installer/output/*.pkg
+            artifacts/macos-installer/output/*.sha256
+          generate_release_notes: true
+          prerelease: true
+          make_latest: false

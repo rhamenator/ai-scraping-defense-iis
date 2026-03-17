@@ -140,7 +140,7 @@ In `Production`, startup now fails fast if Redis still points at a loopback endp
 
 ## Status
 
-The project now has an explicit commercial-v1 target, but release readiness still depends on closing the remaining items in [docs/release_blockers.md](docs/release_blockers.md) and the post-v1 parity queue in [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md).
+Commercial v1 is shipped and the blocker queue in [docs/release_blockers.md](docs/release_blockers.md) is closed. The remaining roadmap in [docs/dotnet_parity_roadmap.md](docs/dotnet_parity_roadmap.md) is post-v1 work rather than a release gate.
 
 ## Packaging
 
