@@ -136,3 +136,5 @@ archives/
 *.swn
 *.swo
 *.swp
+
+.fake
