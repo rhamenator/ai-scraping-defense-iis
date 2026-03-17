@@ -93,7 +93,6 @@ jobs:
           path: |
             artifacts/macos-installer/output/*.pkg
             artifacts/macos-installer/output/*.sha256
-            artifacts/macos-installer/output/macos-release-notes.md
           if-no-files-found: error
 
       - name: Publish macOS Installers To GitHub Release
@@ -103,6 +102,4 @@ jobs:
           files: |
             artifacts/macos-installer/output/*.pkg
             artifacts/macos-installer/output/*.sha256
-          body_path: artifacts/macos-installer/output/macos-release-notes.md
-          append_body: true
           generate_release_notes: true

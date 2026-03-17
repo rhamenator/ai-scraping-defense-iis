@@ -111,21 +111,6 @@ jobs:
           $hash = Get-FileHash $installer.FullName -Algorithm SHA256
           "$($hash.Hash.ToLowerInvariant()) *$($installer.Name)" | Out-File -FilePath "artifacts/installer/output/$($installer.Name).sha256" -Encoding ascii
 
-      - name: Generate Windows Release Notes
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem artifacts/installer/output/*.exe | Select-Object -First 1
-          $hash = Get-FileHash $installer.FullName -Algorithm SHA256
-          $signingStatus = if ($env:WINDOWS_SIGN_CERT_PATH) { 'Authenticode signed in workflow.' } else { 'Unsigned build.' }
-
-          @(
-            '## Windows installer',
-            '',
-            "- $($installer.Name)",
-            "- SHA-256: $($hash.Hash.ToLowerInvariant())",
-            "- Signing status: $signingStatus"
-          ) | Out-File -FilePath artifacts/installer/output/windows-release-notes.md -Encoding ascii
-
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -133,7 +118,6 @@ jobs:
           path: |
             artifacts/installer/output/*.exe
             artifacts/installer/output/*.sha256
-            artifacts/installer/output/windows-release-notes.md
           if-no-files-found: error
 
       - name: Publish Installer To GitHub Release
@@ -143,6 +127,4 @@ jobs:
           files: |
             artifacts/installer/output/*.exe
             artifacts/installer/output/*.sha256
-          body_path: artifacts/installer/output/windows-release-notes.md
-          append_body: true
           generate_release_notes: true

@@ -21,7 +21,6 @@ On tag builds, the workflow also uploads:
 - matching SHA-256 checksum files for the Windows installer assets
 - macOS `.pkg` assets for `osx-x64` and `osx-arm64`
 - matching SHA-256 checksum files for the macOS package assets
-- workflow-generated installer release-note fragments summarizing asset names, checksums, and signing status
 
 The release workflow is implemented in [release-images.yml](../.github/workflows/release-images.yml) and runs on Git tags that match `v*`.
 
