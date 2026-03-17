@@ -16,6 +16,12 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime:
+          - win-x64
+          - win-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +50,7 @@ jobs:
 
       - name: Build Windows Installer
         shell: pwsh
-        run: .\installer\Build-WindowsInstaller.ps1 -Version "${{ steps.version.outputs.version }}"
+        run: .\installer\Build-WindowsInstaller.ps1 -Version "${{ steps.version.outputs.version }}" -Runtime "${{ matrix.runtime }}"
 
       - name: Import Windows Signing Certificate
         shell: pwsh
@@ -123,7 +129,7 @@ jobs:
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ai-scraping-defense-windows-installer-${{ steps.version.outputs.version }}
+          name: ai-scraping-defense-windows-installer-${{ steps.version.outputs.version }}-${{ matrix.runtime }}
           path: |
             artifacts/installer/output/*.exe
             artifacts/installer/output/*.sha256

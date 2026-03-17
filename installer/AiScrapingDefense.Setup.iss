@@ -8,6 +8,17 @@
 #ifndef OutputDir
   #define OutputDir "output"
 #endif
+#ifndef RuntimeIdentifier
+  #define RuntimeIdentifier "win-x64"
+#endif
+
+#if RuntimeIdentifier == "win-arm64"
+  #define ArchitectureIdentifier "arm64"
+  #define OutputArchitectureSuffix "windows-arm64"
+#else
+  #define ArchitectureIdentifier "x64compatible"
+  #define OutputArchitectureSuffix "windows-x64"
+#endif
 
 [Setup]
 AppId={{8D1305F0-F4F8-4ED3-9A03-2F37FD13B8A4}
@@ -17,14 +28,14 @@ AppPublisher=AI Scraping Defense Contributors
 DefaultDirName={autopf}\AiScrapingDefense
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed={#ArchitectureIdentifier}
+ArchitecturesInstallIn64BitMode={#ArchitectureIdentifier}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 OutputDir={#OutputDir}
-OutputBaseFilename=ai-scraping-defense-{#AppVersion}-windows-x64-setup
+OutputBaseFilename=ai-scraping-defense-{#AppVersion}-{#OutputArchitectureSuffix}-setup
 UninstallDisplayIcon={app}\AiScrapingDefense.EdgeGateway.exe
 LicenseFile=..\LICENSE
 

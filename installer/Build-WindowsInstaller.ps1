@@ -47,6 +47,7 @@ New-Item -ItemType Directory -Force -Path $installerOutputDir | Out-Null
 
 & $resolvedIsccPath `
     "/DAppVersion=$Version" `
+    "/DRuntimeIdentifier=$Runtime" `
     "/DSourceDir=$stageDir" `
     "/DOutputDir=$installerOutputDir" `
     (Join-Path $PSScriptRoot 'AiScrapingDefense.Setup.iss')

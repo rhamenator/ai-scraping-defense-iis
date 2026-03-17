@@ -158,9 +158,9 @@ The repository now includes:
 
 Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.
 Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.
-Use `./installer/Build-WindowsInstaller.ps1 -Version <semver>` on Windows to produce an Inno Setup installer for the .NET runtime.
+Use `./installer/Build-WindowsInstaller.ps1 -Version <semver>` on Windows to produce a `win-x64` installer, or pass `-Runtime win-arm64` for the ARM64 variant.
 Use `./installer/macos/build-macos-packages.sh <semver>` on macOS to produce `.pkg` installers for `osx-x64` and `osx-arm64`.
 The Windows installer registers the service by default and can optionally start it after valid production configuration is supplied.
-Tagged release builds also attach Windows and macOS installer assets plus SHA-256 checksums to the GitHub Release.
+Tagged release builds also attach Windows (`win-x64`, `win-arm64`) and macOS (`osx-x64`, `osx-arm64`) installer assets plus SHA-256 checksums to the GitHub Release.
 Operator guidance for SmartScreen and Gatekeeper warnings is in [docs/download_warnings.md](docs/download_warnings.md).
 Tagged releases publish signed GHCR images with provenance as documented in [docs/release_artifacts.md](docs/release_artifacts.md).

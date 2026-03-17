@@ -44,7 +44,7 @@ Use this checklist before cutting a commercial release candidate.
 - `docs/release_artifacts.md` matches the tag and image policy implemented in CI
 - `CHANGELOG.md` has an `Unreleased` entry summarizing the release-hardening work
 - the tagged release workflow publishes to GHCR and emits both signature and provenance metadata
-- the Windows installer workflow publishes a `.exe` and `.sha256` asset on tag builds
+- the Windows installer workflow publishes both `win-x64` and `win-arm64` `.exe` assets plus `.sha256` files on tag builds
 - the macOS installer workflow publishes `osx-x64` and `osx-arm64` `.pkg` assets plus `.sha256` files on tag builds
 - image provenance verification succeeds with `gh attestation verify`
 - remaining deferred parity items are tracked as GitHub issues, not hidden in review threads

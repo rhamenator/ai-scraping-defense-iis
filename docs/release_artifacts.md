@@ -17,8 +17,8 @@ For direct host deployments, the repository also includes:
 
 On tag builds, the workflow also uploads:
 
-- a Windows installer `.exe` asset to the GitHub Release
-- a matching SHA-256 checksum file for the installer asset
+- Windows installer `.exe` assets for `win-x64` and `win-arm64`
+- matching SHA-256 checksum files for the Windows installer assets
 - macOS `.pkg` assets for `osx-x64` and `osx-arm64`
 - matching SHA-256 checksum files for the macOS package assets
 - workflow-generated installer release-note fragments summarizing asset names, checksums, and signing status

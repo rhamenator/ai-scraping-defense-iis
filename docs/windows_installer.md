@@ -2,11 +2,16 @@
 
 This repository now includes a Windows installer path for the commercial .NET runtime in `RedisBlocklistMiddlewareApp`.
 
-The installer builds a self-contained `win-x64` publish, copies the runtime into a staged layout, and packages it as an Inno Setup `.exe` that can install and start a Windows service named `AiScrapingDefense`.
+The installer builds a self-contained Windows publish, copies the runtime into a staged layout, and packages it as an Inno Setup `.exe` that can install and start a Windows service named `AiScrapingDefense`.
+
+Supported Windows installer runtimes:
+
+- `win-x64`
+- `win-arm64`
 
 ## Prerequisites
 
-- Windows x64
+- Windows x64 or Windows ARM64, depending on the installer runtime you build
 - .NET SDK `10.0.104` for building the publish output
 - Inno Setup 6 for compiling the installer executable
 - Administrative rights on the target host for service installation
@@ -20,10 +25,21 @@ From the repository root:
 .\installer\Build-WindowsInstaller.ps1 -Version 1.0.0
 ```
 
+To build the ARM64 variant explicitly:
+
+```powershell
+.\installer\Build-WindowsInstaller.ps1 -Version 1.0.0 -Runtime win-arm64
+```
+
 Outputs:
 
 - staged files: `artifacts\installer\stage`
 - installer executable: `artifacts\installer\output`
+
+Output filenames follow the runtime:
+
+- `ai-scraping-defense-<version>-windows-x64-setup.exe`
+- `ai-scraping-defense-<version>-windows-arm64-setup.exe`
 
 If you want to inspect the staged payload without compiling Inno Setup:
 
@@ -33,7 +49,7 @@ If you want to inspect the staged payload without compiling Inno Setup:
 
 ## What The Installer Does
 
-- copies the self-contained `win-x64` publish to `C:\Program Files\AiScrapingDefense`
+- copies the selected self-contained Windows publish to `C:\Program Files\AiScrapingDefense`
 - creates `data` and `logs` directories under the install root
 - installs a Windows service named `AiScrapingDefense`
 - configures the service for automatic startup and restart-on-failure behavior
