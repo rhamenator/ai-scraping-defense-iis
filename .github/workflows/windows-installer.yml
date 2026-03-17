@@ -1,0 +1,142 @@
+name: windows-installer
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+      - copilot/**
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.104
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Derive Installer Version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME.StartsWith('v')) {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+          }
+          else {
+            $version = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      - name: Build Windows Installer
+        shell: pwsh
+        run: .\installer\Build-WindowsInstaller.ps1 -Version "${{ steps.version.outputs.version }}"
+
+      - name: Import Windows Signing Certificate
+        shell: pwsh
+        env:
+          WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
+          WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_CERT_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_CERT_PASSWORD)) {
+            Write-Host 'Skipping Windows signing certificate import.'
+            exit 0
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP 'windows-signing-cert.pfx'
+          [System.IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
+          "WINDOWS_SIGN_CERT_PATH=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Authenticode Sign Installer
+        shell: pwsh
+        env:
+          WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+          WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_CERT_PATH) -or -not (Test-Path $env:WINDOWS_SIGN_CERT_PATH)) {
+            Write-Host 'Skipping Authenticode signing because no certificate was imported.'
+            exit 0
+          }
+
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if ([string]::IsNullOrWhiteSpace($signtool)) {
+            throw 'signtool.exe was not found on the runner.'
+          }
+
+          $timestampUrl = if (-not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGN_TIMESTAMP_URL)) {
+            $env:WINDOWS_SIGN_TIMESTAMP_URL
+          }
+          else {
+            'http://timestamp.digicert.com'
+          }
+
+          Get-ChildItem artifacts/installer/output/*.exe | ForEach-Object {
+            & $signtool sign /fd SHA256 /f $env:WINDOWS_SIGN_CERT_PATH /p $env:WINDOWS_SIGN_CERT_PASSWORD /tr $timestampUrl /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool.exe failed for $($_.Name)."
+            }
+          }
+
+      - name: Generate Installer Checksums
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem artifacts/installer/output/*.exe | Select-Object -First 1
+          if ($null -eq $installer) {
+            throw 'Installer executable was not produced.'
+          }
+
+          $hash = Get-FileHash $installer.FullName -Algorithm SHA256
+          "$($hash.Hash.ToLowerInvariant()) *$($installer.Name)" | Out-File -FilePath "artifacts/installer/output/$($installer.Name).sha256" -Encoding ascii
+
+      - name: Generate Windows Release Notes
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem artifacts/installer/output/*.exe | Select-Object -First 1
+          $hash = Get-FileHash $installer.FullName -Algorithm SHA256
+          $signingStatus = if ($env:WINDOWS_SIGN_CERT_PATH) { 'Authenticode signed in workflow.' } else { 'Unsigned build.' }
+
+          @(
+            '## Windows installer',
+            '',
+            "- $($installer.Name)",
+            "- SHA-256: $($hash.Hash.ToLowerInvariant())",
+            "- Signing status: $signingStatus"
+          ) | Out-File -FilePath artifacts/installer/output/windows-release-notes.md -Encoding ascii
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-scraping-defense-windows-installer-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/installer/output/*.exe
+            artifacts/installer/output/*.sha256
+            artifacts/installer/output/windows-release-notes.md
+          if-no-files-found: error
+
+      - name: Publish Installer To GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/installer/output/*.exe
+            artifacts/installer/output/*.sha256
+          body_path: artifacts/installer/output/windows-release-notes.md
+          append_body: true
+          generate_release_notes: true

@@ -1,0 +1,108 @@
+name: macos-installer
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+      - copilot/**
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: macos-13
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.104
+
+      - name: Derive Installer Version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build macOS Packages
+        shell: bash
+        run: ./installer/macos/build-macos-packages.sh "${{ steps.version.outputs.version }}"
+
+      - name: Import Apple Installer Certificate
+        shell: bash
+        env:
+          MACOS_INSTALLER_CERT_BASE64: ${{ secrets.MACOS_INSTALLER_CERT_BASE64 }}
+          MACOS_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERT_PASSWORD }}
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${MACOS_INSTALLER_CERT_BASE64}" || -z "${MACOS_INSTALLER_CERT_PASSWORD}" || -z "${MACOS_INSTALLER_SIGN_IDENTITY}" ]]; then
+            echo "Skipping macOS signing certificate import."
+            exit 0
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/ai-scraping-defense-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/macos-installer-cert.p12"
+          KEYCHAIN_PASSWORD="${MACOS_KEYCHAIN_PASSWORD:-$GITHUB_RUN_ID}"
+          echo "${MACOS_INSTALLER_CERT_BASE64}" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_INSTALLER_CERT_PASSWORD" -T /usr/bin/productsign
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          echo "MACOS_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign macOS Packages
+        shell: bash
+        env:
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${MACOS_SIGNING_KEYCHAIN:-}" || -z "${MACOS_INSTALLER_SIGN_IDENTITY}" ]]; then
+            echo "Skipping macOS package signing."
+            exit 0
+          fi
+
+          shopt -s nullglob
+          for pkg in artifacts/macos-installer/output/*.pkg; do
+            signed_pkg="${pkg%.pkg}-signed.pkg"
+            productsign --keychain "$MACOS_SIGNING_KEYCHAIN" --sign "$MACOS_INSTALLER_SIGN_IDENTITY" "$pkg" "$signed_pkg"
+            mv "$signed_pkg" "$pkg"
+            shasum -a 256 "$pkg" | awk '{ print tolower($1) " *" $2 }' > "$pkg.sha256"
+          done
+
+      - name: Upload macOS Installer Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-scraping-defense-macos-installer-${{ steps.version.outputs.version }}
+          path: |
+            artifacts/macos-installer/output/*.pkg
+            artifacts/macos-installer/output/*.sha256
+            artifacts/macos-installer/output/macos-release-notes.md
+          if-no-files-found: error
+
+      - name: Publish macOS Installers To GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/macos-installer/output/*.pkg
+            artifacts/macos-installer/output/*.sha256
+          body_path: artifacts/macos-installer/output/macos-release-notes.md
+          append_body: true
+          generate_release_notes: true

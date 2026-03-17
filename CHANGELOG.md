@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* No unreleased changes yet.
+* Windows installer tooling for the .NET runtime, including Windows service support, release staging scripts, and an Inno Setup manifest.
+* macOS packaging scripts and CI workflows for unsigned `osx-x64` and `osx-arm64` `.pkg` artifacts, plus operator guidance for SmartScreen and Gatekeeper warnings.
 
 ## [1.0.0] - 2026-03-15
 

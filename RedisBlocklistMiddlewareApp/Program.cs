@@ -13,6 +13,11 @@ using RedisBlocklistMiddlewareApp.Services;
 using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = "AiScrapingDefense";
+});
+
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
 
 builder.Services.AddHttpClient();

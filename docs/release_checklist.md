@@ -44,5 +44,16 @@ Use this checklist before cutting a commercial release candidate.
 - `docs/release_artifacts.md` matches the tag and image policy implemented in CI
 - `CHANGELOG.md` has an `Unreleased` entry summarizing the release-hardening work
 - the tagged release workflow publishes to GHCR and emits both signature and provenance metadata
+- the Windows installer workflow publishes a `.exe` and `.sha256` asset on tag builds
+- the macOS installer workflow publishes `osx-x64` and `osx-arm64` `.pkg` assets plus `.sha256` files on tag builds
 - image provenance verification succeeds with `gh attestation verify`
 - remaining deferred parity items are tracked as GitHub issues, not hidden in review threads
+
+## Installer Verification
+
+- a release candidate tag such as `v1.0.1-rc.1` is pushed to GitHub and both installer workflows complete successfully
+- the GitHub Release page contains the expected Windows and macOS installer assets with checksums
+- local checksum verification succeeds against the uploaded `.sha256` files
+- Windows install is exercised on a clean host and SmartScreen bypass guidance in `docs/download_warnings.md` is accurate
+- macOS install is exercised on a clean host and Gatekeeper bypass guidance in `docs/download_warnings.md` is accurate
+- installed service registration is verified on each supported host OS before first customer distribution

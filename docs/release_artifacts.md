@@ -10,6 +10,19 @@ Tagged releases publish container images to GitHub Container Registry:
 ghcr.io/<owner>/ai-scraping-defense-iis
 ```
 
+For direct host deployments, the repository also includes:
+
+- a Windows Inno Setup build path described in [windows_installer.md](windows_installer.md) and automated by [.github/workflows/windows-installer.yml](../.github/workflows/windows-installer.yml)
+- a macOS `.pkg` build path described in [macos_installer.md](macos_installer.md) and automated by [.github/workflows/macos-installer.yml](../.github/workflows/macos-installer.yml)
+
+On tag builds, the workflow also uploads:
+
+- a Windows installer `.exe` asset to the GitHub Release
+- a matching SHA-256 checksum file for the installer asset
+- macOS `.pkg` assets for `osx-x64` and `osx-arm64`
+- matching SHA-256 checksum files for the macOS package assets
+- workflow-generated installer release-note fragments summarizing asset names, checksums, and signing status
+
 The release workflow is implemented in [release-images.yml](../.github/workflows/release-images.yml) and runs on Git tags that match `v*`.
 
 ## Tagging Policy
@@ -33,10 +46,18 @@ This keeps prereleases from mutating `latest` or the rolling minor tag.
 Each tagged build publishes:
 
 - an OCI image in GHCR
+- direct-host installer assets on the GitHub Release page
 - OCI labels for source repository, revision, and version
 - a Sigstore keyless signature over the pushed image digest
 - a GitHub build-provenance attestation pushed to the registry
 - a BuildKit SBOM attestation from the image build step
+
+Installer signing is optional and secret-driven:
+
+- Windows installer signing runs when `WINDOWS_SIGN_CERT_BASE64` and `WINDOWS_SIGN_CERT_PASSWORD` are configured in GitHub Actions secrets.
+- macOS package signing runs when `MACOS_INSTALLER_CERT_BASE64`, `MACOS_INSTALLER_CERT_PASSWORD`, and `MACOS_INSTALLER_SIGN_IDENTITY` are configured.
+
+Without those secrets, the installers are still built and published, but they remain unsigned and will continue to trigger SmartScreen or Gatekeeper warnings.
 
 ## Verification
 
@@ -72,6 +93,8 @@ Recommended operator behavior:
 The release workflow is intentionally narrow for commercial v1:
 
 - one runtime image
+- one Windows installer build path for direct host installs
+- one macOS package build path for direct host installs
 - one primary registry (`ghcr.io`)
 - one signed and attestable release path driven by Git tags
 

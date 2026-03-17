@@ -149,9 +149,18 @@ The repository now includes:
 - a production-oriented multi-stage [Dockerfile](Dockerfile)
 - a local smoke/deployment [compose.yaml](compose.yaml)
 - an observability overlay at [compose.observability.yaml](compose.observability.yaml)
+- a Windows service installer toolchain under [installer/](installer/) with build instructions in [docs/windows_installer.md](docs/windows_installer.md)
+- a macOS packaging path under [installer/macos/](installer/macos/) with build instructions in [docs/macos_installer.md](docs/macos_installer.md)
 - a GitHub Actions CI workflow at [.github/workflows/dotnet-ci.yml](.github/workflows/dotnet-ci.yml)
+- a Windows installer workflow at [.github/workflows/windows-installer.yml](.github/workflows/windows-installer.yml)
+- a macOS installer workflow at [.github/workflows/macos-installer.yml](.github/workflows/macos-installer.yml)
 - a tagged-release image workflow at [.github/workflows/release-images.yml](.github/workflows/release-images.yml)
 
 Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.
 Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.
+Use `./installer/Build-WindowsInstaller.ps1 -Version <semver>` on Windows to produce an Inno Setup installer for the .NET runtime.
+Use `./installer/macos/build-macos-packages.sh <semver>` on macOS to produce `.pkg` installers for `osx-x64` and `osx-arm64`.
+The Windows installer registers the service by default and can optionally start it after valid production configuration is supplied.
+Tagged release builds also attach Windows and macOS installer assets plus SHA-256 checksums to the GitHub Release.
+Operator guidance for SmartScreen and Gatekeeper warnings is in [docs/download_warnings.md](docs/download_warnings.md).
 Tagged releases publish signed GHCR images with provenance as documented in [docs/release_artifacts.md](docs/release_artifacts.md).
