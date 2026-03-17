@@ -39,14 +39,19 @@ jobs:
         id: version
         shell: pwsh
         run: |
+          $prerelease = 'false'
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME.StartsWith('v')) {
             $version = $env:GITHUB_REF_NAME.Substring(1)
+            if ($version.Contains('-')) {
+              $prerelease = 'true'
+            }
           }
           else {
             $version = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"
           }
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "prerelease=$prerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
 
       - name: Build Windows Installer
         shell: pwsh
@@ -120,11 +125,23 @@ jobs:
             artifacts/installer/output/*.sha256
           if-no-files-found: error
 
-      - name: Publish Installer To GitHub Release
-        if: github.ref_type == 'tag'
+      - name: Publish Stable Installer To GitHub Release
+        if: github.ref_type == 'tag' && steps.version.outputs.prerelease != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/installer/output/*.exe
             artifacts/installer/output/*.sha256
           generate_release_notes: true
+          make_latest: true
+
+      - name: Publish Prerelease Installer To GitHub Release
+        if: github.ref_type == 'tag' && steps.version.outputs.prerelease == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/installer/output/*.exe
+            artifacts/installer/output/*.sha256
+          generate_release_notes: true
+          prerelease: true
+          make_latest: false

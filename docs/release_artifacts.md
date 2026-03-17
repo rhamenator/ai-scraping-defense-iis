@@ -38,6 +38,11 @@ For a prerelease tag such as `v1.4.2-rc.1`, the workflow publishes only:
 - `ghcr.io/<owner>/ai-scraping-defense-iis:v1.4.2-rc.1`
 - `ghcr.io/<owner>/ai-scraping-defense-iis:1.4.2-rc.1`
 
+GitHub Release metadata follows the same rule:
+
+- stable tags publish a normal release and may update the `latest` release marker
+- prerelease tags publish a GitHub prerelease and must not become `latest`
+
 This keeps prereleases from mutating `latest` or the rolling minor tag.
 
 ## Release Metadata
