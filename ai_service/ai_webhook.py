@@ -2,9 +2,9 @@
 # Modified for Windows/IIS Compatibility
 # Receives webhook events, logs, blocklists via Redis, reports, and sends alerts.
 
-from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel, Field, ValidationError
-from typing import Dict, Any, Literal, Optional
+from fastapi import FastAPI, Request
+from pydantic import BaseModel, Field
+from typing import Any, Dict, Optional
 import datetime
 import pprint
 import os
@@ -379,8 +379,10 @@ Check logs in '{LOGS_DIR}' for more context.
         except Exception as e: log_error(f"Unexpected error sending email alert for IP {ip}", e); increment_metric("alerts_errors_smtp")
         finally:
             if smtp_conn:
-                try: smtp_conn.quit()
-                except Exception: pass # Ignore errors during quit
+                try:
+                    smtp_conn.quit()
+                except Exception as exc:
+                    logger.debug("SMTP quit failed during cleanup: %s", exc)
 
     try:
         # Run synchronous SMTP logic in a separate thread
