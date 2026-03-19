@@ -8,6 +8,8 @@ This guide covers deploying the current .NET stack to Windows Server IIS with AS
 - Use Redis for operational state.
 - Optionally enable PostgreSQL-backed Markov tarpit content.
 - Enable management/intake/peer endpoints only when API keys are configured.
+- Keep single deployable mode as the default production topology.
+- Support optional split-runtime topology when operational constraints justify it.
 
 ## Prerequisites
 
@@ -53,6 +55,16 @@ Optional but commonly used:
 - `DefenseEngine:Networking:ClientIpResolutionMode=TrustedProxy`
 - `DefenseEngine:Networking:TrustedProxies` (when using proxy/CDN headers)
 
+Optional split-runtime settings (post-v1 topology):
+
+- `DefenseEngine:Topology:Mode=Split`
+- `DefenseEngine:Services:EscalationEngine:BaseUrl`
+- `DefenseEngine:Services:EscalationEngine:ApiKey`
+- `DefenseEngine:Services:TarpitApi:BaseUrl`
+- `DefenseEngine:Services:TarpitApi:ApiKey`
+
+If split-runtime settings are omitted, deployment remains in single deployable mode.
+
 ## 4) File-System Permissions
 
 Grant the IIS app pool identity least-privilege access to:
@@ -81,6 +93,15 @@ After site start/recycle:
 - Set explicit trusted proxies if forwarded headers are enabled.
 - Monitor `/health`, `/defense/metrics`, and Windows/IIS logs.
 
+## 7) Split Runtime Validation (Optional)
+
+When `DefenseEngine:Topology:Mode=Split` is enabled:
+
+1. Verify `EscalationEngine` and `TarpitApi` health endpoints are reachable from `EdgeGateway`.
+2. Verify service-to-service API keys are required and validated.
+3. Run an end-to-end suspicious request to confirm remote escalation and tarpit behavior.
+4. Intentionally stop one downstream runtime and verify graceful degradation with observable error telemetry.
+
 ## Troubleshooting
 
 - `500` at startup: verify Hosting Bundle/runtime mismatch and appsettings syntax.
@@ -88,4 +109,4 @@ After site start/recycle:
 - Redis health failures: verify connection string, TLS requirements, and firewall.
 - Missing management/intake/peer routes: confirm related API keys are configured.
 
-For endpoint contracts, see `api_references.md`. For release-time operational checks, see `operator_runbook.md` and `release_checklist.md`.
+For endpoint contracts, see `api_references.md`. For topology contract details, see `runtime_topologies.md`. For release-time operational checks, see `operator_runbook.md` and `release_checklist.md`.
