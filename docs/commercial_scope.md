@@ -28,6 +28,8 @@ Explicitly deferred from v1:
 - separate runtime deployments for `EdgeGateway`, `EscalationEngine`, and `TarpitApi`
 - SQL Server support
 
+Deferred split-runtime work is tracked in [runtime_topologies.md](runtime_topologies.md).
+
 ## Supported Deployment Model
 
 Commercial v1 supports these deployment modes:
@@ -41,6 +43,7 @@ Commercial v1 does not yet claim:
 - multi-node relational consistency
 - full-fidelity multi-node coordination beyond the shipped peer-sync exchange model
 - complete operator UI parity with the upstream project
+- independent runtime deployment as the default topology (single deployable remains the supported baseline)
 
 ## Database Strategy
 
