@@ -19,6 +19,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Community Blocklist and Peer Coordination Baseline](community_blocklist_peer_coordination_baseline.md)
 - [Observability and Telemetry Export Baseline](observability_telemetry_export_baseline.md)
 - [Multi-Node Durability and Coordination Baseline](multi_node_durability_coordination_baseline.md)
+- [Operator UI Workflow Parity Baseline](operator_ui_workflow_parity_baseline.md)
 - [Runtime Topologies](runtime_topologies.md)
 - [Release Blockers](release_blockers.md)
 

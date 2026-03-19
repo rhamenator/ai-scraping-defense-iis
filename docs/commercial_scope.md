@@ -46,6 +46,7 @@ Commercial v1 does not yet claim:
 - independent runtime deployment as the default topology (single deployable remains the supported baseline)
 
 Post-v1 multi-node durability and coordination work is tracked in [multi_node_durability_coordination_baseline.md](multi_node_durability_coordination_baseline.md).
+Post-v1 operator UI parity and workflow improvements are tracked in [operator_ui_workflow_parity_baseline.md](operator_ui_workflow_parity_baseline.md).
 
 ## Database Strategy
 
