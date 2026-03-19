@@ -45,6 +45,8 @@ Commercial v1 does not yet claim:
 - complete operator UI parity with the upstream project
 - independent runtime deployment as the default topology (single deployable remains the supported baseline)
 
+Post-v1 multi-node durability and coordination work is tracked in [multi_node_durability_coordination_baseline.md](multi_node_durability_coordination_baseline.md).
+
 ## Database Strategy
 
 The storage model for commercial v1 is intentionally narrow:

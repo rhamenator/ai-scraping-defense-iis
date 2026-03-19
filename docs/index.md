@@ -18,6 +18,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Tarpit Content Strategy Baseline](tarpit_content_strategy_baseline.md)
 - [Community Blocklist and Peer Coordination Baseline](community_blocklist_peer_coordination_baseline.md)
 - [Observability and Telemetry Export Baseline](observability_telemetry_export_baseline.md)
+- [Multi-Node Durability and Coordination Baseline](multi_node_durability_coordination_baseline.md)
 - [Runtime Topologies](runtime_topologies.md)
 - [Release Blockers](release_blockers.md)
 
