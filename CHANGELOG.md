@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Windows installer tooling for the .NET runtime, including Windows service support, release staging scripts, and an Inno Setup manifest.
 * macOS packaging scripts and CI workflows for unsigned `osx-x64` and `osx-arm64` `.pkg` artifacts, plus operator guidance for SmartScreen and Gatekeeper warnings.
 * Windows ARM64 installer packaging and release automation alongside the existing Windows x64 installer path.
+* Post-v1 parity baseline documents for optional split runtime topology, escalation scoring/provider expansion, tarpit content strategy, community blocklist + peer coordination, observability/telemetry export, multi-node durability/coordination, and operator UI workflow parity.
+
+### Changed
+
+* Documentation navigation and parity planning references were updated across `docs/index.md`, `docs/commercial_scope.md`, and `docs/dotnet_parity_roadmap.md` to align with the new baseline documents.
 
 ## [1.0.0] - 2026-03-15
 
