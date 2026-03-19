@@ -24,3 +24,4 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 3. Expand the tarpit content strategy with streaming/archive rotation and deeper content sources (see [tarpit_content_strategy_baseline.md](tarpit_content_strategy_baseline.md)).
 4. Add richer community-blocklist trust policy, reporting, and peer coordination (see [community_blocklist_peer_coordination_baseline.md](community_blocklist_peer_coordination_baseline.md)).
 5. Add structured metrics, traces, and richer operator telemetry export (see [observability_telemetry_export_baseline.md](observability_telemetry_export_baseline.md)).
+6. Close remaining operator workflow and UX parity gaps (see [operator_ui_workflow_parity_baseline.md](operator_ui_workflow_parity_baseline.md)).
