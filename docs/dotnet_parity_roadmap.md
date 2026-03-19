@@ -20,7 +20,7 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 ## Post-v1 Parity Queue
 
 1. Promote the project-level split into optional independent runtime deployments when production constraints justify it (see [runtime_topologies.md](runtime_topologies.md)).
-2. Add richer escalation scoring, reputation providers, and optional LLM adapters.
+2. Add richer escalation scoring, reputation providers, and optional LLM adapters (see [escalation_scoring_provider_baseline.md](escalation_scoring_provider_baseline.md)).
 3. Expand the tarpit content strategy with streaming/archive rotation and deeper content sources.
 4. Add richer community-blocklist trust policy, reporting, and peer coordination.
 5. Add structured metrics, traces, and richer operator telemetry export.

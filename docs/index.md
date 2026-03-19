@@ -14,6 +14,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Commercial v1 Scope](commercial_scope.md)
 - [Parity Matrix](parity_matrix.md)
 - [Post-v1 Parity Roadmap](dotnet_parity_roadmap.md)
+- [Escalation Scoring and Provider Baseline](escalation_scoring_provider_baseline.md)
 - [Runtime Topologies](runtime_topologies.md)
 - [Release Blockers](release_blockers.md)
 
