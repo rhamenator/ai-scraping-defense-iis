@@ -16,6 +16,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Post-v1 Parity Roadmap](dotnet_parity_roadmap.md)
 - [Escalation Scoring and Provider Baseline](escalation_scoring_provider_baseline.md)
 - [Tarpit Content Strategy Baseline](tarpit_content_strategy_baseline.md)
+- [Community Blocklist and Peer Coordination Baseline](community_blocklist_peer_coordination_baseline.md)
 - [Runtime Topologies](runtime_topologies.md)
 - [Release Blockers](release_blockers.md)
 
