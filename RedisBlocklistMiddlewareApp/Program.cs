@@ -36,12 +36,10 @@ builder.Services
             options.Redis.ConnectionString = redisConnectionString;
         }
 
-        if (!options.Tarpit.PathPrefix.StartsWith('/'))
-        {
-            options.Tarpit.PathPrefix = "/" + options.Tarpit.PathPrefix;
-        }
-
-        options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
+        options.Tarpit.PathPrefix = NormalizeRoutePrefix(
+            options.Tarpit.PathPrefix,
+            "/anti-scrape-tarpit",
+            "DefenseEngine:Tarpit:PathPrefix");
         options.Tarpit.ArchiveDirectory = string.IsNullOrWhiteSpace(options.Tarpit.ArchiveDirectory)
             ? "data/tarpit-archives"
             : options.Tarpit.ArchiveDirectory.Trim();
@@ -719,8 +717,27 @@ public partial class Program
 
     private static string NormalizeObservabilityPath(string path)
     {
-        return path.StartsWith("/", StringComparison.Ordinal)
-            ? path.TrimEnd('/')
-            : "/" + path.Trim().TrimEnd('/');
+        return NormalizeRoutePrefix(
+            path,
+            "/metrics",
+            "DefenseEngine:Observability:PrometheusEndpointPath");
+    }
+
+    private static string NormalizeRoutePrefix(string path, string fallback, string optionName)
+    {
+        var candidate = string.IsNullOrWhiteSpace(path)
+            ? fallback
+            : path.Trim();
+        var normalized = candidate.StartsWith("/", StringComparison.Ordinal)
+            ? candidate.TrimEnd('/')
+            : "/" + candidate.TrimEnd('/');
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            throw new InvalidOperationException(
+                $"{optionName} must not resolve to the root path '/'.");
+        }
+
+        return normalized;
     }
 }
