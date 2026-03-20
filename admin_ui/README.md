@@ -1,16 +1,14 @@
-# **Admin UI Service**
+# Admin UI notes
 
-This directory contains the Python code for the Admin UI microservice (admin\_ui.py) and its associated HTML template (templates/index.html).
+This directory contains legacy Python-era admin UI assets that were carried forward during the .NET transition.
 
-## **Purpose**
+For the current product surface, the active operator dashboard is the ASP.NET Core management UI exposed by the edge gateway under `/defense/dashboard`.
 
-The Admin UI is a Flask web application that provides a simple dashboard for monitoring the real-time activity of the AI Scraping Defense Stack.
+Current entry points:
 
-Its key functions include:
+- Main product overview: [README.md](../README.md)
+- Operator and deployment docs: [docs/index.md](../docs/index.md)
+- Runtime host and dashboard endpoints: [RedisBlocklistMiddlewareApp/Program.cs](../RedisBlocklistMiddlewareApp/Program.cs)
+- Operator workflow guidance: [docs/operator_runbook.md](../docs/operator_runbook.md)
 
-* Serving a basic HTML dashboard page.  
-* Providing a /metrics API endpoint that returns current system metrics collected by the shared metrics.py module.  
-* Displaying metrics like tarpit hits, escalations, blocks, uptime, etc., fetched dynamically via JavaScript from the /metrics endpoint.  
-* Optionally triggering the periodic dumping of metrics to a JSON file if configured via environment variables (LOG\_METRICS\_TO\_JSON).
-
-**Note:** For deployment configuration specific to IIS, refer to the main [IIS Deployment Guide](http://docs.google.com/docs/iis_deployment_guide.md) and the configuration file README located in iis\_configs/admin\_ui/.
+If you are looking for the supported management interface, start with the top-level docs above instead of the legacy Python files in this folder.
