@@ -5,7 +5,7 @@ using RedisBlocklistMiddlewareApp.Configuration;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
-public sealed class DefenseTelemetry
+public sealed class DefenseTelemetry : IAssessmentTelemetry
 {
     public const string ActivitySourceName = "AiScrapingDefense";
 
@@ -64,6 +64,20 @@ public sealed class DefenseTelemetry
         {
             LabelNames = ["result"]
         });
+    private static readonly Counter AssessmentStages = Metrics.CreateCounter(
+        "ai_scraping_defense_assessment_stage_total",
+        "Assessment stage executions and outcomes.",
+        new CounterConfiguration
+        {
+            LabelNames = ["stage", "result"]
+        });
+    private static readonly Counter RoutingDecisions = Metrics.CreateCounter(
+        "ai_scraping_defense_model_routing_total",
+        "Threat-model routing outcomes selected during queued assessment.",
+        new CounterConfiguration
+        {
+            LabelNames = ["primary_route", "effective_route", "fallback_enabled"]
+        });
 
     private readonly ObservabilityOptions _options;
 
@@ -77,6 +91,11 @@ public sealed class DefenseTelemetry
     public Activity? StartActivity(string name, ActivityKind kind = ActivityKind.Internal)
     {
         return SharedActivitySource.StartActivity(name, kind);
+    }
+
+    public IDisposable? StartActivityScope(string name)
+    {
+        return StartActivity(name);
     }
 
     public void RecordSuspiciousRequest(string reason)
@@ -147,6 +166,19 @@ public sealed class DefenseTelemetry
         {
             PeerImports.WithLabels("rejected").Inc(rejectedCount);
         }
+    }
+
+    public void RecordAssessmentStage(string stage, string result)
+    {
+        AssessmentStages.WithLabels(SanitizeLabel(stage), SanitizeLabel(result)).Inc();
+    }
+
+    public void RecordRoutingDecision(string primaryRoute, string effectiveRoute, bool fallbackEnabled)
+    {
+        RoutingDecisions.WithLabels(
+            SanitizeLabel(primaryRoute),
+            SanitizeLabel(effectiveRoute),
+            fallbackEnabled ? "true" : "false").Inc();
     }
 
     private static string SanitizeLabel(string value)
