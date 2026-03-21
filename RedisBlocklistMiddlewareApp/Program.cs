@@ -38,8 +38,7 @@ builder.Services
 
         options.Tarpit.PathPrefix = NormalizeRoutePrefix(
             options.Tarpit.PathPrefix,
-            "/anti-scrape-tarpit",
-            "DefenseEngine:Tarpit:PathPrefix");
+            "/anti-scrape-tarpit");
         options.Tarpit.ArchiveDirectory = string.IsNullOrWhiteSpace(options.Tarpit.ArchiveDirectory)
             ? "data/tarpit-archives"
             : options.Tarpit.ArchiveDirectory.Trim();
@@ -719,25 +718,22 @@ public partial class Program
     {
         return NormalizeRoutePrefix(
             path,
-            "/metrics",
-            "DefenseEngine:Observability:PrometheusEndpointPath");
+            "/metrics");
     }
 
-    private static string NormalizeRoutePrefix(string path, string fallback, string optionName)
+    private static string NormalizeRoutePrefix(string path, string fallback)
     {
         var candidate = string.IsNullOrWhiteSpace(path)
             ? fallback
             : path.Trim();
-        var normalized = candidate.StartsWith("/", StringComparison.Ordinal)
-            ? candidate.TrimEnd('/')
-            : "/" + candidate.TrimEnd('/');
 
-        if (string.IsNullOrWhiteSpace(normalized))
+        if (!candidate.StartsWith("/", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                $"{optionName} must not resolve to the root path '/'.");
+            candidate = "/" + candidate;
         }
 
-        return normalized;
+        return candidate.Length > 1
+            ? candidate.TrimEnd('/')
+            : "/";
     }
 }
