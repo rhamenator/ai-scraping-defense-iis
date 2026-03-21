@@ -42,6 +42,22 @@ public sealed record DefenseEventMetrics(
     long ObservedCount,
     DateTimeOffset? LatestDecisionAtUtc);
 
+public sealed record OperatorRecommendation(
+    string Id,
+    string Category,
+    string Severity,
+    string Title,
+    string Summary,
+    string Rationale,
+    string CurrentValue,
+    string SuggestedValue,
+    IReadOnlyList<string> Evidence);
+
+public sealed record OperatorRecommendationSnapshot(
+    DateTimeOffset GeneratedAtUtc,
+    int RecentDecisionCount,
+    IReadOnlyList<OperatorRecommendation> Recommendations);
+
 public sealed record RequestSignalEvaluation(
     bool BlockImmediately,
     string BlockReason,

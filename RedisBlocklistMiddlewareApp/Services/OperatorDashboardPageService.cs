@@ -2,14 +2,14 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public interface IOperatorDashboardPageService
 {
-    string Render();
+  string Render();
 }
 
 public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 {
-    public string Render()
-    {
-        return """
+  public string Render()
+  {
+    return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -372,7 +372,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
               <button class="secondary" id="refreshButton" type="button">Refresh now</button>
             </div>
           </form>
-          <p class="inline-note">The browser session uses a server-issued cookie after the initial sign-in. The dashboard then reads the same `/defense/*` management endpoints as any other operator client.</p>
+          <p class="inline-note">The browser session uses a server-issued cookie after the initial sign-in. The dashboard then reads the same `/defense/*` management endpoints as any other operator client, including `/defense/recommendations` for advisory tuning suggestions.</p>
         </aside>
       </div>
       <div class="status-bar">
@@ -440,6 +440,15 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 
       <aside class="panel">
         <div class="status-bar">
+          <h2>Recommendations</h2>
+          <span class="inline-note">Advisory only — generated from recent decisions.</span>
+        </div>
+        <div id="recommendationsList" class="status-card">
+          <h3>Operator guidance</h3>
+          <p class="mono">Sign in to load tuning recommendations.</p>
+        </div>
+        <div style="height:12px"></div>
+        <div class="status-bar">
           <h2>Control actions</h2>
           <span class="inline-note">Lookup, block, and unblock IPs.</span>
         </div>
@@ -498,6 +507,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     const sessionCopy = document.getElementById("sessionCopy");
     const errorBanner = document.getElementById("errorBanner");
     const eventsTableBody = document.getElementById("eventsTableBody");
+    const recommendationsList = document.getElementById("recommendationsList");
     const blocklistResult = document.getElementById("blocklistResult");
     const ipInput = document.getElementById("ipInput");
     const reasonInput = document.getElementById("reasonInput");
@@ -554,6 +564,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         await Promise.all([
           refreshMetrics(),
           refreshEvents(),
+          refreshRecommendations(),
           refreshStatuses()
         ]);
 
@@ -612,6 +623,34 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <td>${formatDate(event.observedAtUtc)}</td>
           </tr>`;
       }).join("");
+    }
+
+    async function refreshRecommendations() {
+      const snapshot = await fetchJson("/defense/recommendations");
+      const recommendations = snapshot.recommendations || [];
+
+      if (!recommendations.length) {
+        recommendationsList.innerHTML = `
+          <h3>Operator guidance</h3>
+          <p class="mono">No changes suggested from the last ${number(snapshot.recentDecisionCount)} decisions.</p>`;
+        return;
+      }
+
+      recommendationsList.innerHTML = `
+        <h3>Operator guidance</h3>
+        <p class="inline-note">Generated ${formatDate(snapshot.generatedAtUtc)} from ${number(snapshot.recentDecisionCount)} recent decisions.</p>
+        ${recommendations.map(recommendation => `
+          <section>
+            <div class="action-row">
+              <span class="chip">${escapeHtml(recommendation.category)}</span>
+              <span class="chip ${recommendation.severity === "medium" || recommendation.severity === "high" ? "blocked" : "observed"}">${escapeHtml(recommendation.severity)}</span>
+            </div>
+            <p><strong>${escapeHtml(recommendation.title)}</strong></p>
+            <p>${escapeHtml(recommendation.summary)}</p>
+            <p class="inline-note">${escapeHtml(recommendation.rationale)}</p>
+            <p class="mono">Current: ${escapeHtml(recommendation.currentValue)}</p>
+            <p class="mono">Suggested: ${escapeHtml(recommendation.suggestedValue)}</p>
+          </section>`).join("<hr style=\"border:0;border-top:1px solid var(--line);margin:12px 0\">")}`;
     }
 
     async function refreshStatuses() {
@@ -725,6 +764,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       document.getElementById("metricObserved").textContent = "0";
       document.getElementById("metricLatest").textContent = "none";
       eventsTableBody.innerHTML = '<tr><td colspan="6" class="empty">Sign in to load recent defense decisions.</td></tr>';
+      recommendationsList.innerHTML = '<h3>Operator guidance</h3><p class="mono">Sign in to load tuning recommendations.</p>';
       document.getElementById("intakeStatusCopy").textContent = "Waiting for session.";
       document.getElementById("communityStatusCopy").textContent = "Waiting for session.";
       document.getElementById("peerStatusCopy").textContent = "Waiting for session.";
@@ -794,5 +834,5 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 </body>
 </html>
 """;
-    }
+  }
 }

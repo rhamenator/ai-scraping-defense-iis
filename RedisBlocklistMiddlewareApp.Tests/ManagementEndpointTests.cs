@@ -133,6 +133,7 @@ public sealed class ManagementEndpointTests
         Assert.Equal("/defense/dashboard", endpoints["dashboard"]);
         Assert.Equal("/defense/events", endpoints["events"]);
         Assert.Equal("/defense/metrics", endpoints["metrics"]);
+        Assert.Equal("/defense/recommendations", endpoints["recommendations"]);
     }
 
     [Fact]
@@ -278,6 +279,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/dashboard/session");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/recommendations");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-deliveries");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-delivery-metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
@@ -295,6 +297,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains("/defense/dashboard/session", html);
         Assert.Contains("/defense/events", html);
         Assert.Contains("/defense/metrics", html);
+        Assert.Contains("/defense/recommendations", html);
         Assert.Contains("/defense/intake-deliveries", html);
         Assert.Contains("/defense/intake-delivery-metrics", html);
         Assert.Contains("/defense/blocklist", html);
@@ -399,6 +402,7 @@ public sealed class ManagementEndpointTests
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
         builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
+        builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
         builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IIntakeDeliveryStore, TestIntakeDeliveryStore>();
@@ -406,6 +410,7 @@ public sealed class ManagementEndpointTests
         builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
         builder.Services.AddSingleton<IPeerSyncStatusStore, TestPeerSyncStatusStore>();
         builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, TestCommunityBlocklistSyncStatusStore>();
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(Options.Create(CreateOptions()));
         return builder.Build();
     }
