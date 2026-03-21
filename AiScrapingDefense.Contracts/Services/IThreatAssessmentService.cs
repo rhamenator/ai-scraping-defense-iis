@@ -7,6 +7,18 @@ public interface IThreatAssessmentService
     Task<ThreatAssessmentResult> AssessAsync(SuspiciousRequest request, CancellationToken cancellationToken);
 }
 
+public interface IThreatModelRoutingStrategy
+{
+    ThreatModelRoutingPlan BuildPlan(
+        ThreatAssessmentContext context,
+        IReadOnlyList<IThreatModelAdapter> adapters);
+}
+
+public interface IContainmentPolicyEngine
+{
+    ContainmentDecision Evaluate(ThreatAssessmentContext context, int totalScore, bool explicitMaliciousVerdict);
+}
+
 public sealed record ThreatAssessmentContext(
     string IpAddress,
     string Method,
@@ -33,11 +45,25 @@ public sealed record ModelAssessment(
     IReadOnlyList<string> Signals,
     string Summary);
 
+public sealed record ThreatModelRoutingPlan(
+    string PrimaryRoute,
+    bool FallbackEnabled,
+    IReadOnlyList<IThreatModelAdapter> OrderedAdapters);
+
+public sealed record ContainmentDecision(
+    string Action,
+    string Reason,
+    bool ShouldBlock);
+
 public sealed record ThreatAssessmentResult(
+    string Action,
     bool ShouldBlock,
-    string BlockReason,
+    string DecisionReason,
     string Summary,
     int Score,
     long Frequency,
     IReadOnlyList<string> Signals,
-    DefenseScoreBreakdown Breakdown);
+    DefenseScoreBreakdown Breakdown)
+{
+    public string BlockReason => DecisionReason;
+}

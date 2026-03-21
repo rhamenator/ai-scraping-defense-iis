@@ -184,6 +184,34 @@ builder.Services
                 ? "You are classifying incoming web requests for scraping-defense enforcement. Return JSON with classification and summary."
                 : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
         options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
+        var defaultHeuristics = new HeuristicOptions();
+        var defaultContainment = new ContainmentPolicyOptions();
+        var useLegacyBlockThreshold =
+            options.Escalation.Containment.BlockScoreThreshold == defaultContainment.BlockScoreThreshold &&
+            options.Heuristics.BlockScoreThreshold != defaultHeuristics.BlockScoreThreshold;
+        var useLegacyFrequencyThreshold =
+            options.Escalation.Containment.FrequencyBlockThreshold == defaultContainment.FrequencyBlockThreshold &&
+            options.Heuristics.FrequencyBlockThreshold != defaultHeuristics.FrequencyBlockThreshold;
+        options.Escalation.Routing.PreferredPrimaryRoute = string.IsNullOrWhiteSpace(options.Escalation.Routing.PreferredPrimaryRoute)
+            ? ThreatModelRoutes.Auto
+            : options.Escalation.Routing.PreferredPrimaryRoute.Trim();
+        options.Escalation.Routing.MaxSignalsForLocalRoute = Math.Max(0, options.Escalation.Routing.MaxSignalsForLocalRoute);
+        options.Escalation.Routing.MaxQueryStringLengthForLocalRoute = Math.Max(0, options.Escalation.Routing.MaxQueryStringLengthForLocalRoute);
+        options.Escalation.Routing.MaxFrequencyForLocalRoute = Math.Max(0, options.Escalation.Routing.MaxFrequencyForLocalRoute);
+        options.Escalation.Containment.ChallengeScoreThreshold = Math.Max(0, options.Escalation.Containment.ChallengeScoreThreshold);
+        options.Escalation.Containment.TarpitScoreThreshold = Math.Max(0, options.Escalation.Containment.TarpitScoreThreshold);
+        options.Escalation.Containment.ThrottleScoreThreshold = Math.Max(0, options.Escalation.Containment.ThrottleScoreThreshold);
+        options.Escalation.Containment.BlockScoreThreshold = Math.Max(0, options.Escalation.Containment.BlockScoreThreshold);
+        options.Escalation.Containment.FrequencyBlockThreshold = Math.Max(1, options.Escalation.Containment.FrequencyBlockThreshold);
+        if (useLegacyBlockThreshold)
+        {
+            options.Escalation.Containment.BlockScoreThreshold = Math.Max(0, options.Heuristics.BlockScoreThreshold);
+        }
+
+        if (useLegacyFrequencyThreshold)
+        {
+            options.Escalation.Containment.FrequencyBlockThreshold = Math.Max(1, options.Heuristics.FrequencyBlockThreshold);
+        }
 
         options.CommunityBlocklist.SyncIntervalMinutes = Math.Max(1, options.CommunityBlocklist.SyncIntervalMinutes);
         options.CommunityBlocklist.RequestTimeoutSeconds = Math.Max(1, options.CommunityBlocklist.RequestTimeoutSeconds);
@@ -276,6 +304,8 @@ builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputati
 builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
 builder.Services.AddSingleton<IThreatModelAdapter, LocalTrainedModelAdapter>();
 builder.Services.AddSingleton<IThreatModelAdapter, OpenAiCompatibleModelAdapter>();
+builder.Services.AddSingleton<IThreatModelRoutingStrategy, ThreatModelRoutingStrategy>();
+builder.Services.AddSingleton<IContainmentPolicyEngine, ContainmentPolicyEngine>();
 builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
 builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();
 builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, CommunityBlocklistSyncStatusStore>();

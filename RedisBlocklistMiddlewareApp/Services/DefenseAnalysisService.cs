@@ -41,13 +41,14 @@ public sealed class DefenseAnalysisService : BackgroundService
                 activity?.SetTag("ip", request.IpAddress);
                 activity?.SetTag("path", request.Path);
                 var assessment = await _threatAssessmentService.AssessAsync(request, stoppingToken);
-                var action = assessment.ShouldBlock ? "blocked" : "observed";
+                var action = assessment.Action;
+                activity?.SetTag("analysis.action", action);
 
                 if (assessment.ShouldBlock)
                 {
                     await _blocklistService.BlockAsync(
                         request.IpAddress,
-                        assessment.BlockReason,
+                        assessment.DecisionReason,
                         assessment.Signals,
                         stoppingToken);
 
@@ -60,7 +61,8 @@ public sealed class DefenseAnalysisService : BackgroundService
                 else
                 {
                     _logger.LogInformation(
-                        "Observed suspicious request from {IpAddress} with score {Score} and frequency {Frequency}.",
+                        "Queued analysis selected action {Action} for suspicious request from {IpAddress} with score {Score} and frequency {Frequency}.",
+                        action,
                         request.IpAddress,
                         assessment.Score,
                         assessment.Frequency);

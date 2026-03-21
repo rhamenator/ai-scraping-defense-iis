@@ -66,6 +66,8 @@ public sealed class DefenseStackFixture : IAsyncLifetime
             ["DefenseEngine:Redis:FrequencyWindowSeconds"] = "60",
             ["DefenseEngine:Heuristics:BlockScoreThreshold"] = "80",
             ["DefenseEngine:Heuristics:FrequencyBlockThreshold"] = "2",
+            ["DefenseEngine:Escalation:Containment:BlockScoreThreshold"] = "80",
+            ["DefenseEngine:Escalation:Containment:FrequencyBlockThreshold"] = "2",
             ["DefenseEngine:Management:ApiKey"] = ManagementApiKey,
             ["DefenseEngine:Intake:ApiKey"] = IntakeApiKey,
             ["DefenseEngine:Audit:DatabasePath"] = auditDatabasePath,
@@ -114,6 +116,8 @@ public sealed class DefenseStackFixture : IAsyncLifetime
                         options.Redis.FrequencyWindowSeconds = 60;
                         options.Heuristics.BlockScoreThreshold = 80;
                         options.Heuristics.FrequencyBlockThreshold = 2;
+                        options.Escalation.Containment.BlockScoreThreshold = 80;
+                        options.Escalation.Containment.FrequencyBlockThreshold = 2;
                         options.Management.ApiKey = ManagementApiKey;
                         options.Intake.ApiKey = IntakeApiKey;
                         options.Audit.DatabasePath = auditDatabasePath;

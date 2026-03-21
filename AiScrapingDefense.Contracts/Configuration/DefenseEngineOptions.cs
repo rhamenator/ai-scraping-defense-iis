@@ -152,6 +152,64 @@ public sealed class EscalationOptions
     public LocalTrainedModelOptions LocalTrainedModel { get; set; } = new();
 
     public OpenAiCompatibleModelAdapterOptions OpenAiCompatibleModel { get; set; } = new();
+
+    public ThreatModelRoutingOptions Routing { get; set; } = new();
+
+    public ContainmentPolicyOptions Containment { get; set; } = new();
+}
+
+public sealed class ThreatModelRoutingOptions
+{
+    public bool Enabled { get; set; } = true;
+
+    public string PreferredPrimaryRoute { get; set; } = ThreatModelRoutes.Auto;
+
+    public bool RemoteFallbackEnabled { get; set; } = true;
+
+    public bool LocalFallbackEnabled { get; set; } = true;
+
+    public int MaxSignalsForLocalRoute { get; set; } = 3;
+
+    public int MaxQueryStringLengthForLocalRoute { get; set; } = 80;
+
+    public int MaxFrequencyForLocalRoute { get; set; } = 4;
+}
+
+public static class ThreatModelRoutes
+{
+    public const string Auto = "Auto";
+
+    public const string Local = "Local";
+
+    public const string Remote = "Remote";
+
+    public const string Any = "Any";
+}
+
+public sealed class ContainmentPolicyOptions
+{
+    public int ChallengeScoreThreshold { get; set; } = 25;
+
+    public int TarpitScoreThreshold { get; set; } = 40;
+
+    public int ThrottleScoreThreshold { get; set; } = 55;
+
+    public int BlockScoreThreshold { get; set; } = 60;
+
+    public int FrequencyBlockThreshold { get; set; } = 8;
+}
+
+public static class ContainmentActions
+{
+    public const string Observed = "observed";
+
+    public const string Challenged = "challenged";
+
+    public const string Tarpitted = "tarpitted";
+
+    public const string Throttled = "throttled";
+
+    public const string Blocked = "blocked";
 }
 
 public sealed class ConfiguredRangeReputationOptions

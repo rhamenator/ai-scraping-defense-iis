@@ -54,6 +54,22 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 "DefenseEngine:Observability:PrometheusEndpointPath must not resolve to the root path '/'.");
         }
 
+        if (!string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Auto, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Local, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Remote, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"DefenseEngine:Escalation:Routing:PreferredPrimaryRoute must be '{ThreatModelRoutes.Auto}', '{ThreatModelRoutes.Local}', or '{ThreatModelRoutes.Remote}'.");
+        }
+
+        if (options.Escalation.Containment.ChallengeScoreThreshold > options.Escalation.Containment.TarpitScoreThreshold ||
+            options.Escalation.Containment.TarpitScoreThreshold > options.Escalation.Containment.ThrottleScoreThreshold ||
+            options.Escalation.Containment.ThrottleScoreThreshold > options.Escalation.Containment.BlockScoreThreshold)
+        {
+            errors.Add(
+                "DefenseEngine:Escalation:Containment thresholds must increase in this order: Challenge <= Tarpit <= Throttle <= Block.");
+        }
+
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);

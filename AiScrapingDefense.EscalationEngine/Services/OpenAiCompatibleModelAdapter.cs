@@ -24,6 +24,8 @@ public sealed class OpenAiCompatibleModelAdapter : IThreatModelAdapter
 
     public string Name => "openai_compatible_model";
 
+    public string Route => ThreatModelRoutes.Remote;
+
     public async Task<ModelAssessment?> AssessAsync(
         ThreatAssessmentContext context,
         CancellationToken cancellationToken)
