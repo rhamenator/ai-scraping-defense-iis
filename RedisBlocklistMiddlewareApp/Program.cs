@@ -317,6 +317,7 @@ builder.Services.AddSingleton<ManagementAuthenticationService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
+builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
@@ -437,6 +438,7 @@ public partial class Program
             endpoints["dashboard"] = "/defense/dashboard";
             endpoints["events"] = "/defense/events";
             endpoints["metrics"] = "/defense/metrics";
+            endpoints["recommendations"] = "/defense/recommendations";
         }
 
         if (ShouldExposeIntakeEndpoints(runtimeOptions))
@@ -516,6 +518,12 @@ public partial class Program
             IDefenseEventStore store) =>
         {
             return Results.Ok(store.GetMetrics());
+        });
+
+        management.MapGet("/recommendations", (
+            IOperatorRecommendationService recommendationService) =>
+        {
+            return Results.Ok(recommendationService.GetRecommendations());
         });
 
         management.MapGet("/intake-deliveries", (
