@@ -134,6 +134,7 @@ public sealed class ManagementEndpointTests
         Assert.Equal("/defense/events", endpoints["events"]);
         Assert.Equal("/defense/metrics", endpoints["metrics"]);
         Assert.Equal("/defense/recommendations", endpoints["recommendations"]);
+        Assert.Equal("/defense/feedback", endpoints["feedback"]);
     }
 
     [Fact]
@@ -250,6 +251,44 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void GetFeedbackAuthenticatedActor_ReturnsApiKeySource_WhenHeaderPresent()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-API-Key"] = "test-management-key";
+
+        var actor = Program.GetFeedbackAuthenticatedActor(httpContext, CreateOptions());
+
+        Assert.Equal("management_api_key", actor);
+    }
+
+    [Fact]
+    public void GetFeedbackAuthenticatedActor_ReturnsDashboardSession_WhenCookiePresent()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers.Cookie = $"{ManagementAuthenticationService.SessionCookieName}=session-value";
+
+        var actor = Program.GetFeedbackAuthenticatedActor(httpContext, CreateOptions());
+
+        Assert.Equal("dashboard_session", actor);
+    }
+
+    [Fact]
+    public void BuildFeedbackReason_AppendsOperatorLabel_WhenProvided()
+    {
+        var reason = Program.BuildFeedbackReason("confirmed malicious after review", "operator@example");
+
+        Assert.Equal("confirmed malicious after review (operator: operator@example)", reason);
+    }
+
+    [Fact]
+    public void BuildFeedbackReason_UsesBaseReason_WhenOperatorLabelMissing()
+    {
+        var reason = Program.BuildFeedbackReason("confirmed malicious after review", "   ");
+
+        Assert.Equal("confirmed malicious after review", reason);
+    }
+
+    [Fact]
     public void MapManagementEndpoints_DoesNotRegisterDefenseEvents_WhenManagementApiKeyIsMissing()
     {
         var app = CreateApp();
@@ -280,6 +319,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/events");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/recommendations");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/feedback");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-deliveries");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/intake-delivery-metrics");
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/defense/blocklist");
@@ -488,13 +528,34 @@ public sealed class ManagementEndpointTests
 
     private sealed class TestDefenseEventStore : IDefenseEventStore
     {
+        private readonly List<DefenseDecision> _decisions = [];
+        private readonly List<DefenseDecisionFeedback> _feedback = [];
+
         public void Add(Models.DefenseDecision decision)
         {
+            _decisions.Add(decision);
         }
 
         public IReadOnlyList<Models.DefenseDecision> GetRecent(int count)
         {
-            return [];
+            return _decisions.Take(count).ToArray();
+        }
+
+        public DefenseDecision? GetById(long id)
+        {
+            return _decisions.FirstOrDefault(decision => decision.Id == id);
+        }
+
+        public DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback)
+        {
+            var persisted = feedback with { Id = _feedback.Count + 1 };
+            _feedback.Add(persisted);
+            return persisted;
+        }
+
+        public IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count)
+        {
+            return _feedback.Take(count).ToArray();
         }
 
         public Models.DefenseEventMetrics GetMetrics()
@@ -519,6 +580,21 @@ public sealed class ManagementEndpointTests
         public IReadOnlyList<DefenseDecision> GetRecent(int count)
         {
             return _decisions.Take(count).ToArray();
+        }
+
+        public DefenseDecision? GetById(long id)
+        {
+            return _decisions.FirstOrDefault(decision => decision.Id == id);
+        }
+
+        public DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback)
+        {
+            return feedback with { Id = 1 };
+        }
+
+        public IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count)
+        {
+            return [];
         }
 
         public DefenseEventMetrics GetMetrics()

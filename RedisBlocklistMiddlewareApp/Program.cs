@@ -439,6 +439,7 @@ public partial class Program
             endpoints["events"] = "/defense/events";
             endpoints["metrics"] = "/defense/metrics";
             endpoints["recommendations"] = "/defense/recommendations";
+            endpoints["feedback"] = "/defense/feedback";
         }
 
         if (ShouldExposeIntakeEndpoints(runtimeOptions))
@@ -524,6 +525,13 @@ public partial class Program
             IOperatorRecommendationService recommendationService) =>
         {
             return Results.Ok(recommendationService.GetRecommendations());
+        });
+
+        management.MapGet("/feedback", (
+            IDefenseEventStore store,
+            int count = 50) =>
+        {
+            return Results.Ok(store.GetRecentFeedback(count));
         });
 
         management.MapGet("/intake-deliveries", (
@@ -617,6 +625,59 @@ public partial class Program
                 ip = normalizedIp,
                 blocked = false
             });
+        });
+
+        management.MapPost("/feedback", async (
+            DefenseDecisionFeedbackCreateRequest request,
+            HttpContext httpContext,
+            IDefenseEventStore store,
+            IBlocklistService blocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            if (request.DecisionId <= 0)
+            {
+                return Results.BadRequest(new { error = "decisionId must be a positive integer." });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return Results.BadRequest(new { error = "reason is required." });
+            }
+
+            if (!TryNormalizeManagedAction(request.UpdatedAction, out var updatedAction))
+            {
+                return Results.BadRequest(new { error = "updatedAction must be one of observed, challenged, tarpitted, throttled, or blocked." });
+            }
+
+            var decision = store.GetById(request.DecisionId);
+            if (decision is null)
+            {
+                return Results.NotFound(new { error = "The referenced defense decision could not be found." });
+            }
+
+            var authenticatedActor = GetFeedbackAuthenticatedActor(httpContext, runtimeOptions);
+            var persistedReason = BuildFeedbackReason(request.Reason, request.Actor);
+
+            var feedback = store.AddFeedback(new DefenseDecisionFeedback(
+                0,
+                decision.Id,
+                decision.IpAddress,
+                decision.Action,
+                updatedAction,
+                persistedReason,
+                authenticatedActor,
+                DateTimeOffset.UtcNow));
+
+            if (string.Equals(updatedAction, ContainmentActions.Blocked, StringComparison.OrdinalIgnoreCase))
+            {
+                await blocklistService.BlockAsync(
+                    decision.IpAddress,
+                    "operator_feedback_override",
+                    ["operator_feedback_override"],
+                    cancellationToken);
+            }
+
+            return Results.Accepted("/defense/feedback?count=50", feedback);
         });
     }
 
@@ -752,6 +813,33 @@ public partial class Program
         return true;
     }
 
+    public static string GetFeedbackAuthenticatedActor(
+        HttpContext httpContext,
+        DefenseEngineOptions runtimeOptions)
+    {
+        if (httpContext.Request.Headers.ContainsKey(runtimeOptions.Management.ApiKeyHeaderName))
+        {
+            return "management_api_key";
+        }
+
+        if (httpContext.Request.Cookies.ContainsKey(ManagementAuthenticationService.SessionCookieName))
+        {
+            return "dashboard_session";
+        }
+
+        return "management_endpoint";
+    }
+
+    public static string BuildFeedbackReason(string reason, string? actor)
+    {
+        var trimmedReason = reason.Trim();
+        var trimmedActor = actor?.Trim() ?? string.Empty;
+
+        return string.IsNullOrWhiteSpace(trimmedActor)
+            ? trimmedReason
+            : $"{trimmedReason} (operator: {trimmedActor})";
+    }
+
     private static string NormalizeObservabilityPath(string path)
     {
         return NormalizeRoutePrefix(
@@ -773,5 +861,43 @@ public partial class Program
         return candidate.Length > 1
             ? candidate.TrimEnd('/')
             : "/";
+    }
+
+    private static bool TryNormalizeManagedAction(string? value, out string normalized)
+    {
+        normalized = string.Empty;
+        var candidate = value?.Trim() ?? string.Empty;
+
+        if (string.Equals(candidate, ContainmentActions.Observed, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = ContainmentActions.Observed;
+            return true;
+        }
+
+        if (string.Equals(candidate, ContainmentActions.Challenged, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = ContainmentActions.Challenged;
+            return true;
+        }
+
+        if (string.Equals(candidate, ContainmentActions.Tarpitted, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = ContainmentActions.Tarpitted;
+            return true;
+        }
+
+        if (string.Equals(candidate, ContainmentActions.Throttled, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = ContainmentActions.Throttled;
+            return true;
+        }
+
+        if (string.Equals(candidate, ContainmentActions.Blocked, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = ContainmentActions.Blocked;
+            return true;
+        }
+
+        return false;
     }
 }

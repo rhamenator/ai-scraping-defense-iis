@@ -237,6 +237,8 @@ public sealed class PeerSyncRunnerTests
     {
         public List<DefenseDecision> Decisions { get; } = [];
 
+        public List<DefenseDecisionFeedback> Feedback { get; } = [];
+
         public void Add(DefenseDecision decision)
         {
             Decisions.Add(decision);
@@ -245,6 +247,23 @@ public sealed class PeerSyncRunnerTests
         public IReadOnlyList<DefenseDecision> GetRecent(int count)
         {
             return Decisions.Take(count).ToArray();
+        }
+
+        public DefenseDecision? GetById(long id)
+        {
+            return Decisions.FirstOrDefault(decision => decision.Id == id);
+        }
+
+        public DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback)
+        {
+            var persisted = feedback with { Id = Feedback.Count + 1 };
+            Feedback.Add(persisted);
+            return persisted;
+        }
+
+        public IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count)
+        {
+            return Feedback.Take(count).ToArray();
         }
 
         public DefenseEventMetrics GetMetrics()
