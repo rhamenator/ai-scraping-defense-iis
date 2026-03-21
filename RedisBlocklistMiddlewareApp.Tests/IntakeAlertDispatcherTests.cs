@@ -14,6 +14,7 @@ public sealed class IntakeAlertDispatcherTests
     [Fact]
     public async Task DispatchAsync_SendsGenericWebhookAndSmtpAlerts()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.Accepted));
         var smtpSender = new RecordingSmtpAlertSender();
         var dispatcher = new IntakeAlertDispatcher(
@@ -22,7 +23,7 @@ public sealed class IntakeAlertDispatcherTests
             smtpSender);
         var webhookEvent = CreateEvent();
 
-        var results = await dispatcher.DispatchAsync(webhookEvent, CancellationToken.None);
+        var results = await dispatcher.DispatchAsync(webhookEvent, cancellationToken);
 
         Assert.Equal(2, results.Count);
         Assert.Contains(results, record =>
@@ -35,7 +36,7 @@ public sealed class IntakeAlertDispatcherTests
         Assert.NotNull(handler.Request);
         Assert.Equal(HttpMethod.Post, handler.Request!.Method);
         Assert.Equal("Bearer test-token", handler.Request.Headers.Authorization!.ToString());
-        var requestJson = await handler.Request.Content!.ReadAsStringAsync();
+        var requestJson = await handler.Request.Content!.ReadAsStringAsync(cancellationToken);
         using var json = JsonDocument.Parse(requestJson);
         Assert.Equal("AI_DEFENSE_BLOCK", json.RootElement.GetProperty("alert_type").GetString());
         Assert.Equal("suspicious_activity_detected", json.RootElement.GetProperty("event_type").GetString());
@@ -49,12 +50,13 @@ public sealed class IntakeAlertDispatcherTests
     [Fact]
     public async Task DispatchAsync_ReturnsFailedWebhookRecord_WhenWebhookCallThrows()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var dispatcher = new IntakeAlertDispatcher(
             Options.Create(CreateOptions()),
             new FakeHttpClientFactory(new ThrowingHttpMessageHandler(new HttpRequestException("network down"))),
             new RecordingSmtpAlertSender());
 
-        var results = await dispatcher.DispatchAsync(CreateEvent(), CancellationToken.None);
+        var results = await dispatcher.DispatchAsync(CreateEvent(), cancellationToken);
 
         var webhookResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.GenericWebhook);
         Assert.Equal(IntakeDeliveryStatuses.Failed, webhookResult.Status);
@@ -64,6 +66,7 @@ public sealed class IntakeAlertDispatcherTests
     [Fact]
     public async Task DispatchAsync_SendsSlackAlert_WithSlackFormattedPayload()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
         var options = CreateOptions();
         options.Intake.Alerting.GenericWebhook.Enabled = false;
@@ -79,7 +82,7 @@ public sealed class IntakeAlertDispatcherTests
             new FakeHttpClientFactory(handler),
             new RecordingSmtpAlertSender());
 
-        var results = await dispatcher.DispatchAsync(CreateEvent(), CancellationToken.None);
+        var results = await dispatcher.DispatchAsync(CreateEvent(), cancellationToken);
 
         var slackResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.Slack);
         Assert.Equal(IntakeDeliveryStatuses.Succeeded, slackResult.Status);
@@ -87,7 +90,7 @@ public sealed class IntakeAlertDispatcherTests
         Assert.Equal(HttpMethod.Post, handler.Request!.Method);
         Assert.Equal("https://hooks.slack.example.test/services/test", handler.Request.RequestUri!.ToString());
 
-        var requestJson = await handler.Request.Content!.ReadAsStringAsync();
+        var requestJson = await handler.Request.Content!.ReadAsStringAsync(cancellationToken);
         using var json = JsonDocument.Parse(requestJson);
         var text = json.RootElement.GetProperty("text").GetString();
         Assert.Contains("*AI Defense Alert*", text);
@@ -99,6 +102,7 @@ public sealed class IntakeAlertDispatcherTests
     [Fact]
     public async Task DispatchAsync_ReturnsFailedSlackRecord_WhenSlackCallThrows()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var options = CreateOptions();
         options.Intake.Alerting.GenericWebhook.Enabled = false;
         options.Intake.Alerting.Smtp.Enabled = false;
@@ -113,7 +117,7 @@ public sealed class IntakeAlertDispatcherTests
             new FakeHttpClientFactory(new ThrowingHttpMessageHandler(new HttpRequestException("slack down"))),
             new RecordingSmtpAlertSender());
 
-        var results = await dispatcher.DispatchAsync(CreateEvent(), CancellationToken.None);
+        var results = await dispatcher.DispatchAsync(CreateEvent(), cancellationToken);
 
         var slackResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.Slack);
         Assert.Equal(IntakeDeliveryStatuses.Failed, slackResult.Status);

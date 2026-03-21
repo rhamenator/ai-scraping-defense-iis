@@ -10,19 +10,21 @@ public sealed class SuspiciousRequestQueueTests
     [Fact]
     public async Task QueueAsync_WaitsForCapacityInsteadOfDroppingOldestRequest()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var queue = CreateQueue(capacity: 1);
         var first = CreateRequest("198.51.100.1", "/first");
         var second = CreateRequest("198.51.100.2", "/second");
 
-        Assert.True(await queue.QueueAsync(first, CancellationToken.None));
+        Assert.True(await queue.QueueAsync(first, cancellationToken));
 
-        using var secondWriteCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var secondWriteCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        secondWriteCts.CancelAfter(TimeSpan.FromSeconds(2));
         var secondWriteTask = queue.QueueAsync(second, secondWriteCts.Token).AsTask();
 
-        await Task.Delay(100);
+        await Task.Delay(100, cancellationToken);
         Assert.False(secondWriteTask.IsCompleted);
 
-        var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        var enumerator = queue.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("/first", enumerator.Current.Path);
 
@@ -37,16 +39,18 @@ public sealed class SuspiciousRequestQueueTests
     [Fact]
     public async Task QueueAsync_ReturnsFalseWhenWaitingWriterIsCancelled()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var queue = CreateQueue(capacity: 1);
 
-        Assert.True(await queue.QueueAsync(CreateRequest("198.51.100.1", "/first"), CancellationToken.None));
+        Assert.True(await queue.QueueAsync(CreateRequest("198.51.100.1", "/first"), cancellationToken));
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(100));
         var queued = await queue.QueueAsync(CreateRequest("198.51.100.2", "/second"), cts.Token);
 
         Assert.False(queued);
 
-        var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        var enumerator = queue.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("/first", enumerator.Current.Path);
         await enumerator.DisposeAsync();

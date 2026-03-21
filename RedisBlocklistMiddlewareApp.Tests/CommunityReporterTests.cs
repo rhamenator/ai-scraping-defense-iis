@@ -12,12 +12,13 @@ public sealed class CommunityReporterTests
     [Fact]
     public async Task ReportAsync_PostsExpectedFormPayload()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
         var reporter = new CommunityReporter(
             Options.Create(CreateOptions()),
             new FakeHttpClientFactory(handler));
 
-        var result = await reporter.ReportAsync(CreateEvent("AI scraper detected"), CancellationToken.None);
+        var result = await reporter.ReportAsync(CreateEvent("AI scraper detected"), cancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal(IntakeDeliveryStatuses.Succeeded, result!.Status);
@@ -26,7 +27,7 @@ public sealed class CommunityReporterTests
 
         Assert.NotNull(handler.Request);
         Assert.Equal("integration-key", handler.Request!.Headers.GetValues("Key").Single());
-        var body = await handler.Request.Content!.ReadAsStringAsync();
+        var body = await handler.Request.Content!.ReadAsStringAsync(cancellationToken);
         Assert.Contains("ip=198.51.100.44", body);
         Assert.Contains("categories=19", body);
         Assert.Contains("AI+Defense+Stack+detection", body);
@@ -35,14 +36,15 @@ public sealed class CommunityReporterTests
     [Fact]
     public async Task ReportAsync_UsesDefaultCategoryWhenReasonDoesNotMatchKnownPatterns()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
         var reporter = new CommunityReporter(
             Options.Create(CreateOptions()),
             new FakeHttpClientFactory(handler));
 
-        await reporter.ReportAsync(CreateEvent("manual review verdict"), CancellationToken.None);
+        await reporter.ReportAsync(CreateEvent("manual review verdict"), cancellationToken);
 
-        var body = await handler.Request!.Content!.ReadAsStringAsync();
+        var body = await handler.Request!.Content!.ReadAsStringAsync(cancellationToken);
         Assert.Contains("categories=18%2C20", body);
     }
 

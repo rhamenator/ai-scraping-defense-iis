@@ -12,13 +12,14 @@ public sealed class WebhookEventInboxTests
     [Fact]
     public async Task Inbox_PersistsQueuedEventsAcrossInstances()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         using var harness = SqliteInboxHarness.Create();
         var firstInbox = harness.CreateInbox();
 
-        await firstInbox.EnqueueAsync(CreateEvent("198.51.100.10"), CancellationToken.None);
+        await firstInbox.EnqueueAsync(CreateEvent("198.51.100.10"), cancellationToken);
 
         var secondInbox = harness.CreateInbox();
-        await using var enumerator = secondInbox.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        await using var enumerator = secondInbox.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
 
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("198.51.100.10", enumerator.Current.Event.Details.IpAddress);
@@ -28,18 +29,19 @@ public sealed class WebhookEventInboxTests
     [Fact]
     public async Task Abandon_RequeuesClaimedWebhookEvent()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         using var harness = SqliteInboxHarness.Create();
         var inbox = harness.CreateInbox();
-        await inbox.EnqueueAsync(CreateEvent("198.51.100.11"), CancellationToken.None);
+        await inbox.EnqueueAsync(CreateEvent("198.51.100.11"), cancellationToken);
 
-        await using var firstEnumerator = inbox.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        await using var firstEnumerator = inbox.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Assert.True(await firstEnumerator.MoveNextAsync());
         var claimed = firstEnumerator.Current;
         await firstEnumerator.DisposeAsync();
 
-        await inbox.AbandonAsync(claimed.Id, CancellationToken.None);
+        await inbox.AbandonAsync(claimed.Id, cancellationToken);
 
-        await using var secondEnumerator = inbox.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        await using var secondEnumerator = inbox.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Assert.True(await secondEnumerator.MoveNextAsync());
         Assert.Equal(claimed.Id, secondEnumerator.Current.Id);
     }

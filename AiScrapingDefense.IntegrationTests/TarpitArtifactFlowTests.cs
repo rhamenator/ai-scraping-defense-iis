@@ -16,12 +16,13 @@ public sealed class TarpitArtifactFlowTests
     [Fact]
     public async Task TarpitArchiveRoute_ReturnsZipDecoyArtifact()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await _fixture.CreateHostAsync();
-        var response = await host.Client.GetAsync("/anti-scrape-tarpit/reference/manual/archive/assets.zip");
+        using var response = await host.Client.GetAsync("/anti-scrape-tarpit/reference/manual/archive/assets.zip", cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/zip", response.Content.Headers.ContentType?.MediaType);
-        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         Assert.NotEmpty(archive.Entries);
