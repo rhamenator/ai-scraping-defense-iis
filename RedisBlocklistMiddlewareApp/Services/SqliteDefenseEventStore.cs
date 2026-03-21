@@ -82,8 +82,8 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                 "$breakdownJson",
                 decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
             command.Parameters.AddWithValue("$summary", decision.Summary);
-            command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.UtcDateTime.ToString("O"));
-            command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.UtcDateTime.ToString("O"));
+            command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
             command.ExecuteNonQuery();
 
             using var summaryCommand = connection.CreateCommand();
@@ -102,7 +102,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                 WHERE summary_key = 1;
                 """;
             summaryCommand.Parameters.AddWithValue("$action", decision.Action);
-            summaryCommand.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.UtcDateTime.ToString("O"));
+            summaryCommand.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
             summaryCommand.ExecuteNonQuery();
         }
     }
@@ -119,6 +119,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.CommandText =
                 """
                 SELECT
+                    id,
                     ip_address,
                     action,
                     score,
@@ -139,18 +140,160 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             while (reader.Read())
             {
                 results.Add(new DefenseDecision(
-                    reader.GetString(0),
                     reader.GetString(1),
-                    reader.GetInt32(2),
-                    reader.GetInt64(3),
-                    reader.GetString(4),
-                    JsonSerializer.Deserialize<string[]>(reader.GetString(5)) ?? [],
-                    reader.GetString(7),
-                    DateTimeOffset.Parse(reader.GetString(8)),
+                    reader.GetString(2),
+                    reader.GetInt32(3),
+                    reader.GetInt64(4),
+                    reader.GetString(5),
+                    JsonSerializer.Deserialize<string[]>(reader.GetString(6)) ?? [],
+                    reader.GetString(8),
                     DateTimeOffset.Parse(reader.GetString(9)),
-                    reader.IsDBNull(6)
+                    DateTimeOffset.Parse(reader.GetString(10)),
+                    reader.IsDBNull(7)
                         ? null
-                        : JsonSerializer.Deserialize<DefenseScoreBreakdown>(reader.GetString(6))));
+                        : JsonSerializer.Deserialize<DefenseScoreBreakdown>(reader.GetString(7)),
+                    reader.GetInt64(0)));
+            }
+        }
+
+        return results;
+    }
+
+    public DefenseDecision? GetById(long id)
+    {
+        if (id <= 0)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT
+                    id,
+                    ip_address,
+                    action,
+                    score,
+                    frequency,
+                    path,
+                    signals_json,
+                    breakdown_json,
+                    summary,
+                    observed_at_utc,
+                    decided_at_utc
+                FROM defense_events
+                WHERE id = $id;
+                """;
+            command.Parameters.AddWithValue("$id", id);
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return null;
+            }
+
+            return new DefenseDecision(
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetInt32(3),
+                reader.GetInt64(4),
+                reader.GetString(5),
+                JsonSerializer.Deserialize<string[]>(reader.GetString(6)) ?? [],
+                reader.GetString(8),
+                DateTimeOffset.Parse(reader.GetString(9)),
+                DateTimeOffset.Parse(reader.GetString(10)),
+                reader.IsDBNull(7)
+                    ? null
+                    : JsonSerializer.Deserialize<DefenseScoreBreakdown>(reader.GetString(7)),
+                reader.GetInt64(0));
+        }
+    }
+
+    public DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback)
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                INSERT INTO defense_feedback
+                (
+                    decision_id,
+                    ip_address,
+                    original_action,
+                    updated_action,
+                    reason,
+                    actor,
+                    created_at_utc
+                )
+                VALUES
+                (
+                    $decisionId,
+                    $ipAddress,
+                    $originalAction,
+                    $updatedAction,
+                    $reason,
+                    $actor,
+                    $createdAtUtc
+                );
+
+                SELECT last_insert_rowid();
+                """;
+            command.Parameters.AddWithValue("$decisionId", feedback.DecisionId);
+            command.Parameters.AddWithValue("$ipAddress", feedback.IpAddress);
+            command.Parameters.AddWithValue("$originalAction", feedback.OriginalAction);
+            command.Parameters.AddWithValue("$updatedAction", feedback.UpdatedAction);
+            command.Parameters.AddWithValue("$reason", feedback.Reason);
+            command.Parameters.AddWithValue("$actor", feedback.Actor);
+            command.Parameters.AddWithValue("$createdAtUtc", feedback.CreatedAtUtc.ToString("O"));
+
+            var id = (long)(command.ExecuteScalar() ?? 0L);
+            return feedback with { Id = id };
+        }
+    }
+
+    public IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count)
+    {
+        var safeCount = Math.Clamp(count, 1, _maxRecentEvents);
+        var results = new List<DefenseDecisionFeedback>(safeCount);
+
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT
+                    id,
+                    decision_id,
+                    ip_address,
+                    original_action,
+                    updated_action,
+                    reason,
+                    actor,
+                    created_at_utc
+                FROM defense_feedback
+                ORDER BY created_at_utc DESC, id DESC
+                LIMIT $limit;
+                """;
+            command.Parameters.AddWithValue("$limit", safeCount);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(new DefenseDecisionFeedback(
+                    reader.GetInt64(0),
+                    reader.GetInt64(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.GetString(5),
+                    reader.GetString(6),
+                    DateTimeOffset.Parse(reader.GetString(7))));
             }
         }
 
@@ -215,6 +358,22 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
                 CREATE INDEX IF NOT EXISTS idx_defense_events_decided_at
                     ON defense_events (decided_at_utc DESC, id DESC);
 
+                CREATE TABLE IF NOT EXISTS defense_feedback
+                (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    decision_id INTEGER NOT NULL,
+                    ip_address TEXT NOT NULL,
+                    original_action TEXT NOT NULL,
+                    updated_action TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    created_at_utc TEXT NOT NULL,
+                    FOREIGN KEY (decision_id) REFERENCES defense_events (id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_defense_feedback_created_at
+                    ON defense_feedback (created_at_utc DESC, id DESC);
+
                 CREATE TABLE IF NOT EXISTS defense_event_summary
                 (
                     summary_key INTEGER PRIMARY KEY CHECK (summary_key = 1),
@@ -270,6 +429,11 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+
+        using var pragmaCommand = connection.CreateCommand();
+        pragmaCommand.CommandText = "PRAGMA foreign_keys = ON;";
+        pragmaCommand.ExecuteNonQuery();
+
         return connection;
     }
 

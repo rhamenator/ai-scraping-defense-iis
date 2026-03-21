@@ -8,5 +8,11 @@ public interface IDefenseEventStore
 
     IReadOnlyList<DefenseDecision> GetRecent(int count);
 
+    DefenseDecision? GetById(long id);
+
+    DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback);
+
+    IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count);
+
     DefenseEventMetrics GetMetrics();
 }

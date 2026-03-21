@@ -21,7 +21,8 @@ public sealed record DefenseDecision(
     string Summary,
     DateTimeOffset ObservedAtUtc,
     DateTimeOffset DecidedAtUtc,
-    DefenseScoreBreakdown? Breakdown = null);
+    DefenseScoreBreakdown? Breakdown = null,
+    long Id = 0);
 
 public sealed record DefenseScoreBreakdown(
     int BaseSignalScore,
@@ -57,6 +58,16 @@ public sealed record OperatorRecommendationSnapshot(
     DateTimeOffset GeneratedAtUtc,
     int RecentDecisionCount,
     IReadOnlyList<OperatorRecommendation> Recommendations);
+
+public sealed record DefenseDecisionFeedback(
+    long Id,
+    long DecisionId,
+    string IpAddress,
+    string OriginalAction,
+    string UpdatedAction,
+    string Reason,
+    string Actor,
+    DateTimeOffset CreatedAtUtc);
 
 public sealed record RequestSignalEvaluation(
     bool BlockImmediately,

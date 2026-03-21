@@ -106,6 +106,21 @@ public sealed class OperatorRecommendationServiceTests
             return _decisions.Take(count).ToArray();
         }
 
+        public DefenseDecision? GetById(long id)
+        {
+            return _decisions.FirstOrDefault(decision => decision.Id == id);
+        }
+
+        public DefenseDecisionFeedback AddFeedback(DefenseDecisionFeedback feedback)
+        {
+            return feedback with { Id = 1 };
+        }
+
+        public IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count)
+        {
+            return [];
+        }
+
         public DefenseEventMetrics GetMetrics()
         {
             return new DefenseEventMetrics(_decisions.Count, _decisions.Count(item => item.Action == "blocked"), _decisions.Count(item => item.Action == "observed"), _decisions.LastOrDefault()?.DecidedAtUtc);
