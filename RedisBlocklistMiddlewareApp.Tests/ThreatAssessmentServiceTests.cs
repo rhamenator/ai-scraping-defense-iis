@@ -96,7 +96,7 @@ public sealed class ThreatAssessmentServiceTests
 
         Assert.True(result.ShouldBlock);
         Assert.Equal(ContainmentActions.Blocked, result.Action);
-        Assert.Equal("threat_intelligence_verdict", result.BlockReason);
+        Assert.Equal("threat_intelligence_verdict", result.DecisionReason);
         Assert.True(result.Breakdown.ExplicitMaliciousVerdict);
         Assert.Contains("model_verdict:malicious_bot", result.Signals);
     }
@@ -125,7 +125,7 @@ public sealed class ThreatAssessmentServiceTests
 
         Assert.True(result.ShouldBlock);
         Assert.Equal(ContainmentActions.Blocked, result.Action);
-        Assert.Equal("frequency_threshold", result.BlockReason);
+        Assert.Equal("frequency_threshold", result.DecisionReason);
         Assert.Equal(35, result.Score);
     }
 

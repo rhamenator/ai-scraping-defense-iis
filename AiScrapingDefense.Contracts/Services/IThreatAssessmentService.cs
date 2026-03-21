@@ -58,9 +58,12 @@ public sealed record ContainmentDecision(
 public sealed record ThreatAssessmentResult(
     string Action,
     bool ShouldBlock,
-    string BlockReason,
+    string DecisionReason,
     string Summary,
     int Score,
     long Frequency,
     IReadOnlyList<string> Signals,
-    DefenseScoreBreakdown Breakdown);
+    DefenseScoreBreakdown Breakdown)
+{
+    public string BlockReason => DecisionReason;
+}

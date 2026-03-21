@@ -184,6 +184,14 @@ builder.Services
                 ? "You are classifying incoming web requests for scraping-defense enforcement. Return JSON with classification and summary."
                 : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
         options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
+        var defaultHeuristics = new HeuristicOptions();
+        var defaultContainment = new ContainmentPolicyOptions();
+        var useLegacyBlockThreshold =
+            options.Escalation.Containment.BlockScoreThreshold == defaultContainment.BlockScoreThreshold &&
+            options.Heuristics.BlockScoreThreshold != defaultHeuristics.BlockScoreThreshold;
+        var useLegacyFrequencyThreshold =
+            options.Escalation.Containment.FrequencyBlockThreshold == defaultContainment.FrequencyBlockThreshold &&
+            options.Heuristics.FrequencyBlockThreshold != defaultHeuristics.FrequencyBlockThreshold;
         options.Escalation.Routing.PreferredPrimaryRoute = string.IsNullOrWhiteSpace(options.Escalation.Routing.PreferredPrimaryRoute)
             ? ThreatModelRoutes.Auto
             : options.Escalation.Routing.PreferredPrimaryRoute.Trim();
@@ -195,6 +203,15 @@ builder.Services
         options.Escalation.Containment.ThrottleScoreThreshold = Math.Max(0, options.Escalation.Containment.ThrottleScoreThreshold);
         options.Escalation.Containment.BlockScoreThreshold = Math.Max(0, options.Escalation.Containment.BlockScoreThreshold);
         options.Escalation.Containment.FrequencyBlockThreshold = Math.Max(1, options.Escalation.Containment.FrequencyBlockThreshold);
+        if (useLegacyBlockThreshold)
+        {
+            options.Escalation.Containment.BlockScoreThreshold = Math.Max(0, options.Heuristics.BlockScoreThreshold);
+        }
+
+        if (useLegacyFrequencyThreshold)
+        {
+            options.Escalation.Containment.FrequencyBlockThreshold = Math.Max(1, options.Heuristics.FrequencyBlockThreshold);
+        }
 
         options.CommunityBlocklist.SyncIntervalMinutes = Math.Max(1, options.CommunityBlocklist.SyncIntervalMinutes);
         options.CommunityBlocklist.RequestTimeoutSeconds = Math.Max(1, options.CommunityBlocklist.RequestTimeoutSeconds);

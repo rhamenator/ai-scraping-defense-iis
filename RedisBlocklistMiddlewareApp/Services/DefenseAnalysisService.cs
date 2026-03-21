@@ -48,7 +48,7 @@ public sealed class DefenseAnalysisService : BackgroundService
                 {
                     await _blocklistService.BlockAsync(
                         request.IpAddress,
-                        assessment.BlockReason,
+                        assessment.DecisionReason,
                         assessment.Signals,
                         stoppingToken);
 

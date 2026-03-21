@@ -38,10 +38,26 @@ public sealed class ThreatModelRoutingStrategy : IThreatModelRoutingStrategy
                 .ToArray()
             : [];
 
+        if (primaryAdapters.Length == 0 && fallbackAdapters.Length > 0)
+        {
+            return new ThreatModelRoutingPlan(
+                fallbackRoute,
+                false,
+                fallbackAdapters);
+        }
+
+        var effectiveFallbackEnabled = fallbackAdapters.Length > 0;
+        var effectivePrimaryRoute = primaryAdapters.Length > 0
+            ? primaryRoute
+            : ThreatModelRoutes.Any;
+        var orderedAdapters = primaryAdapters.Length > 0
+            ? primaryAdapters.Concat(fallbackAdapters).ToArray()
+            : adapters;
+
         return new ThreatModelRoutingPlan(
-            primaryRoute,
-            fallbackEnabled,
-            primaryAdapters.Concat(fallbackAdapters).ToArray());
+            effectivePrimaryRoute,
+            effectiveFallbackEnabled,
+            orderedAdapters);
     }
 
     private string DeterminePrimaryRoute(ThreatAssessmentContext context)
