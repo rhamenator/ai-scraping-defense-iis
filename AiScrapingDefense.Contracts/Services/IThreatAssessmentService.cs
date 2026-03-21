@@ -19,6 +19,15 @@ public interface IContainmentPolicyEngine
     ContainmentDecision Evaluate(ThreatAssessmentContext context, int totalScore, bool explicitMaliciousVerdict);
 }
 
+public interface IAssessmentTelemetry
+{
+    IDisposable? StartActivityScope(string name);
+
+    void RecordAssessmentStage(string stage, string result);
+
+    void RecordRoutingDecision(string primaryRoute, string effectiveRoute, bool fallbackEnabled);
+}
+
 public sealed record ThreatAssessmentContext(
     string IpAddress,
     string Method,

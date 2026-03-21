@@ -29,13 +29,44 @@ public sealed record DefenseScoreBreakdown(
     int FrequencyScore,
     int TotalScore,
     bool ExplicitMaliciousVerdict,
-    IReadOnlyList<DefenseScoreContribution> Contributions);
+    IReadOnlyList<DefenseScoreContribution> Contributions,
+    IReadOnlyList<DefenseAdapterVerdict>? AdapterVerdicts = null,
+    DefenseRoutingDetails? Routing = null,
+    DefenseContainmentDetails? Containment = null)
+{
+    public IReadOnlyList<string> ContributorNames => Contributions
+        .Select(contribution => contribution.Source)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+}
 
 public sealed record DefenseScoreContribution(
     string Source,
     int ScoreDelta,
     IReadOnlyList<string> Signals,
     string Summary);
+
+public sealed record DefenseAdapterVerdict(
+    string Adapter,
+    string Route,
+    string Classification,
+    bool? IsBot,
+    int ScoreDelta,
+    bool Decisive,
+    IReadOnlyList<string> Signals,
+    string Summary);
+
+public sealed record DefenseRoutingDetails(
+    string PrimaryRoute,
+    string EffectiveRoute,
+    bool FallbackEnabled,
+    IReadOnlyList<string> OrderedAdapters,
+    IReadOnlyList<string> EvaluatedAdapters);
+
+public sealed record DefenseContainmentDetails(
+    string Action,
+    string Reason,
+    bool ShouldBlock);
 
 public sealed record DefenseEventMetrics(
     long TotalDecisions,

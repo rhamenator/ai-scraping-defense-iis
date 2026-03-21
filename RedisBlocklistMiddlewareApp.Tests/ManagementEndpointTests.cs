@@ -341,6 +341,7 @@ public sealed class ManagementEndpointTests
         Assert.Contains("/defense/intake-deliveries", html);
         Assert.Contains("/defense/intake-delivery-metrics", html);
         Assert.Contains("/defense/blocklist", html);
+        Assert.Contains("Explainability", html);
     }
 
     [Fact]

@@ -266,6 +266,7 @@ builder.Services
 
 builder.Services.AddSingleton<IConfigureOptions<ForwardedHeadersOptions>, ForwardedHeadersOptionsSetup>();
 builder.Services.AddSingleton<DefenseTelemetry>();
+builder.Services.AddSingleton<IAssessmentTelemetry>(sp => sp.GetRequiredService<DefenseTelemetry>());
 
 var observabilityOptions = builder.Configuration
     .GetSection(DefenseEngineOptions.SectionName)

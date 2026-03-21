@@ -428,11 +428,12 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
                 <th>Path</th>
                 <th>Score</th>
                 <th>Signals</th>
+                <th>Explainability</th>
                 <th>Observed</th>
               </tr>
             </thead>
             <tbody id="eventsTableBody">
-              <tr><td colspan="6" class="empty">Sign in to load recent defense decisions.</td></tr>
+                <tr><td colspan="7" class="empty">Sign in to load recent defense decisions.</td></tr>
             </tbody>
           </table>
         </div>
@@ -605,13 +606,23 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       const events = await fetchJson("/defense/events?count=" + encodeURIComponent(state.eventCount));
 
       if (!events.length) {
-        eventsTableBody.innerHTML = '<tr><td colspan="6" class="empty">No defense decisions are stored yet.</td></tr>';
+        eventsTableBody.innerHTML = '<tr><td colspan="7" class="empty">No defense decisions are stored yet.</td></tr>';
         return;
       }
 
       eventsTableBody.innerHTML = events.map(event => {
         const actionClass = event.action === "blocked" ? "blocked" : "observed";
         const signalHtml = (event.signals || []).map(signal => '<span class="chip">' + escapeHtml(signal) + '</span>').join("");
+        const contributorHtml = (event.breakdown?.contributorNames || []).map(source => '<span class="chip">' + escapeHtml(source) + '</span>').join("");
+        const adapterHtml = (event.breakdown?.adapterVerdicts || []).map(verdict => '<span class="chip">' + escapeHtml(verdict.adapter + ': ' + verdict.classification) + '</span>').join("");
+        const routing = event.breakdown?.routing;
+        const containment = event.breakdown?.containment;
+        const explainability = [
+          containment ? '<div><strong>Containment</strong> <span class="mono">' + escapeHtml(containment.action + ' / ' + containment.reason) + '</span></div>' : '',
+          routing ? '<div><strong>Routing</strong> <span class="mono">' + escapeHtml(routing.primaryRoute + ' → ' + routing.effectiveRoute) + '</span></div>' : '',
+          contributorHtml ? '<div><strong>Contributors</strong><div>' + contributorHtml + '</div></div>' : '',
+          adapterHtml ? '<div><strong>Adapter verdicts</strong><div>' + adapterHtml + '</div></div>' : ''
+        ].filter(Boolean).join('');
 
         return `
           <tr>
@@ -620,6 +631,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <td class="mono">${escapeHtml(event.path)}</td>
             <td>${number(event.score)}</td>
             <td>${signalHtml || '<span class="empty">none</span>'}</td>
+            <td>${explainability || '<span class="empty">No breakdown details recorded.</span>'}</td>
             <td>${formatDate(event.observedAtUtc)}</td>
           </tr>`;
       }).join("");
@@ -763,7 +775,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       document.getElementById("metricBlocked").textContent = "0";
       document.getElementById("metricObserved").textContent = "0";
       document.getElementById("metricLatest").textContent = "none";
-      eventsTableBody.innerHTML = '<tr><td colspan="6" class="empty">Sign in to load recent defense decisions.</td></tr>';
+      eventsTableBody.innerHTML = '<tr><td colspan="7" class="empty">Sign in to load recent defense decisions.</td></tr>';
       recommendationsList.innerHTML = '<h3>Operator guidance</h3><p class="mono">Sign in to load tuning recommendations.</p>';
       document.getElementById("intakeStatusCopy").textContent = "Waiting for session.";
       document.getElementById("communityStatusCopy").textContent = "Waiting for session.";

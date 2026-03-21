@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
@@ -11,6 +12,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
     private readonly IReadOnlyList<IThreatModelAdapter> _modelAdapters;
     private readonly IThreatModelRoutingStrategy _routingStrategy;
     private readonly IContainmentPolicyEngine _containmentPolicyEngine;
+    private readonly IAssessmentTelemetry _telemetry;
     private readonly ILogger<ThreatAssessmentService> _logger;
 
     public ThreatAssessmentService(
@@ -19,6 +21,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         IEnumerable<IThreatModelAdapter> modelAdapters,
         IThreatModelRoutingStrategy routingStrategy,
         IContainmentPolicyEngine containmentPolicyEngine,
+        IAssessmentTelemetry telemetry,
         ILogger<ThreatAssessmentService> logger)
     {
         _frequencyTracker = frequencyTracker;
@@ -26,6 +29,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         _modelAdapters = modelAdapters.ToArray();
         _routingStrategy = routingStrategy;
         _containmentPolicyEngine = containmentPolicyEngine;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -33,9 +37,23 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         SuspiciousRequest request,
         CancellationToken cancellationToken)
     {
-        var frequency = await _frequencyTracker.IncrementAsync(request.IpAddress, cancellationToken);
+        using var assessmentActivity = _telemetry.StartActivityScope("assessment.evaluate") as Activity;
+        assessmentActivity?.SetTag("assessment.ip", request.IpAddress);
+        assessmentActivity?.SetTag("assessment.path", request.Path);
+        assessmentActivity?.SetTag("assessment.signal_count", request.Signals.Count);
+
+        long frequency;
+        using (var frequencyActivity = _telemetry.StartActivityScope("assessment.frequency") as Activity)
+        {
+            frequency = await _frequencyTracker.IncrementAsync(request.IpAddress, cancellationToken);
+            frequencyActivity?.SetTag("frequency.value", frequency);
+            _telemetry.RecordAssessmentStage("frequency", "measured");
+        }
+
         var baseSignalScore = ScoreSignals(request.Signals);
         var frequencyScore = (int)Math.Min(25, frequency * 5);
+        assessmentActivity?.SetTag("assessment.base_signal_score", baseSignalScore);
+        assessmentActivity?.SetTag("assessment.frequency_score", frequencyScore);
         var context = new ThreatAssessmentContext(
             request.IpAddress,
             request.Method,
@@ -69,21 +87,38 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
 
         var explicitMaliciousVerdict = false;
         var totalScore = baseSignalScore + frequencyScore;
+        var adapterVerdicts = new List<DefenseAdapterVerdict>();
 
         foreach (var provider in _reputationProviders)
         {
+            using var providerActivity = _telemetry.StartActivityScope("assessment.reputation_provider") as Activity;
+            providerActivity?.SetTag("provider.name", provider.Name);
             var assessment = await provider.AssessAsync(context, cancellationToken);
             if (assessment is null)
             {
+                _telemetry.RecordAssessmentStage("reputation_provider", "miss");
                 continue;
             }
 
             totalScore += assessment.ScoreAdjustment;
             explicitMaliciousVerdict |= assessment.IsMalicious;
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
+            providerActivity?.SetTag("provider.source", assessment.Source);
+            providerActivity?.SetTag("provider.score_delta", assessment.ScoreAdjustment);
+            providerActivity?.SetTag("provider.is_malicious", assessment.IsMalicious);
+            _telemetry.RecordAssessmentStage("reputation_provider", assessment.IsMalicious ? "malicious" : "matched");
         }
 
-        var routingPlan = _routingStrategy.BuildPlan(context, _modelAdapters);
+        ThreatModelRoutingPlan routingPlan;
+        using (var routingActivity = _telemetry.StartActivityScope("assessment.routing") as Activity)
+        {
+            routingPlan = _routingStrategy.BuildPlan(context, _modelAdapters);
+            routingActivity?.SetTag("routing.primary_route", routingPlan.PrimaryRoute);
+            routingActivity?.SetTag("routing.fallback_enabled", routingPlan.FallbackEnabled);
+            routingActivity?.SetTag("routing.adapter_count", routingPlan.OrderedAdapters.Count);
+            _telemetry.RecordAssessmentStage("routing", routingPlan.PrimaryRoute);
+        }
+
         var routedModelSignals = new List<string>
         {
             $"model_route:primary:{routingPlan.PrimaryRoute.ToLowerInvariant()}"
@@ -100,27 +135,77 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             routedModelSignals,
             $"Model routing selected the {routingPlan.PrimaryRoute.ToLowerInvariant()} classifier route.");
 
+        var effectiveRoute = routingPlan.PrimaryRoute;
+        var evaluatedAdapters = new List<string>();
+
         foreach (var adapter in routingPlan.OrderedAdapters)
         {
+            using var adapterActivity = _telemetry.StartActivityScope("assessment.model_adapter") as Activity;
+            adapterActivity?.SetTag("adapter.name", adapter.Name);
+            adapterActivity?.SetTag("adapter.route", adapter.Route);
+
             var assessment = await adapter.AssessAsync(context, cancellationToken);
             if (assessment is null)
             {
+                _telemetry.RecordAssessmentStage("model_adapter", "no_result");
                 continue;
             }
 
             totalScore += assessment.ScoreAdjustment;
             explicitMaliciousVerdict |= assessment.IsBot == true;
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
+            var decisive = assessment.IsBot is not null;
+            effectiveRoute = adapter.Route;
+            evaluatedAdapters.Add($"{adapter.Route}:{adapter.Name}");
+            adapterVerdicts.Add(new DefenseAdapterVerdict(
+                adapter.Name,
+                adapter.Route,
+                assessment.Classification,
+                assessment.IsBot,
+                assessment.ScoreAdjustment,
+                decisive,
+                assessment.Signals,
+                assessment.Summary));
+            adapterActivity?.SetTag("adapter.classification", assessment.Classification);
+            adapterActivity?.SetTag("adapter.score_delta", assessment.ScoreAdjustment);
+            adapterActivity?.SetTag("adapter.is_bot", assessment.IsBot?.ToString() ?? "inconclusive");
+            adapterActivity?.SetTag("adapter.decisive", decisive);
+            _telemetry.RecordAssessmentStage("model_adapter", decisive ? "decisive" : "inconclusive");
 
-            if (assessment.IsBot is not null)
+            if (decisive)
             {
                 break;
             }
         }
 
         totalScore = Math.Max(0, totalScore);
-        var containment = _containmentPolicyEngine.Evaluate(context, totalScore, explicitMaliciousVerdict);
+        ContainmentDecision containment;
+        using (var containmentActivity = _telemetry.StartActivityScope("assessment.containment") as Activity)
+        {
+            containment = _containmentPolicyEngine.Evaluate(context, totalScore, explicitMaliciousVerdict);
+            containmentActivity?.SetTag("containment.action", containment.Action);
+            containmentActivity?.SetTag("containment.reason", containment.Reason);
+            containmentActivity?.SetTag("containment.should_block", containment.ShouldBlock);
+            _telemetry.RecordAssessmentStage("containment", containment.Action);
+        }
+
+        var routingDetails = new DefenseRoutingDetails(
+            routingPlan.PrimaryRoute,
+            effectiveRoute,
+            routingPlan.FallbackEnabled,
+            routingPlan.OrderedAdapters.Select(adapter => $"{adapter.Route}:{adapter.Name}").ToArray(),
+            evaluatedAdapters);
+        var containmentDetails = new DefenseContainmentDetails(
+            containment.Action,
+            containment.Reason,
+            containment.ShouldBlock);
+        _telemetry.RecordRoutingDecision(routingDetails.PrimaryRoute, routingDetails.EffectiveRoute, routingDetails.FallbackEnabled);
+
         var summary = BuildSummary(containment.Action, totalScore, frequency, explicitMaliciousVerdict, contributions);
+        assessmentActivity?.SetTag("assessment.total_score", totalScore);
+        assessmentActivity?.SetTag("assessment.action", containment.Action);
+        assessmentActivity?.SetTag("assessment.reason", containment.Reason);
+        assessmentActivity?.SetTag("assessment.effective_route", routingDetails.EffectiveRoute);
 
         _logger.LogInformation(
             "Threat assessment completed for {IpAddress} with score {Score}, frequency {Frequency}, explicit malicious verdict {ExplicitVerdict}, action {Action}.",
@@ -143,7 +228,10 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                 frequencyScore,
                 totalScore,
                 explicitMaliciousVerdict,
-                contributions));
+                contributions,
+                adapterVerdicts,
+                routingDetails,
+                containmentDetails));
     }
 
     private static int ScoreSignals(IReadOnlyList<string> signals)

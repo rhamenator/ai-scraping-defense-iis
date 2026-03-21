@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -56,6 +57,13 @@ public sealed class ThreatAssessmentServiceTests
         Assert.Equal(3, result.Frequency);
         Assert.Equal(15, result.Breakdown.BaseSignalScore);
         Assert.Equal(15, result.Breakdown.FrequencyScore);
+        Assert.Equal("observed", result.Breakdown.Containment!.Action);
+        Assert.Equal("queued_analysis_observed", result.Breakdown.Containment.Reason);
+        Assert.Equal(ThreatModelRoutes.Remote, result.Breakdown.Routing!.PrimaryRoute);
+        Assert.Equal(ThreatModelRoutes.Remote, result.Breakdown.Routing.EffectiveRoute);
+        Assert.Contains(result.Breakdown.ContributorNames, contributor => contributor == "openai_compatible_model");
+        Assert.Single(result.Breakdown.AdapterVerdicts!);
+        Assert.Equal("BENIGN_CRAWLER", result.Breakdown.AdapterVerdicts![0].Classification);
         Assert.Contains(result.Breakdown.Contributions, contribution => contribution.Source == "model_routing");
         Assert.Contains(result.Breakdown.Contributions, contribution => contribution.Source == "configured_ranges");
         Assert.Contains(result.Breakdown.Contributions, contribution => contribution.Source == "openai_compatible_model");
@@ -266,6 +274,58 @@ public sealed class ThreatAssessmentServiceTests
         Assert.Equal(shouldBlock, result.ShouldBlock);
     }
 
+    [Fact]
+    public async Task AssessAsync_EmitsAssessmentStageActivities()
+    {
+        var recordedActivities = new List<string>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == DefenseTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStarted = activity => recordedActivities.Add(activity.OperationName),
+            ActivityStopped = _ => { }
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var service = CreateService(
+            frequency: 2,
+            reputationProviders:
+            [
+                new TestReputationProvider(new ReputationAssessment(
+                    "configured_ranges",
+                    10,
+                    false,
+                    ["reputation_range:test_range"],
+                    "Matched configured test range."))
+            ],
+            modelAdapters:
+            [
+                new TestModelAdapter(new ModelAssessment(
+                    "openai_compatible_model",
+                    5,
+                    true,
+                    "MALICIOUS_BOT",
+                    ["model_verdict:malicious_bot"],
+                    "Model classified the request as malicious."))
+            ]);
+
+        await service.AssessAsync(new SuspiciousRequest(
+            "198.51.100.40",
+            "GET",
+            "/probe",
+            string.Empty,
+            "crawler",
+            ["generic_accept_any"],
+            DateTimeOffset.UtcNow), CancellationToken.None);
+
+        Assert.Contains("assessment.evaluate", recordedActivities);
+        Assert.Contains("assessment.frequency", recordedActivities);
+        Assert.Contains("assessment.reputation_provider", recordedActivities);
+        Assert.Contains("assessment.routing", recordedActivities);
+        Assert.Contains("assessment.model_adapter", recordedActivities);
+        Assert.Contains("assessment.containment", recordedActivities);
+    }
+
     private static ThreatAssessmentService CreateService(
         long frequency,
         IEnumerable<IThreatReputationProvider> reputationProviders,
@@ -281,6 +341,7 @@ public sealed class ThreatAssessmentServiceTests
             modelAdapters,
             new ThreatModelRoutingStrategy(Options.Create(options)),
             new ContainmentPolicyEngine(Options.Create(options)),
+                TestTelemetryFactory.Create(),
             NullLogger<ThreatAssessmentService>.Instance);
     }
 
