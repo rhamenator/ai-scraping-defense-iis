@@ -4,6 +4,8 @@ This document maps the upstream `ai-scraping-defense` roles to the .NET implemen
 
 Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roadmap now tracks post-v1 parity work instead of acting as an implied release checklist.
 
+The issue-backed implementation sequence is broken into explicit tracks in [agentic_core_parity_tracks.md](agentic_core_parity_tracks.md) so contributors can pick up non-overlapping workstreams before broader agentic-core changes begin.
+
 ## Upstream Role Mapping
 
 | Upstream role | Current .NET status | Next target |
@@ -25,3 +27,13 @@ Commercial v1 is defined in [commercial_scope.md](commercial_scope.md). This roa
 4. Add richer community-blocklist trust policy, reporting, and peer coordination (see [community_blocklist_peer_coordination_baseline.md](community_blocklist_peer_coordination_baseline.md)).
 5. Add structured metrics, traces, and richer operator telemetry export (see [observability_telemetry_export_baseline.md](observability_telemetry_export_baseline.md)).
 6. Close remaining operator workflow and UX parity gaps (see [operator_ui_workflow_parity_baseline.md](operator_ui_workflow_parity_baseline.md)).
+
+## Implementation Tracks
+
+Use [agentic_core_parity_tracks.md](agentic_core_parity_tracks.md) as the execution plan for how the parity backlog should be staged. In short:
+
+- Track A stabilizes orchestration, routing, and containment.
+- Track B adds extensibility and decision-memory surfaces.
+- Track C layers operator recommendations and explainability on top of those stable seams.
+
+Those tracks should land before broader "more agentic" orchestration work begins.

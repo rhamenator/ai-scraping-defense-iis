@@ -14,6 +14,7 @@ This documentation index is for the current .NET implementation in this reposito
 - [Commercial v1 Scope](commercial_scope.md)
 - [Parity Matrix](parity_matrix.md)
 - [Post-v1 Parity Roadmap](dotnet_parity_roadmap.md)
+- [Agentic-Core Parity Implementation Tracks](agentic_core_parity_tracks.md)
 - [Escalation Scoring and Provider Baseline](escalation_scoring_provider_baseline.md)
 - [Tarpit Content Strategy Baseline](tarpit_content_strategy_baseline.md)
 - [Community Blocklist and Peer Coordination Baseline](community_blocklist_peer_coordination_baseline.md)
