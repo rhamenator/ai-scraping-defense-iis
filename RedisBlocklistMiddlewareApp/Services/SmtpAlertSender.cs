@@ -5,7 +5,7 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class SmtpAlertSender : ISmtpAlertSender
 {
-    public Task SendAsync(
+    public async Task SendAsync(
         string host,
         int port,
         string username,
@@ -40,8 +40,21 @@ public sealed class SmtpAlertSender : ISmtpAlertSender
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        client.Send(message);
-        return Task.CompletedTask;
+        var sendTask = client.SendMailAsync(message);
+
+        try
+        {
+            await sendTask.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            _ = sendTask.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            throw;
+        }
     }
 }
 

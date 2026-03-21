@@ -142,6 +142,7 @@ public sealed class IntakeAlertDispatcherTests
                     Smtp = new SmtpAlertOptions
                     {
                         Enabled = true,
+                        TimeoutSeconds = 5,
                         Host = "smtp.example.test",
                         Port = 2525,
                         Username = "alert-user",
@@ -153,6 +154,26 @@ public sealed class IntakeAlertDispatcherTests
                 }
             }
         };
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ReturnsFailedSmtpRecord_WhenSmtpSendTimesOut()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var options = CreateOptions();
+        options.Intake.Alerting.GenericWebhook.Enabled = false;
+        options.Intake.Alerting.Slack.Enabled = false;
+        options.Intake.Alerting.Smtp.TimeoutSeconds = 1;
+        var dispatcher = new IntakeAlertDispatcher(
+            Options.Create(options),
+            new FakeHttpClientFactory(new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK))),
+            new DelayingSmtpAlertSender());
+
+        var results = await dispatcher.DispatchAsync(CreateEvent(), cancellationToken);
+
+        var smtpResult = Assert.Single(results, record => record.Channel == IntakeDeliveryChannels.Smtp);
+        Assert.Equal(IntakeDeliveryStatuses.Failed, smtpResult.Status);
+        Assert.Contains("timed out", smtpResult.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IntakeWebhookEvent CreateEvent()
@@ -257,6 +278,24 @@ public sealed class IntakeAlertDispatcherTests
         {
             Messages.Add(new SmtpMessage(host, port, username, password, useTls, from, to, subject, body));
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class DelayingSmtpAlertSender : ISmtpAlertSender
+    {
+        public async Task SendAsync(
+            string host,
+            int port,
+            string username,
+            string password,
+            bool useTls,
+            string from,
+            IReadOnlyList<string> to,
+            string subject,
+            string body,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
     }
 

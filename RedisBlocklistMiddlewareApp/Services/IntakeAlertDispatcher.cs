@@ -27,26 +27,18 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
         IntakeWebhookEvent webhookEvent,
         CancellationToken cancellationToken)
     {
-        var results = new List<IntakeDeliveryRecord>(3);
-        var webhookResult = await SendGenericWebhookAsync(webhookEvent, cancellationToken);
-        if (webhookResult is not null)
+        var deliveryTasks = new List<Task<IntakeDeliveryRecord?>>(3)
         {
-            results.Add(webhookResult);
-        }
+            SendGenericWebhookAsync(webhookEvent, cancellationToken),
+            SendSlackAsync(webhookEvent, cancellationToken),
+            SendSmtpAsync(webhookEvent, cancellationToken)
+        };
 
-        var slackResult = await SendSlackAsync(webhookEvent, cancellationToken);
-        if (slackResult is not null)
-        {
-            results.Add(slackResult);
-        }
-
-        var smtpResult = await SendSmtpAsync(webhookEvent, cancellationToken);
-        if (smtpResult is not null)
-        {
-            results.Add(smtpResult);
-        }
-
-        return results;
+        var results = await Task.WhenAll(deliveryTasks);
+        return results
+            .Where(result => result is not null)
+            .Cast<IntakeDeliveryRecord>()
+            .ToArray();
     }
 
     private async Task<IntakeDeliveryRecord?> SendGenericWebhookAsync(
@@ -177,6 +169,8 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
         {
             var subject = $"[AI Defense Alert] {webhookEvent.Reason}";
             var body = BuildSmtpBody(webhookEvent);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds)));
             await _smtpAlertSender.SendAsync(
                 options.Host,
                 options.Port,
@@ -187,7 +181,7 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 options.To,
                 subject,
                 body,
-                cancellationToken);
+                timeoutCts.Token);
 
             return new IntakeDeliveryRecord(
                 IntakeDeliveryTypes.Alert,
@@ -198,6 +192,18 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 IntakeDeliveryStatuses.Succeeded,
                 "Alert delivered successfully.",
                 attemptedAtUtc);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new IntakeDeliveryRecord(
+            IntakeDeliveryTypes.Alert,
+            IntakeDeliveryChannels.Smtp,
+            webhookEvent.Details.IpAddress,
+            webhookEvent.Reason,
+            string.Join(",", options.To),
+            IntakeDeliveryStatuses.Failed,
+            $"SMTP alert delivery timed out after {Math.Max(1, options.TimeoutSeconds)} second(s).",
+            attemptedAtUtc);
         }
         catch (Exception ex)
         {
