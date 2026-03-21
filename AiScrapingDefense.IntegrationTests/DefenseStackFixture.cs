@@ -32,14 +32,14 @@ public sealed class DefenseStackFixture : IAsyncLifetime
 
     public string IntakeApiKey => "integration-intake-key";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await _redisContainer.StartAsync();
         await _postgresContainer.StartAsync();
         await InitializeMarkovSchemaAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _postgresContainer.DisposeAsync();
         await _redisContainer.DisposeAsync();
