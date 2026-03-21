@@ -142,7 +142,14 @@ public sealed class OperatorRecommendationService : IOperatorRecommendationServi
             .OrderByDescending(group => group.Count())
             .FirstOrDefault();
 
-        if (dominantPath is null || dominantPath.Count() < Math.Max(5, (int)Math.Ceiling(recentDecisions.Count * 0.4d)))
+        if (dominantPath is null)
+        {
+            return;
+        }
+
+        var dominantPathCount = dominantPath.Count();
+        var threshold = Math.Max(5, (int)Math.Ceiling(recentDecisions.Count * 0.4d));
+        if (dominantPathCount < threshold)
         {
             return;
         }
@@ -152,13 +159,13 @@ public sealed class OperatorRecommendationService : IOperatorRecommendationServi
             "traffic-shaping",
             "low",
             "Review the busiest defended path",
-            $"The path {dominantPath.Key} accounts for {dominantPath.Count()} of the last {recentDecisions.Count} decisions.",
+            $"The path {dominantPath.Key} accounts for {dominantPathCount} of the last {recentDecisions.Count} decisions.",
             "A single dominant route can usually be tuned more safely with a targeted rule or allowlist than with a stack-wide threshold change.",
-            "No targeted path rule recorded",
+            "Not evaluated",
             $"Review a dedicated rule or allowlist policy for {dominantPath.Key}",
             [
                 $"Dominant path sample: {dominantPath.Key}",
-                $"Recent decision share: {(dominantPath.Count() / (double)recentDecisions.Count):P0}"
+                $"Recent decision share: {(dominantPathCount / (double)recentDecisions.Count):P0}"
             ]));
     }
 

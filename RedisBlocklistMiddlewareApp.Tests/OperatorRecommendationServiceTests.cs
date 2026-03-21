@@ -61,7 +61,8 @@ public sealed class OperatorRecommendationServiceTests
 
         Assert.Contains(snapshot.Recommendations, item => item.Id == "lower-block-threshold");
         Assert.Contains(snapshot.Recommendations, item => item.Id == "lower-frequency-threshold");
-        Assert.Contains(snapshot.Recommendations, item => item.Id == "review-hot-path");
+        var hotPathRecommendation = Assert.Single(snapshot.Recommendations, item => item.Id == "review-hot-path");
+        Assert.Equal("Not evaluated", hotPathRecommendation.CurrentValue);
     }
 
     private static OperatorRecommendationService CreateService(
