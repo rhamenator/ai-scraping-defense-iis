@@ -8,6 +8,7 @@ namespace RedisBlocklistMiddlewareApp.Services;
 public sealed class ThreatAssessmentService : IThreatAssessmentService
 {
     private readonly IRequestFrequencyTracker _frequencyTracker;
+    private readonly IReadOnlyList<IThreatScoreContributor> _scoreContributors;
     private readonly IReadOnlyList<IThreatReputationProvider> _reputationProviders;
     private readonly IReadOnlyList<IThreatModelAdapter> _modelAdapters;
     private readonly IThreatModelRoutingStrategy _routingStrategy;
@@ -17,6 +18,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
 
     public ThreatAssessmentService(
         IRequestFrequencyTracker frequencyTracker,
+        IEnumerable<IThreatScoreContributor> scoreContributors,
         IEnumerable<IThreatReputationProvider> reputationProviders,
         IEnumerable<IThreatModelAdapter> modelAdapters,
         IThreatModelRoutingStrategy routingStrategy,
@@ -25,6 +27,10 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         ILogger<ThreatAssessmentService> logger)
     {
         _frequencyTracker = frequencyTracker;
+        _scoreContributors = scoreContributors
+            .OrderBy(contributor => contributor.Order)
+            .ThenBy(contributor => contributor.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         _reputationProviders = reputationProviders.ToArray();
         _modelAdapters = modelAdapters.ToArray();
         _routingStrategy = routingStrategy;
@@ -50,8 +56,71 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             _telemetry.RecordAssessmentStage("frequency", "measured");
         }
 
-        var baseSignalScore = ScoreSignals(request.Signals);
-        var frequencyScore = (int)Math.Min(25, frequency * 5);
+        var combinedSignals = new List<string>(request.Signals);
+        var contributions = new List<DefenseScoreContribution>();
+        var explicitMaliciousVerdict = false;
+        var totalScore = 0;
+        var baseSignalScore = 0;
+        var frequencyScore = 0;
+        var adapterVerdicts = new List<DefenseAdapterVerdict>();
+
+        foreach (var contributor in _scoreContributors)
+        {
+            using var contributorActivity = _telemetry.StartActivityScope("assessment.score_contributor") as Activity;
+            contributorActivity?.SetTag("contributor.type", "score");
+            contributorActivity?.SetTag("contributor.name", contributor.Name);
+            contributorActivity?.SetTag("contributor.order", contributor.Order);
+
+            try
+            {
+                var contribution = await contributor.ContributeAsync(
+                    new ThreatScoreContributorContext(
+                        request,
+                        frequency,
+                        combinedSignals.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                        contributions.ToArray(),
+                        totalScore),
+                    cancellationToken);
+                if (contribution is null)
+                {
+                    _telemetry.RecordContributorExecution("score", contributor.Name, "skipped");
+                    continue;
+                }
+
+                totalScore += contribution.ScoreAdjustment;
+                explicitMaliciousVerdict |= contribution.ExplicitMaliciousVerdict;
+                baseSignalScore += contribution.Kind == ThreatScoreContributionKind.BaseSignal
+                    ? contribution.ScoreAdjustment
+                    : 0;
+                frequencyScore += contribution.Kind == ThreatScoreContributionKind.Frequency
+                    ? contribution.ScoreAdjustment
+                    : 0;
+                AppendContribution(
+                    contributions,
+                    combinedSignals,
+                    contribution.Source,
+                    contribution.ScoreAdjustment,
+                    contribution.Signals,
+                    contribution.Summary);
+                contributorActivity?.SetTag("contributor.result", "applied");
+                contributorActivity?.SetTag("contributor.source", contribution.Source);
+                contributorActivity?.SetTag("contributor.score_delta", contribution.ScoreAdjustment);
+                contributorActivity?.SetTag("contributor.kind", contribution.Kind.ToString());
+                _telemetry.RecordContributorExecution("score", contributor.Name, "applied");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                contributorActivity?.SetTag("contributor.result", "failed");
+                contributorActivity?.SetTag("contributor.failure", ex.GetType().Name);
+                _telemetry.RecordContributorExecution("score", contributor.Name, "failed");
+                _logger.LogWarning(ex, "Threat score contributor {ContributorName} failed.", contributor.Name);
+            }
+        }
+
         assessmentActivity?.SetTag("assessment.base_signal_score", baseSignalScore);
         assessmentActivity?.SetTag("assessment.frequency_score", frequencyScore);
         var context = new ThreatAssessmentContext(
@@ -64,30 +133,6 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             frequency,
             baseSignalScore,
             frequencyScore);
-
-        var combinedSignals = new List<string>(request.Signals);
-        var contributions = new List<DefenseScoreContribution>();
-        if (baseSignalScore > 0)
-        {
-            contributions.Add(new DefenseScoreContribution(
-                "edge_signals",
-                baseSignalScore,
-                request.Signals,
-                "Base edge heuristics contributed to the escalation score."));
-        }
-
-        if (frequencyScore > 0)
-        {
-            contributions.Add(new DefenseScoreContribution(
-                "frequency",
-                frequencyScore,
-                ["frequency_window"],
-                "Short-window suspicious request frequency increased the escalation score."));
-        }
-
-        var explicitMaliciousVerdict = false;
-        var totalScore = baseSignalScore + frequencyScore;
-        var adapterVerdicts = new List<DefenseAdapterVerdict>();
 
         foreach (var provider in _reputationProviders)
         {
@@ -182,10 +227,16 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         ContainmentDecision containment;
         using (var containmentActivity = _telemetry.StartActivityScope("assessment.containment") as Activity)
         {
-            containment = _containmentPolicyEngine.Evaluate(context, totalScore, explicitMaliciousVerdict);
+            containment = _containmentPolicyEngine.Evaluate(new ThreatContainmentContributorContext(
+                context,
+                totalScore,
+                explicitMaliciousVerdict,
+                combinedSignals.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                contributions.ToArray()));
             containmentActivity?.SetTag("containment.action", containment.Action);
             containmentActivity?.SetTag("containment.reason", containment.Reason);
             containmentActivity?.SetTag("containment.should_block", containment.ShouldBlock);
+            containmentActivity?.SetTag("containment.contributor", containment.Contributor);
             _telemetry.RecordAssessmentStage("containment", containment.Action);
         }
 
@@ -198,13 +249,15 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         var containmentDetails = new DefenseContainmentDetails(
             containment.Action,
             containment.Reason,
-            containment.ShouldBlock);
+            containment.ShouldBlock,
+            containment.Contributor);
         _telemetry.RecordRoutingDecision(routingDetails.PrimaryRoute, routingDetails.EffectiveRoute, routingDetails.FallbackEnabled);
 
         var summary = BuildSummary(containment.Action, totalScore, frequency, explicitMaliciousVerdict, contributions);
         assessmentActivity?.SetTag("assessment.total_score", totalScore);
         assessmentActivity?.SetTag("assessment.action", containment.Action);
         assessmentActivity?.SetTag("assessment.reason", containment.Reason);
+        assessmentActivity?.SetTag("assessment.containment_contributor", containment.Contributor);
         assessmentActivity?.SetTag("assessment.effective_route", routingDetails.EffectiveRoute);
 
         _logger.LogInformation(
@@ -232,41 +285,6 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                 adapterVerdicts,
                 routingDetails,
                 containmentDetails));
-    }
-
-    private static int ScoreSignals(IReadOnlyList<string> signals)
-    {
-        var score = 0;
-
-        foreach (var signal in signals)
-        {
-            if (signal.StartsWith("known_bad_user_agent:", StringComparison.Ordinal))
-            {
-                score += 100;
-            }
-            else if (signal.StartsWith("suspicious_path:", StringComparison.Ordinal))
-            {
-                score += 30;
-            }
-            else if (string.Equals(signal, "empty_user_agent", StringComparison.Ordinal))
-            {
-                score += 25;
-            }
-            else if (string.Equals(signal, "missing_accept_language", StringComparison.Ordinal))
-            {
-                score += 15;
-            }
-            else if (string.Equals(signal, "generic_accept_any", StringComparison.Ordinal))
-            {
-                score += 15;
-            }
-            else if (string.Equals(signal, "long_query_string", StringComparison.Ordinal))
-            {
-                score += 10;
-            }
-        }
-
-        return score;
     }
 
     private static void AppendContribution(

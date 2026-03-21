@@ -59,6 +59,7 @@ public sealed class ThreatAssessmentServiceTests
         Assert.Equal(15, result.Breakdown.FrequencyScore);
         Assert.Equal("observed", result.Breakdown.Containment!.Action);
         Assert.Equal("queued_analysis_observed", result.Breakdown.Containment.Reason);
+        Assert.Equal("score_thresholds", result.Breakdown.Containment.Contributor);
         Assert.Equal(ThreatModelRoutes.Remote, result.Breakdown.Routing!.PrimaryRoute);
         Assert.Equal(ThreatModelRoutes.Remote, result.Breakdown.Routing.EffectiveRoute);
         Assert.Contains(result.Breakdown.ContributorNames, contributor => contributor == "openai_compatible_model");
@@ -105,6 +106,7 @@ public sealed class ThreatAssessmentServiceTests
         Assert.True(result.ShouldBlock);
         Assert.Equal(ContainmentActions.Blocked, result.Action);
         Assert.Equal("threat_intelligence_verdict", result.DecisionReason);
+        Assert.Equal("explicit_verdict", result.Breakdown.Containment!.Contributor);
         Assert.True(result.Breakdown.ExplicitMaliciousVerdict);
         Assert.Contains("model_verdict:malicious_bot", result.Signals);
     }
@@ -134,6 +136,7 @@ public sealed class ThreatAssessmentServiceTests
         Assert.True(result.ShouldBlock);
         Assert.Equal(ContainmentActions.Blocked, result.Action);
         Assert.Equal("frequency_threshold", result.DecisionReason);
+        Assert.Equal("frequency_threshold", result.Breakdown.Containment!.Contributor);
         Assert.Equal(35, result.Score);
     }
 
@@ -275,6 +278,55 @@ public sealed class ThreatAssessmentServiceTests
     }
 
     [Fact]
+    public async Task AssessAsync_AppliesCustomScoreContributorsInOrderAndContinuesAfterFailures()
+    {
+        var executionOrder = new List<string>();
+        var service = CreateService(
+            frequency: 1,
+            reputationProviders: [],
+            modelAdapters: [],
+            scoreContributors:
+            [
+                new NamedScoreContributor(
+                    "custom_first",
+                    150,
+                    executionOrder,
+                    new ThreatScoreContributorResult(
+                        "custom_first",
+                        7,
+                        ["custom:first"],
+                        "First custom contributor.")),
+                new ThrowingScoreContributor("custom_failure", 160, executionOrder),
+                new NamedScoreContributor(
+                    "custom_second",
+                    170,
+                    executionOrder,
+                    new ThreatScoreContributorResult(
+                        "custom_second",
+                        3,
+                        ["custom:second"],
+                        "Second custom contributor."))
+            ]);
+
+        var result = await service.AssessAsync(new SuspiciousRequest(
+            "198.51.100.41",
+            "GET",
+            "/contributors",
+            string.Empty,
+            "crawler",
+            [],
+            DateTimeOffset.UtcNow), CancellationToken.None);
+
+        Assert.Equal(["custom_first", "custom_failure", "custom_second"], executionOrder);
+        Assert.Equal(10, result.Score);
+        Assert.Contains(result.Breakdown.Contributions, contribution => contribution.Source == "custom_first");
+        Assert.Contains(result.Breakdown.Contributions, contribution => contribution.Source == "custom_second");
+        Assert.DoesNotContain(result.Breakdown.Contributions, contribution => contribution.Source == "custom_failure");
+        Assert.Contains("custom:first", result.Signals);
+        Assert.Contains("custom:second", result.Signals);
+    }
+
+    [Fact]
     public async Task AssessAsync_EmitsAssessmentStageActivities()
     {
         var recordedActivities = new List<string>();
@@ -330,18 +382,32 @@ public sealed class ThreatAssessmentServiceTests
         long frequency,
         IEnumerable<IThreatReputationProvider> reputationProviders,
         IEnumerable<IThreatModelAdapter> modelAdapters,
+        IEnumerable<IThreatScoreContributor>? scoreContributors = null,
         Action<DefenseEngineOptions>? configure = null)
     {
         var options = new DefenseEngineOptions();
         configure?.Invoke(options);
+        var telemetry = TestTelemetryFactory.Create();
 
         return new ThreatAssessmentService(
             new TestRequestFrequencyTracker(frequency),
+            scoreContributors ??
+            [
+                new EdgeSignalScoreContributor(),
+                new FrequencyScoreContributor()
+            ],
             reputationProviders,
             modelAdapters,
             new ThreatModelRoutingStrategy(Options.Create(options)),
-            new ContainmentPolicyEngine(Options.Create(options)),
-                TestTelemetryFactory.Create(),
+            new ContainmentPolicyEngine(
+                [
+                    new ExplicitVerdictContainmentContributor(),
+                    new FrequencyContainmentContributor(Options.Create(options)),
+                    new ThresholdBandContainmentContributor(Options.Create(options))
+                ],
+                telemetry,
+                NullLogger<ContainmentPolicyEngine>.Instance),
+            telemetry,
             NullLogger<ThreatAssessmentService>.Instance);
     }
 
@@ -402,6 +468,60 @@ public sealed class ThreatAssessmentServiceTests
         {
             CallCount++;
             return Task.FromResult(_assessment);
+        }
+    }
+
+    private sealed class NamedScoreContributor : IThreatScoreContributor
+    {
+        private readonly IList<string> _executionOrder;
+        private readonly ThreatScoreContributorResult? _result;
+
+        public NamedScoreContributor(
+            string name,
+            int order,
+            IList<string> executionOrder,
+            ThreatScoreContributorResult? result)
+        {
+            Name = name;
+            Order = order;
+            _executionOrder = executionOrder;
+            _result = result;
+        }
+
+        public string Name { get; }
+
+        public int Order { get; }
+
+        public Task<ThreatScoreContributorResult?> ContributeAsync(
+            ThreatScoreContributorContext context,
+            CancellationToken cancellationToken)
+        {
+            _executionOrder.Add(Name);
+            return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class ThrowingScoreContributor : IThreatScoreContributor
+    {
+        private readonly IList<string> _executionOrder;
+
+        public ThrowingScoreContributor(string name, int order, IList<string> executionOrder)
+        {
+            Name = name;
+            Order = order;
+            _executionOrder = executionOrder;
+        }
+
+        public string Name { get; }
+
+        public int Order { get; }
+
+        public Task<ThreatScoreContributorResult?> ContributeAsync(
+            ThreatScoreContributorContext context,
+            CancellationToken cancellationToken)
+        {
+            _executionOrder.Add(Name);
+            throw new InvalidOperationException("Contributor failure.");
         }
     }
 }

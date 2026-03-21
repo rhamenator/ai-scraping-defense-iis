@@ -618,7 +618,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         const routing = event.breakdown?.routing;
         const containment = event.breakdown?.containment;
         const explainability = [
-          containment ? '<div><strong>Containment</strong> <span class="mono">' + escapeHtml(containment.action + ' / ' + containment.reason) + '</span></div>' : '',
+          containment ? '<div><strong>Containment</strong> <span class="mono">' + escapeHtml(containment.action + ' / ' + containment.reason + ' / ' + (containment.contributor || 'unknown')) + '</span></div>' : '',
           routing ? '<div><strong>Routing</strong> <span class="mono">' + escapeHtml(routing.primaryRoute + ' → ' + routing.effectiveRoute) + '</span></div>' : '',
           contributorHtml ? '<div><strong>Contributors</strong><div>' + contributorHtml + '</div></div>' : '',
           adapterHtml ? '<div><strong>Adapter verdicts</strong><div>' + adapterHtml + '</div></div>' : ''

@@ -66,7 +66,8 @@ public sealed record DefenseRoutingDetails(
 public sealed record DefenseContainmentDetails(
     string Action,
     string Reason,
-    bool ShouldBlock);
+    bool ShouldBlock,
+    string Contributor);
 
 public sealed record DefenseEventMetrics(
     long TotalDecisions,

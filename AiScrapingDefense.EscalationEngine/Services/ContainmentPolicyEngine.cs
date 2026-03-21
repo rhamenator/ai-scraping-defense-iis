@@ -1,73 +1,59 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using RedisBlocklistMiddlewareApp.Configuration;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class ContainmentPolicyEngine : IContainmentPolicyEngine
 {
-    private readonly ContainmentPolicyOptions _options;
+    private readonly IReadOnlyList<IContainmentDecisionContributor> _contributors;
+    private readonly IAssessmentTelemetry _telemetry;
+    private readonly ILogger<ContainmentPolicyEngine> _logger;
 
-    public ContainmentPolicyEngine(IOptions<DefenseEngineOptions> options)
+    public ContainmentPolicyEngine(
+        IEnumerable<IContainmentDecisionContributor> contributors,
+        IAssessmentTelemetry telemetry,
+        ILogger<ContainmentPolicyEngine> logger)
     {
-        _options = options.Value.Escalation.Containment;
+        _contributors = contributors
+            .OrderBy(contributor => contributor.Order)
+            .ThenBy(contributor => contributor.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        _telemetry = telemetry;
+        _logger = logger;
     }
 
-    public ContainmentDecision Evaluate(
-        ThreatAssessmentContext context,
-        int totalScore,
-        bool explicitMaliciousVerdict)
+    public ContainmentDecision Evaluate(ThreatContainmentContributorContext context)
     {
-        if (explicitMaliciousVerdict)
+        foreach (var contributor in _contributors)
         {
-            return new ContainmentDecision(
-                ContainmentActions.Blocked,
-                "threat_intelligence_verdict",
-                ShouldBlock: true);
-        }
+            try
+            {
+                var hint = contributor.EvaluateAsync(context, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+                if (hint is null)
+                {
+                    _telemetry.RecordContributorExecution("containment", contributor.Name, "skipped");
+                    continue;
+                }
 
-        if (context.Frequency >= _options.FrequencyBlockThreshold)
-        {
-            return new ContainmentDecision(
-                ContainmentActions.Blocked,
-                "frequency_threshold",
-                ShouldBlock: true);
-        }
-
-        if (totalScore >= _options.BlockScoreThreshold)
-        {
-            return new ContainmentDecision(
-                ContainmentActions.Blocked,
-                "queued_analysis_threshold",
-                ShouldBlock: true);
-        }
-
-        if (totalScore >= _options.ThrottleScoreThreshold)
-        {
-            return new ContainmentDecision(
-                ContainmentActions.Throttled,
-                "score_policy_throttle",
-                ShouldBlock: false);
-        }
-
-        if (totalScore >= _options.TarpitScoreThreshold)
-        {
-            return new ContainmentDecision(
-                ContainmentActions.Tarpitted,
-                "score_policy_tarpit",
-                ShouldBlock: false);
-        }
-
-        if (totalScore >= _options.ChallengeScoreThreshold)
-        {
-            return new ContainmentDecision(
-                ContainmentActions.Challenged,
-                "score_policy_challenge",
-                ShouldBlock: false);
+                _telemetry.RecordContributorExecution("containment", contributor.Name, "applied");
+                return new ContainmentDecision(
+                    hint.Action,
+                    hint.Reason,
+                    hint.ShouldBlock,
+                    hint.Contributor);
+            }
+            catch (Exception ex)
+            {
+                _telemetry.RecordContributorExecution("containment", contributor.Name, "failed");
+                _logger.LogWarning(ex, "Containment contributor {ContributorName} failed.", contributor.Name);
+            }
         }
 
         return new ContainmentDecision(
             ContainmentActions.Observed,
             "queued_analysis_observed",
-            ShouldBlock: false);
+            ShouldBlock: false,
+            Contributor: "fallback");
     }
 }

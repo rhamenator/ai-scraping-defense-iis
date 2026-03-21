@@ -16,7 +16,29 @@ public interface IThreatModelRoutingStrategy
 
 public interface IContainmentPolicyEngine
 {
-    ContainmentDecision Evaluate(ThreatAssessmentContext context, int totalScore, bool explicitMaliciousVerdict);
+    ContainmentDecision Evaluate(ThreatContainmentContributorContext context);
+}
+
+public interface IThreatScoreContributor
+{
+    string Name { get; }
+
+    int Order { get; }
+
+    Task<ThreatScoreContributorResult?> ContributeAsync(
+        ThreatScoreContributorContext context,
+        CancellationToken cancellationToken);
+}
+
+public interface IContainmentDecisionContributor
+{
+    string Name { get; }
+
+    int Order { get; }
+
+    ValueTask<ContainmentDecisionHint?> EvaluateAsync(
+        ThreatContainmentContributorContext context,
+        CancellationToken cancellationToken);
 }
 
 public interface IAssessmentTelemetry
@@ -25,8 +47,32 @@ public interface IAssessmentTelemetry
 
     void RecordAssessmentStage(string stage, string result);
 
+    void RecordContributorExecution(string contributorType, string contributorName, string result);
+
     void RecordRoutingDecision(string primaryRoute, string effectiveRoute, bool fallbackEnabled);
 }
+
+public enum ThreatScoreContributionKind
+{
+    Custom = 0,
+    BaseSignal = 1,
+    Frequency = 2
+}
+
+public sealed record ThreatScoreContributorContext(
+    SuspiciousRequest Request,
+    long Frequency,
+    IReadOnlyList<string> CurrentSignals,
+    IReadOnlyList<DefenseScoreContribution> Contributions,
+    int CurrentScore);
+
+public sealed record ThreatScoreContributorResult(
+    string Source,
+    int ScoreAdjustment,
+    IReadOnlyList<string> Signals,
+    string Summary,
+    ThreatScoreContributionKind Kind = ThreatScoreContributionKind.Custom,
+    bool ExplicitMaliciousVerdict = false);
 
 public sealed record ThreatAssessmentContext(
     string IpAddress,
@@ -59,10 +105,24 @@ public sealed record ThreatModelRoutingPlan(
     bool FallbackEnabled,
     IReadOnlyList<IThreatModelAdapter> OrderedAdapters);
 
-public sealed record ContainmentDecision(
+public sealed record ThreatContainmentContributorContext(
+    ThreatAssessmentContext AssessmentContext,
+    int TotalScore,
+    bool ExplicitMaliciousVerdict,
+    IReadOnlyList<string> Signals,
+    IReadOnlyList<DefenseScoreContribution> Contributions);
+
+public sealed record ContainmentDecisionHint(
+    string Contributor,
     string Action,
     string Reason,
     bool ShouldBlock);
+
+public sealed record ContainmentDecision(
+    string Action,
+    string Reason,
+    bool ShouldBlock,
+    string Contributor);
 
 public sealed record ThreatAssessmentResult(
     string Action,

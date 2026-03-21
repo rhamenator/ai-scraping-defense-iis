@@ -89,6 +89,7 @@ public sealed class DefenseEventStoreTests
         Assert.Equal(10, breakdown!.TotalScore);
         Assert.Equal("blocked", breakdown.Containment!.Action);
         Assert.Equal("queued_analysis_threshold", breakdown.Containment.Reason);
+        Assert.Equal("score_thresholds", breakdown.Containment.Contributor);
         Assert.Equal("Remote", breakdown.Routing!.EffectiveRoute);
         Assert.Contains(breakdown.AdapterVerdicts!, verdict => verdict.Classification == "MALICIOUS_BOT");
         Assert.Contains(breakdown.ContributorNames, contributor => contributor == "test");
@@ -140,7 +141,8 @@ public sealed class DefenseEventStoreTests
                 new DefenseContainmentDetails(
                     ContainmentActions.Blocked,
                     "queued_analysis_threshold",
-                    true)));
+                    true,
+                    "score_thresholds")));
     }
 
     private sealed class SqliteStoreHarness : IDisposable
