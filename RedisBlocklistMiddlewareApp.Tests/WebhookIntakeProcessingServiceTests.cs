@@ -1,5 +1,7 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
 
@@ -78,6 +80,70 @@ public sealed class WebhookIntakeProcessingServiceTests
         Assert.Equal(2, deliveryStore.Records.Count);
         Assert.Contains(deliveryStore.Records, record => record.DeliveryType == IntakeDeliveryTypes.Alert);
         Assert.Contains(deliveryStore.Records, record => record.DeliveryType == IntakeDeliveryTypes.CommunityReport);
+    }
+
+    [Fact]
+    public async Task ProcessingService_CompletesWebhookItem_WhenSmtpDeliveryTimesOut()
+    {
+        var inbox = new TestWebhookEventInbox();
+        var blocklist = new TestBlocklistService();
+        var eventStore = new TestDefenseEventStore();
+        var dispatcher = new IntakeAlertDispatcher(
+            Options.Create(new DefenseEngineOptions
+            {
+                Intake = new IntakeOptions
+                {
+                    Alerting = new IntakeAlertingOptions
+                    {
+                        Smtp = new SmtpAlertOptions
+                        {
+                            Enabled = true,
+                            TimeoutSeconds = 1,
+                            Host = "smtp.example.test",
+                            Port = 2525,
+                            From = "defense@example.test",
+                            To = ["ops@example.test"]
+                        }
+                    }
+                }
+            }),
+            new NoOpHttpClientFactory(),
+            new DelayingSmtpAlertSender());
+        var communityReporter = new TestCommunityReporter(null);
+        var deliveryStore = new TestIntakeDeliveryStore();
+        var service = new WebhookIntakeProcessingService(
+            inbox,
+            blocklist,
+            eventStore,
+            dispatcher,
+            communityReporter,
+            deliveryStore,
+            TestTelemetryFactory.Create(),
+            NullLogger<WebhookIntakeProcessingService>.Instance);
+
+        await inbox.EnqueueAsync(new WebhookInboxItem(
+            8,
+            new IntakeWebhookEvent(
+                "suspicious_activity_detected",
+                "Timed SMTP path",
+                DateTimeOffset.UtcNow,
+                new IntakeWebhookDetails(
+                    "198.51.100.21",
+                    "GET",
+                    "/upstream",
+                    string.Empty,
+                    "test-agent",
+                    ["upstream_signal"]))), CancellationToken.None);
+
+        await service.StartAsync(CancellationToken.None);
+        var completedTask = inbox.WaitForCompletionAsync();
+        var winner = await Task.WhenAny(completedTask, Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Same(completedTask, winner);
+        var smtpDelivery = Assert.Single(deliveryStore.Records, record => record.Channel == IntakeDeliveryChannels.Smtp);
+        Assert.Equal(IntakeDeliveryStatuses.Failed, smtpDelivery.Status);
+        Assert.Contains("timed out", smtpDelivery.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class TestWebhookEventInbox : IWebhookEventInbox
@@ -258,6 +324,32 @@ public sealed class WebhookIntakeProcessingServiceTests
                 Records.OrderByDescending(record => record.AttemptedAtUtc)
                     .Select(record => (DateTimeOffset?)record.AttemptedAtUtc)
                     .FirstOrDefault());
+        }
+    }
+
+    private sealed class NoOpHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name)
+        {
+            return new HttpClient(new HttpClientHandler(), disposeHandler: true);
+        }
+    }
+
+    private sealed class DelayingSmtpAlertSender : ISmtpAlertSender
+    {
+        public async Task SendAsync(
+            string host,
+            int port,
+            string username,
+            string password,
+            bool useTls,
+            string from,
+            IReadOnlyList<string> to,
+            string subject,
+            string body,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
     }
 }

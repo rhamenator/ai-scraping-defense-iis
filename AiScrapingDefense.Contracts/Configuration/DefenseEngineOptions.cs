@@ -420,6 +420,8 @@ public sealed class SmtpAlertOptions
 {
     public bool Enabled { get; set; }
 
+    public int TimeoutSeconds { get; set; } = 10;
+
     public string Host { get; set; } = string.Empty;
 
     public int Port { get; set; } = 587;
