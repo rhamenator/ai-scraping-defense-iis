@@ -30,6 +30,8 @@ public sealed class LocalTrainedModelAdapter : IThreatModelAdapter
 
     public string Name => "local_trained_model";
 
+    public string Route => ThreatModelRoutes.Local;
+
     public Task<ModelAssessment?> AssessAsync(
         ThreatAssessmentContext context,
         CancellationToken cancellationToken)

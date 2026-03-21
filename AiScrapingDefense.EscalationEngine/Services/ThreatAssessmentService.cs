@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
@@ -10,20 +9,23 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
     private readonly IRequestFrequencyTracker _frequencyTracker;
     private readonly IReadOnlyList<IThreatReputationProvider> _reputationProviders;
     private readonly IReadOnlyList<IThreatModelAdapter> _modelAdapters;
-    private readonly HeuristicOptions _heuristics;
+    private readonly IThreatModelRoutingStrategy _routingStrategy;
+    private readonly IContainmentPolicyEngine _containmentPolicyEngine;
     private readonly ILogger<ThreatAssessmentService> _logger;
 
     public ThreatAssessmentService(
         IRequestFrequencyTracker frequencyTracker,
         IEnumerable<IThreatReputationProvider> reputationProviders,
         IEnumerable<IThreatModelAdapter> modelAdapters,
-        IOptions<DefenseEngineOptions> options,
+        IThreatModelRoutingStrategy routingStrategy,
+        IContainmentPolicyEngine containmentPolicyEngine,
         ILogger<ThreatAssessmentService> logger)
     {
         _frequencyTracker = frequencyTracker;
         _reputationProviders = reputationProviders.ToArray();
         _modelAdapters = modelAdapters.ToArray();
-        _heuristics = options.Value.Heuristics;
+        _routingStrategy = routingStrategy;
+        _containmentPolicyEngine = containmentPolicyEngine;
         _logger = logger;
     }
 
@@ -81,7 +83,24 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
         }
 
-        foreach (var adapter in _modelAdapters)
+        var routingPlan = _routingStrategy.BuildPlan(context, _modelAdapters);
+        var routedModelSignals = new List<string>
+        {
+            $"model_route:primary:{routingPlan.PrimaryRoute.ToLowerInvariant()}"
+        };
+        if (routingPlan.FallbackEnabled)
+        {
+            routedModelSignals.Add("model_route:fallback_enabled");
+        }
+        AppendContribution(
+            contributions,
+            combinedSignals,
+            "model_routing",
+            0,
+            routedModelSignals,
+            $"Model routing selected the {routingPlan.PrimaryRoute.ToLowerInvariant()} classifier route.");
+
+        foreach (var adapter in routingPlan.OrderedAdapters)
         {
             var assessment = await adapter.AssessAsync(context, cancellationToken);
             if (assessment is null)
@@ -92,31 +111,29 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             totalScore += assessment.ScoreAdjustment;
             explicitMaliciousVerdict |= assessment.IsBot == true;
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
+
+            if (assessment.IsBot is not null)
+            {
+                break;
+            }
         }
 
         totalScore = Math.Max(0, totalScore);
-        var shouldBlock =
-            explicitMaliciousVerdict ||
-            totalScore >= _heuristics.BlockScoreThreshold ||
-            frequency >= _heuristics.FrequencyBlockThreshold;
-        var blockReason = explicitMaliciousVerdict
-            ? "threat_intelligence_verdict"
-            : frequency >= _heuristics.FrequencyBlockThreshold
-                ? "frequency_threshold"
-                : "queued_analysis_threshold";
-        var summary = BuildSummary(shouldBlock, totalScore, frequency, explicitMaliciousVerdict, contributions);
+        var containment = _containmentPolicyEngine.Evaluate(context, totalScore, explicitMaliciousVerdict);
+        var summary = BuildSummary(containment.Action, totalScore, frequency, explicitMaliciousVerdict, contributions);
 
         _logger.LogInformation(
-            "Threat assessment completed for {IpAddress} with score {Score}, frequency {Frequency}, explicit malicious verdict {ExplicitVerdict}, block {ShouldBlock}.",
+            "Threat assessment completed for {IpAddress} with score {Score}, frequency {Frequency}, explicit malicious verdict {ExplicitVerdict}, action {Action}.",
             request.IpAddress,
             totalScore,
             frequency,
             explicitMaliciousVerdict,
-            shouldBlock);
+            containment.Action);
 
         return new ThreatAssessmentResult(
-            shouldBlock,
-            blockReason,
+            containment.Action,
+            containment.ShouldBlock,
+            containment.Reason,
             summary,
             totalScore,
             frequency,
@@ -190,7 +207,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
     }
 
     private static string BuildSummary(
-        bool shouldBlock,
+        string action,
         int totalScore,
         long frequency,
         bool explicitMaliciousVerdict,
@@ -203,7 +220,6 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var action = shouldBlock ? "blocked" : "observed";
         var verdictText = explicitMaliciousVerdict ? " explicit malicious verdict;" : string.Empty;
         var sourceText = dominantSources.Length == 0
             ? " no named contributors."
