@@ -78,6 +78,13 @@ public sealed class DefenseTelemetry : IAssessmentTelemetry
         {
             LabelNames = ["primary_route", "effective_route", "fallback_enabled"]
         });
+    private static readonly Counter ContributorExecutions = Metrics.CreateCounter(
+        "ai_scraping_defense_contributor_execution_total",
+        "Threat-score and containment contributor execution outcomes.",
+        new CounterConfiguration
+        {
+            LabelNames = ["type", "name", "result"]
+        });
 
     private readonly ObservabilityOptions _options;
 
@@ -171,6 +178,14 @@ public sealed class DefenseTelemetry : IAssessmentTelemetry
     public void RecordAssessmentStage(string stage, string result)
     {
         AssessmentStages.WithLabels(SanitizeLabel(stage), SanitizeLabel(result)).Inc();
+    }
+
+    public void RecordContributorExecution(string contributorType, string contributorName, string result)
+    {
+        ContributorExecutions.WithLabels(
+            SanitizeLabel(contributorType),
+            SanitizeLabel(contributorName),
+            SanitizeLabel(result)).Inc();
     }
 
     public void RecordRoutingDecision(string primaryRoute, string effectiveRoute, bool fallbackEnabled)
