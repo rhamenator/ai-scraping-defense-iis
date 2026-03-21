@@ -41,8 +41,31 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 "DefenseEngine:Networking:TrustedProxies must be empty when ClientIpResolutionMode is 'Direct'.");
         }
 
+        if (IsEmptyEquivalentRoute(options.Tarpit.PathPrefix))
+        {
+            errors.Add(
+                "DefenseEngine:Tarpit:PathPrefix must not resolve to the root path '/'.");
+        }
+
+        if (options.Observability.EnablePrometheusEndpoint &&
+            IsEmptyEquivalentRoute(options.Observability.PrometheusEndpointPath))
+        {
+            errors.Add(
+                "DefenseEngine:Observability:PrometheusEndpointPath must not resolve to the root path '/'.");
+        }
+
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);
+    }
+
+    private static bool IsEmptyEquivalentRoute(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return true;
+        }
+
+        return path.Trim().Trim('/').Length == 0;
     }
 }

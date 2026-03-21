@@ -36,12 +36,9 @@ builder.Services
             options.Redis.ConnectionString = redisConnectionString;
         }
 
-        if (!options.Tarpit.PathPrefix.StartsWith('/'))
-        {
-            options.Tarpit.PathPrefix = "/" + options.Tarpit.PathPrefix;
-        }
-
-        options.Tarpit.PathPrefix = options.Tarpit.PathPrefix.TrimEnd('/');
+        options.Tarpit.PathPrefix = NormalizeRoutePrefix(
+            options.Tarpit.PathPrefix,
+            "/anti-scrape-tarpit");
         options.Tarpit.ArchiveDirectory = string.IsNullOrWhiteSpace(options.Tarpit.ArchiveDirectory)
             ? "data/tarpit-archives"
             : options.Tarpit.ArchiveDirectory.Trim();
@@ -719,8 +716,24 @@ public partial class Program
 
     private static string NormalizeObservabilityPath(string path)
     {
-        return path.StartsWith("/", StringComparison.Ordinal)
-            ? path.TrimEnd('/')
-            : "/" + path.Trim().TrimEnd('/');
+        return NormalizeRoutePrefix(
+            path,
+            "/metrics");
+    }
+
+    private static string NormalizeRoutePrefix(string path, string fallback)
+    {
+        var candidate = string.IsNullOrWhiteSpace(path)
+            ? fallback
+            : path.Trim();
+
+        if (!candidate.StartsWith("/", StringComparison.Ordinal))
+        {
+            candidate = "/" + candidate;
+        }
+
+        return candidate.Length > 1
+            ? candidate.TrimEnd('/')
+            : "/";
     }
 }

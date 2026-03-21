@@ -121,6 +121,43 @@ public sealed class NetworkingConfigurationTests
     }
 
     [Fact]
+    public void Validator_RejectsRootTarpitPathPrefix()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var options = new DefenseEngineOptions
+        {
+            Tarpit = new TarpitOptions
+            {
+                PathPrefix = "/"
+            }
+        };
+
+        var result = validator.Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains("Tarpit:PathPrefix", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validator_RejectsRootPrometheusEndpointPath_WhenMetricsAreEnabled()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var options = new DefenseEngineOptions
+        {
+            Observability = new ObservabilityOptions
+            {
+                EnablePrometheusEndpoint = true,
+                PrometheusEndpointPath = "/"
+            }
+        };
+
+        var result = validator.Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains("PrometheusEndpointPath", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ForwardedHeadersSetup_DisablesForwardingInDirectMode()
     {
         var setup = CreateSetup(new DefenseEngineOptions
@@ -154,7 +191,9 @@ public sealed class NetworkingConfigurationTests
 
         setup.Configure(options);
 
-        Assert.Equal(ForwardedHeaders.XForwardedFor, options.ForwardedHeaders);
+        Assert.Equal(
+            ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+            options.ForwardedHeaders);
         Assert.Contains(IPAddress.Parse("203.0.113.10"), options.KnownProxies);
         Assert.Contains(IPAddress.Parse("2001:db8::10"), options.KnownProxies);
     }

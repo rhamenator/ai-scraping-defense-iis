@@ -28,7 +28,7 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
             return;
         }
 
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
         foreach (var trustedProxyAddress in _options.Networking.TrustedProxies)
         {
