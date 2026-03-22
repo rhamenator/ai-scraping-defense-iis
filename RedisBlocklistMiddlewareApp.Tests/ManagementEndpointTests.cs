@@ -289,6 +289,57 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void IsMacOsPackagedInstall_ReturnsTrue_ForInstalledMacOsRuntimeRoot()
+    {
+        var packagedInstall = Program.IsMacOsPackagedInstall(
+            "/usr/local/lib/ai-scraping-defense/osx-arm64",
+            isMacOs: true);
+
+        Assert.True(packagedInstall);
+    }
+
+    [Fact]
+    public void ResolveWritableStatePath_UsesWritableMacOsLocation_ForPackagedDefaults()
+    {
+        var resolvedPath = Program.ResolveWritableStatePath(
+            "data/defense-events.db",
+            "data/defense-events.db",
+            "/usr/local/lib/ai-scraping-defense/osx-arm64",
+            "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
+            isMacOs: true);
+
+        Assert.Equal(
+            "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
+            resolvedPath);
+    }
+
+    [Fact]
+    public void ResolveWritableStatePath_PreservesCustomRelativePath_ForPackagedMacOsInstall()
+    {
+        var resolvedPath = Program.ResolveWritableStatePath(
+            "state/custom-events.db",
+            "data/defense-events.db",
+            "/usr/local/lib/ai-scraping-defense/osx-arm64",
+            "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
+            isMacOs: true);
+
+        Assert.Equal("state/custom-events.db", resolvedPath);
+    }
+
+    [Fact]
+    public void ResolveWritableStatePath_PreservesDefaultRelativePath_OutsidePackagedMacOsInstall()
+    {
+        var resolvedPath = Program.ResolveWritableStatePath(
+            "data/tarpit-archives",
+            "data/tarpit-archives",
+            "/opt/ai-scraping-defense",
+            "/usr/local/var/lib/ai-scraping-defense/tarpit-archives",
+            isMacOs: true);
+
+        Assert.Equal("data/tarpit-archives", resolvedPath);
+    }
+
+    [Fact]
     public void MapManagementEndpoints_DoesNotRegisterDefenseEvents_WhenManagementApiKeyIsMissing()
     {
         var app = CreateApp();
