@@ -37,6 +37,18 @@ Outputs:
 
 The package does not auto-start the service. That is intentional because a fresh install still needs real production configuration.
 
+The installer also creates writable runtime state directories under:
+
+- `/usr/local/var/lib/ai-scraping-defense`
+- `/usr/local/var/log/ai-scraping-defense`
+
+When the service runs from the packaged macOS install root, the built-in defaults automatically remap to those writable locations:
+
+- `DefenseEngine:Audit:DatabasePath` defaults to `/usr/local/var/lib/ai-scraping-defense/defense-events.db`
+- `DefenseEngine:Tarpit:ArchiveDirectory` defaults to `/usr/local/var/lib/ai-scraping-defense/tarpit-archives`
+
+Explicit custom paths in configuration are preserved.
+
 ## Configuration Notes
 
 Before starting the service, update the installed configuration for:

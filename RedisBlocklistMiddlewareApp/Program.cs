@@ -19,6 +19,7 @@ builder.Host.UseWindowsService(options =>
 });
 
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
+var contentRootPath = builder.Environment.ContentRootPath;
 
 builder.Services.AddHttpClient();
 builder.Services.AddDataProtection();
@@ -39,9 +40,12 @@ builder.Services
         options.Tarpit.PathPrefix = NormalizeRoutePrefix(
             options.Tarpit.PathPrefix,
             "/anti-scrape-tarpit");
-        options.Tarpit.ArchiveDirectory = string.IsNullOrWhiteSpace(options.Tarpit.ArchiveDirectory)
-            ? "data/tarpit-archives"
-            : options.Tarpit.ArchiveDirectory.Trim();
+        options.Tarpit.ArchiveDirectory = ResolveWritableStatePath(
+            options.Tarpit.ArchiveDirectory,
+            "data/tarpit-archives",
+            contentRootPath,
+            "/usr/local/var/lib/ai-scraping-defense/tarpit-archives",
+            OperatingSystem.IsMacOS());
         options.Tarpit.ArchiveRotationMinutes = Math.Max(1, options.Tarpit.ArchiveRotationMinutes);
         options.Tarpit.MaximumArchivesToKeep = Math.Max(1, options.Tarpit.MaximumArchivesToKeep);
         options.Tarpit.JavaScriptDecoyFileCount = Math.Max(1, options.Tarpit.JavaScriptDecoyFileCount);
@@ -142,9 +146,12 @@ builder.Services
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        options.Audit.DatabasePath = string.IsNullOrWhiteSpace(options.Audit.DatabasePath)
-            ? "data/defense-events.db"
-            : options.Audit.DatabasePath.Trim();
+        options.Audit.DatabasePath = ResolveWritableStatePath(
+            options.Audit.DatabasePath,
+            "data/defense-events.db",
+            contentRootPath,
+            "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
+            OperatingSystem.IsMacOS());
 
         options.Audit.MaxRecentEvents = Math.Max(1, options.Audit.MaxRecentEvents);
 
@@ -846,6 +853,42 @@ public partial class Program
         return string.IsNullOrWhiteSpace(trimmedActor)
             ? trimmedReason
             : $"{trimmedReason} (operator: {trimmedActor})";
+    }
+
+    public static bool IsMacOsPackagedInstall(string contentRootPath, bool isMacOs)
+    {
+        if (!isMacOs || string.IsNullOrWhiteSpace(contentRootPath))
+        {
+            return false;
+        }
+
+        var normalizedContentRoot = Path.GetFullPath(contentRootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return normalizedContentRoot.StartsWith(
+            "/usr/local/lib/ai-scraping-defense/",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string ResolveWritableStatePath(
+        string? configuredPath,
+        string relativeDefault,
+        string contentRootPath,
+        string macOsInstalledPath,
+        bool isMacOs)
+    {
+        var candidate = string.IsNullOrWhiteSpace(configuredPath)
+            ? relativeDefault
+            : configuredPath.Trim();
+
+        if (!IsMacOsPackagedInstall(contentRootPath, isMacOs) ||
+            Path.IsPathRooted(candidate) ||
+            !string.Equals(candidate, relativeDefault, StringComparison.OrdinalIgnoreCase))
+        {
+            return candidate;
+        }
+
+        return macOsInstalledPath;
     }
 
     private static string NormalizeObservabilityPath(string path)
