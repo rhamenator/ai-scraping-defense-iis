@@ -23,13 +23,13 @@ public sealed class ContainmentPolicyEngine : IContainmentPolicyEngine
         _logger = logger;
     }
 
-    public ContainmentDecision Evaluate(ThreatContainmentContributorContext context)
+    public async Task<ContainmentDecision> EvaluateAsync(ThreatContainmentContributorContext context, CancellationToken cancellationToken)
     {
         foreach (var contributor in _contributors)
         {
             try
             {
-                var hint = contributor.EvaluateAsync(context, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+                var hint = await contributor.EvaluateAsync(context, cancellationToken);
                 if (hint is null)
                 {
                     _telemetry.RecordContributorExecution("containment", contributor.Name, "skipped");

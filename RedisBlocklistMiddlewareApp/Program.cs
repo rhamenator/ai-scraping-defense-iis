@@ -724,6 +724,14 @@ public partial class Program
             [FromServices] DefenseTelemetry telemetry,
             CancellationToken cancellationToken) =>
         {
+            if (webhookEvent.Details is null)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The webhook details field is required."
+                });
+            }
+
             if (!TryNormalizeIpAddress(webhookEvent.Details.IpAddress, out var normalizedIp))
             {
                 return Results.BadRequest(new

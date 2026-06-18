@@ -16,7 +16,7 @@ public interface IThreatModelRoutingStrategy
 
 public interface IContainmentPolicyEngine
 {
-    ContainmentDecision Evaluate(ThreatContainmentContributorContext context);
+    Task<ContainmentDecision> EvaluateAsync(ThreatContainmentContributorContext context, CancellationToken cancellationToken);
 }
 
 public interface IThreatScoreContributor

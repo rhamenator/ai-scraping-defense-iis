@@ -9,7 +9,7 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class ContainmentPolicyEngineTests
 {
     [Fact]
-    public void Evaluate_UsesOrderedContributorsAndSkipsFailingContributors()
+    public async Task Evaluate_UsesOrderedContributorsAndSkipsFailingContributors()
     {
         var executionOrder = new List<string>();
         var engine = new ContainmentPolicyEngine(
@@ -29,7 +29,7 @@ public sealed class ContainmentPolicyEngineTests
             TestTelemetryFactory.Create(),
             NullLogger<ContainmentPolicyEngine>.Instance);
 
-        var decision = engine.Evaluate(CreateContext(totalScore: 10, explicitMaliciousVerdict: false));
+        var decision = await engine.EvaluateAsync(CreateContext(totalScore: 10, explicitMaliciousVerdict: false), CancellationToken.None);
 
         Assert.Equal(["custom_failure", "custom_override"], executionOrder);
         Assert.Equal(ContainmentActions.Challenged, decision.Action);
@@ -38,7 +38,7 @@ public sealed class ContainmentPolicyEngineTests
     }
 
     [Fact]
-    public void Evaluate_FallsBackToThresholdContributorWhenNoOverrideMatches()
+    public async Task Evaluate_FallsBackToThresholdContributorWhenNoOverrideMatches()
     {
         var options = Options.Create(new DefenseEngineOptions
         {
@@ -63,7 +63,7 @@ public sealed class ContainmentPolicyEngineTests
             TestTelemetryFactory.Create(),
             NullLogger<ContainmentPolicyEngine>.Instance);
 
-        var decision = engine.Evaluate(CreateContext(totalScore: 56, explicitMaliciousVerdict: false));
+        var decision = await engine.EvaluateAsync(CreateContext(totalScore: 56, explicitMaliciousVerdict: false), CancellationToken.None);
 
         Assert.Equal(ContainmentActions.Throttled, decision.Action);
         Assert.Equal("score_policy_throttle", decision.Reason);

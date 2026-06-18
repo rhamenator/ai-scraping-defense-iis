@@ -227,12 +227,12 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         ContainmentDecision containment;
         using (var containmentActivity = _telemetry.StartActivityScope("assessment.containment") as Activity)
         {
-            containment = _containmentPolicyEngine.Evaluate(new ThreatContainmentContributorContext(
+            containment = await _containmentPolicyEngine.EvaluateAsync(new ThreatContainmentContributorContext(
                 context,
                 totalScore,
                 explicitMaliciousVerdict,
                 combinedSignals.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-                contributions.ToArray()));
+                contributions.ToArray()), cancellationToken);
             containmentActivity?.SetTag("containment.action", containment.Action);
             containmentActivity?.SetTag("containment.reason", containment.Reason);
             containmentActivity?.SetTag("containment.should_block", containment.ShouldBlock);
