@@ -110,6 +110,19 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public async Task PublicBlocklistApiKeyFilter_AllowsRequest_WhenHeaderMatches()
+    {
+        var filter = CreatePublicBlocklistFilter();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-API-Key"] = "test-public-blocklist-key";
+        var context = new TestEndpointFilterInvocationContext(httpContext);
+
+        var result = await filter.InvokeAsync(context, _ => ValueTask.FromResult<object?>(Results.Ok()));
+
+        await AssertStatusCodeAsync(result, StatusCodes.Status200OK);
+    }
+
+    [Fact]
     public void GetAdvertisedEndpoints_HidesEvents_WhenManagementApiKeyIsMissing()
     {
         var endpoints = Program.GetAdvertisedEndpoints(new DefenseEngineOptions());
@@ -167,6 +180,41 @@ public sealed class ManagementEndpointTests
         var endpoints = Program.GetAdvertisedEndpoints(options);
 
         Assert.Equal("/peer-sync/signals", endpoints["peerSignals"]);
+    }
+
+    [Fact]
+    public void GetAdvertisedEndpoints_IncludesPublicBlocklist_WhenEnabledAndApiKeyConfigured()
+    {
+        var options = new DefenseEngineOptions
+        {
+            PublicBlocklist = new PublicBlocklistOptions
+            {
+                Enabled = true,
+                ApiKey = "test-public-blocklist-key"
+            }
+        };
+
+        var endpoints = Program.GetAdvertisedEndpoints(options);
+
+        Assert.Equal("/public-blocklist/list", endpoints["publicBlocklist"]);
+        Assert.Equal("/public-blocklist/list/auth", endpoints["publicBlocklistAuthenticated"]);
+        Assert.Equal("/public-blocklist/report", endpoints["publicBlocklistReport"]);
+    }
+
+    [Fact]
+    public void GetAdvertisedEndpoints_HidesPublicBlocklist_WhenEnabledWithoutApiKey()
+    {
+        var options = new DefenseEngineOptions
+        {
+            PublicBlocklist = new PublicBlocklistOptions
+            {
+                Enabled = true
+            }
+        };
+
+        var endpoints = Program.GetAdvertisedEndpoints(options);
+
+        Assert.False(endpoints.ContainsKey("publicBlocklist"));
     }
 
     [Fact]
@@ -453,6 +501,38 @@ public sealed class ManagementEndpointTests
         Assert.DoesNotContain(endpoints, endpoint => endpoint.RoutePattern.RawText == "/peer-sync/signals");
     }
 
+    [Fact]
+    public void MapPublicBlocklistEndpoints_RegistersRoutes_WhenEnabledAndApiKeyConfigured()
+    {
+        var app = CreateApp();
+        var options = new DefenseEngineOptions
+        {
+            PublicBlocklist = new PublicBlocklistOptions
+            {
+                Enabled = true,
+                ApiKey = "test-public-blocklist-key"
+            }
+        };
+
+        Program.MapPublicBlocklistEndpoints(app, options);
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/public-blocklist/list");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/public-blocklist/list/auth");
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/public-blocklist/report");
+    }
+
+    [Fact]
+    public void MapPublicBlocklistEndpoints_DoesNotRegisterRoutes_WhenDisabled()
+    {
+        var app = CreateApp();
+
+        Program.MapPublicBlocklistEndpoints(app, new DefenseEngineOptions());
+        var endpoints = GetRouteEndpoints(app);
+
+        Assert.DoesNotContain(endpoints, endpoint => endpoint.RoutePattern.RawText == "/public-blocklist/list");
+    }
+
     private static ApiKeyEndpointFilter CreateFilter()
     {
         return CreateServiceProvider().GetRequiredService<ApiKeyEndpointFilter>();
@@ -486,6 +566,20 @@ public sealed class ManagementEndpointTests
         return new PeerApiKeyEndpointFilter(options);
     }
 
+    private static PublicBlocklistApiKeyEndpointFilter CreatePublicBlocklistFilter()
+    {
+        var options = Options.Create(new DefenseEngineOptions
+        {
+            PublicBlocklist = new PublicBlocklistOptions
+            {
+                ApiKeyHeaderName = "X-API-Key",
+                ApiKey = "test-public-blocklist-key"
+            }
+        });
+
+        return new PublicBlocklistApiKeyEndpointFilter(options);
+    }
+
     private static WebApplication CreateApp()
     {
         var builder = WebApplication.CreateBuilder();
@@ -494,11 +588,13 @@ public sealed class ManagementEndpointTests
         builder.Services.AddSingleton<ApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
         builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
+        builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
         builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IIntakeDeliveryStore, TestIntakeDeliveryStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
+        builder.Services.AddSingleton<IPublicBlocklistService, TestPublicBlocklistService>();
         builder.Services.AddSingleton<IWebhookEventInbox, TestWebhookEventInbox>();
         builder.Services.AddSingleton<IPeerSyncStatusStore, TestPeerSyncStatusStore>();
         builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, TestCommunityBlocklistSyncStatusStore>();
@@ -691,6 +787,23 @@ public sealed class ManagementEndpointTests
         public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestPublicBlocklistService : IPublicBlocklistService
+    {
+        public Task<PublicBlocklistEnvelope> ListAsync(int count, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new PublicBlocklistEnvelope("test", []));
+        }
+
+        public Task<PublicBlocklistReportResponse> ReportAsync(
+            string ipAddress,
+            string reason,
+            string source,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new PublicBlocklistReportResponse(ipAddress, true, reason));
         }
     }
 

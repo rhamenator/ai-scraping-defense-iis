@@ -20,6 +20,8 @@ public sealed class DefenseEngineOptions
 
     public CommunityBlocklistOptions CommunityBlocklist { get; set; } = new();
 
+    public PublicBlocklistOptions PublicBlocklist { get; set; } = new();
+
     public PeerSyncOptions PeerSync { get; set; } = new();
 
     public QueueOptions Queue { get; set; } = new();
@@ -152,6 +154,8 @@ public sealed class EscalationOptions
     public LocalTrainedModelOptions LocalTrainedModel { get; set; } = new();
 
     public OpenAiCompatibleModelAdapterOptions OpenAiCompatibleModel { get; set; } = new();
+
+    public McpModelAdapterOptions McpModel { get; set; } = new();
 
     public ThreatModelRoutingOptions Routing { get; set; } = new();
 
@@ -286,6 +290,25 @@ public sealed class LocalTrainedModelOptions
     public int BenignScoreAdjustment { get; set; } = -10;
 }
 
+public sealed class McpModelAdapterOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ModelUri { get; set; } = string.Empty;
+
+    public string ServerUrl { get; set; } = string.Empty;
+
+    public string AuthToken { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    public int MaliciousScoreAdjustment { get; set; } = 40;
+
+    public int SuspiciousScoreAdjustment { get; set; } = 25;
+
+    public int HumanScoreAdjustment { get; set; } = -15;
+}
+
 public sealed class CommunityBlocklistOptions
 {
     public bool Enabled { get; set; }
@@ -308,6 +331,19 @@ public sealed class CommunityBlocklistSourceOptions
     public string ApiKeyHeaderName { get; set; } = "X-API-Key";
 
     public string ApiKey { get; set; } = string.Empty;
+}
+
+public sealed class PublicBlocklistOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ApiKeyHeaderName { get; set; } = "X-API-Key";
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public int MaximumListEntries { get; set; } = 1000;
+
+    public string ReportReason { get; set; } = "public_blocklist_report";
 }
 
 public sealed class PeerSyncOptions

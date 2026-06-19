@@ -190,3 +190,21 @@ public sealed record PeerSyncPeerStatus(
     int RejectedCount,
     DateTimeOffset? LastSuccessAtUtc,
     string? LastError);
+
+public sealed record PublicBlocklistEntry(
+    string IpAddress,
+    string Source);
+
+public sealed record PublicBlocklistEnvelope(
+    string Service,
+    IReadOnlyList<PublicBlocklistEntry> Entries);
+
+public sealed record PublicBlocklistReportRequest(
+    string Ip,
+    string? Reason = null,
+    string? Source = null);
+
+public sealed record PublicBlocklistReportResponse(
+    string IpAddress,
+    bool Blocked,
+    string Reason);

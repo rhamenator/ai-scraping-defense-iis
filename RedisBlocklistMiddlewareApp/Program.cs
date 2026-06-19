@@ -193,6 +193,46 @@ builder.Services
                 ? "You are classifying incoming web requests for scraping-defense enforcement. Return JSON with classification and summary."
                 : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
         options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
+
+        var modelUriFromEnvironment = Environment.GetEnvironmentVariable("MODEL_URI")?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
+            modelUriFromEnvironment.StartsWith("mcp://", StringComparison.OrdinalIgnoreCase))
+        {
+            options.Escalation.McpModel.ModelUri = modelUriFromEnvironment;
+        }
+
+        options.Escalation.McpModel.ModelUri = options.Escalation.McpModel.ModelUri.Trim();
+        options.Escalation.McpModel.ServerUrl = options.Escalation.McpModel.ServerUrl.Trim();
+        options.Escalation.McpModel.AuthToken = options.Escalation.McpModel.AuthToken.Trim();
+        options.Escalation.McpModel.TimeoutSeconds = Math.Max(1, options.Escalation.McpModel.TimeoutSeconds);
+        if (!string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
+            TryGetMcpServerLabel(options.Escalation.McpModel.ModelUri, out var mcpServerLabel))
+        {
+            var mcpPrefix = $"MCP_SERVER_{mcpServerLabel.ToUpperInvariant()}_";
+            if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.ServerUrl))
+            {
+                options.Escalation.McpModel.ServerUrl =
+                    Environment.GetEnvironmentVariable(mcpPrefix + "URL")?.Trim() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.AuthToken))
+            {
+                options.Escalation.McpModel.AuthToken =
+                    Environment.GetEnvironmentVariable(mcpPrefix + "AUTH_TOKEN")?.Trim() ?? string.Empty;
+            }
+
+            var timeoutValue = Environment.GetEnvironmentVariable(mcpPrefix + "TIMEOUT");
+            if (int.TryParse(timeoutValue, out var mcpTimeoutSeconds))
+            {
+                options.Escalation.McpModel.TimeoutSeconds = Math.Max(1, mcpTimeoutSeconds);
+            }
+        }
+
+        options.Escalation.McpModel.Enabled =
+            options.Escalation.McpModel.Enabled ||
+            (!string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
+             !string.IsNullOrWhiteSpace(options.Escalation.McpModel.ServerUrl));
+
         var defaultHeuristics = new HeuristicOptions();
         var defaultContainment = new ContainmentPolicyOptions();
         var useLegacyBlockThreshold =
@@ -237,6 +277,15 @@ builder.Services
                 ApiKey = source.ApiKey.Trim()
             })
             .ToArray();
+
+        options.PublicBlocklist.ApiKeyHeaderName = string.IsNullOrWhiteSpace(options.PublicBlocklist.ApiKeyHeaderName)
+            ? "X-API-Key"
+            : options.PublicBlocklist.ApiKeyHeaderName.Trim();
+        options.PublicBlocklist.ApiKey = options.PublicBlocklist.ApiKey.Trim();
+        options.PublicBlocklist.MaximumListEntries = Math.Max(1, options.PublicBlocklist.MaximumListEntries);
+        options.PublicBlocklist.ReportReason = string.IsNullOrWhiteSpace(options.PublicBlocklist.ReportReason)
+            ? "public_blocklist_report"
+            : options.PublicBlocklist.ReportReason.Trim();
 
         options.PeerSync.SyncIntervalMinutes = Math.Max(1, options.PeerSync.SyncIntervalMinutes);
         options.PeerSync.RequestTimeoutSeconds = Math.Max(1, options.PeerSync.RequestTimeoutSeconds);
@@ -316,6 +365,7 @@ builder.Services.AddSingleton<IThreatReputationProvider, ConfiguredRangeReputati
 builder.Services.AddSingleton<IThreatReputationProvider, HttpReputationProvider>();
 builder.Services.AddSingleton<IThreatModelAdapter, LocalTrainedModelAdapter>();
 builder.Services.AddSingleton<IThreatModelAdapter, OpenAiCompatibleModelAdapter>();
+builder.Services.AddSingleton<IThreatModelAdapter, McpModelAdapter>();
 builder.Services.AddSingleton<IThreatModelRoutingStrategy, ThreatModelRoutingStrategy>();
 builder.Services.AddSingleton<IContainmentDecisionContributor, ExplicitVerdictContainmentContributor>();
 builder.Services.AddSingleton<IContainmentDecisionContributor, FrequencyContainmentContributor>();
@@ -325,12 +375,14 @@ builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>
 builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();
 builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, CommunityBlocklistSyncStatusStore>();
 builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
+builder.Services.AddSingleton<IPublicBlocklistService, RedisPublicBlocklistService>();
 builder.Services.AddSingleton<IPeerSignalFeedClient, HttpPeerSignalFeedClient>();
 builder.Services.AddSingleton<IPeerSyncStatusStore, PeerSyncStatusStore>();
 builder.Services.AddSingleton<PeerSyncRunner>();
 builder.Services.AddSingleton<ManagementAuthenticationService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
+builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
@@ -397,6 +449,7 @@ app.MapGet("/health", async (
 
 Program.MapManagementEndpoints(app, runtimeOptions);
 Program.MapIntakeEndpoints(app, runtimeOptions);
+Program.MapPublicBlocklistEndpoints(app, runtimeOptions);
 Program.MapPeerSyncEndpoints(app, runtimeOptions);
 
 app.MapGet(tarpitRoutePattern, async (
@@ -465,6 +518,13 @@ public partial class Program
         if (ShouldExposePeerSyncEndpoints(runtimeOptions))
         {
             endpoints["peerSignals"] = "/peer-sync/signals";
+        }
+
+        if (ShouldExposePublicBlocklistEndpoints(runtimeOptions))
+        {
+            endpoints["publicBlocklist"] = "/public-blocklist/list";
+            endpoints["publicBlocklistAuthenticated"] = "/public-blocklist/list/auth";
+            endpoints["publicBlocklistReport"] = "/public-blocklist/report";
         }
 
         return endpoints;
@@ -760,6 +820,58 @@ public partial class Program
         .AddEndpointFilter<IntakeApiKeyEndpointFilter>();
     }
 
+    public static void MapPublicBlocklistEndpoints(
+        IEndpointRouteBuilder app,
+        DefenseEngineOptions runtimeOptions)
+    {
+        if (!ShouldExposePublicBlocklistEndpoints(runtimeOptions))
+        {
+            return;
+        }
+
+        var publicBlocklist = app.MapGroup("/public-blocklist");
+
+        publicBlocklist.MapGet("/list", async (
+            [FromQuery] int count,
+            IPublicBlocklistService publicBlocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            return Results.Ok(await publicBlocklistService.ListAsync(count, cancellationToken));
+        });
+
+        publicBlocklist.MapGet("/list/auth", async (
+            [FromQuery] int count,
+            IPublicBlocklistService publicBlocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            return Results.Ok(await publicBlocklistService.ListAsync(count, cancellationToken));
+        })
+        .AddEndpointFilter<PublicBlocklistApiKeyEndpointFilter>();
+
+        publicBlocklist.MapPost("/report", async (
+            PublicBlocklistReportRequest request,
+            IPublicBlocklistService publicBlocklistService,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryNormalizeIpAddress(request.Ip, out var normalizedIp))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "The ip field must contain a valid IPv4 or IPv6 address."
+                });
+            }
+
+            return Results.Accepted(
+                $"/public-blocklist/list/auth?count={runtimeOptions.PublicBlocklist.MaximumListEntries}",
+                await publicBlocklistService.ReportAsync(
+                    normalizedIp,
+                    request.Reason ?? runtimeOptions.PublicBlocklist.ReportReason,
+                    request.Source ?? "public_blocklist",
+                    cancellationToken));
+        })
+        .AddEndpointFilter<PublicBlocklistApiKeyEndpointFilter>();
+    }
+
     public static void MapPeerSyncEndpoints(
         IEndpointRouteBuilder app,
         DefenseEngineOptions runtimeOptions)
@@ -813,6 +925,12 @@ public partial class Program
         return !string.IsNullOrWhiteSpace(runtimeOptions.Intake.ApiKey);
     }
 
+    public static bool ShouldExposePublicBlocklistEndpoints(DefenseEngineOptions runtimeOptions)
+    {
+        return runtimeOptions.PublicBlocklist.Enabled &&
+            !string.IsNullOrWhiteSpace(runtimeOptions.PublicBlocklist.ApiKey);
+    }
+
     public static bool ShouldExposePeerSyncEndpoints(DefenseEngineOptions runtimeOptions)
     {
         return !string.IsNullOrWhiteSpace(runtimeOptions.PeerSync.ExportApiKey);
@@ -833,6 +951,21 @@ public partial class Program
         }
 
         normalizedIp = address.ToString();
+        return true;
+    }
+
+    public static bool TryGetMcpServerLabel(string modelUri, out string label)
+    {
+        label = string.Empty;
+        if (!Uri.TryCreate(modelUri, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, "mcp", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(uri.Host) ||
+            string.IsNullOrWhiteSpace(uri.AbsolutePath.Trim('/')))
+        {
+            return false;
+        }
+
+        label = uri.Host;
         return true;
     }
 
