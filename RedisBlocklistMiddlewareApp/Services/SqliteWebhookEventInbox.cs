@@ -35,7 +35,8 @@ public sealed class SqliteWebhookEventInbox : IWebhookEventInbox
 
         _connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = resolvedDatabasePath
+            DataSource = resolvedDatabasePath,
+            Pooling = false
         }.ToString();
 
         EnsureSchema();

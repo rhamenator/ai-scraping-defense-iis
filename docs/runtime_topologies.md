@@ -16,7 +16,7 @@ This document defines supported runtime topology modes for the .NET stack and es
 - One ASP.NET Core deployment hosts the full defense pipeline.
 - Internal service calls remain in-process.
 - Redis remains required for hot operational state.
-- SQLite remains the default durable event store.
+- SQLite remains the default durable event store, with PostgreSQL and SQL Server available through `DefenseEngine:Audit:Provider`.
 
 This mode is the commercial v1 baseline and remains supported after split-runtime enablement.
 

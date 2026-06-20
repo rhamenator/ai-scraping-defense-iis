@@ -19,6 +19,7 @@ builder.Host.UseWindowsService(options =>
 });
 
 var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection");
+var auditConnectionString = builder.Configuration.GetConnectionString("AuditDatabase");
 var contentRootPath = builder.Environment.ContentRootPath;
 
 builder.Services.AddHttpClient();
@@ -146,12 +147,29 @@ builder.Services
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        options.Audit.DatabasePath = ResolveWritableStatePath(
-            options.Audit.DatabasePath,
-            "data/defense-events.db",
-            contentRootPath,
-            "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
-            OperatingSystem.IsMacOS());
+        options.Audit.Provider = NormalizeAuditStorageProvider(options.Audit.Provider);
+        if (!string.IsNullOrWhiteSpace(auditConnectionString) &&
+            string.IsNullOrWhiteSpace(options.Audit.ConnectionString))
+        {
+            options.Audit.ConnectionString = auditConnectionString;
+        }
+
+        options.Audit.ConnectionString = options.Audit.ConnectionString.Trim();
+        if (string.Equals(options.Audit.Provider, AuditStorageProviders.Sqlite, StringComparison.OrdinalIgnoreCase))
+        {
+            options.Audit.DatabasePath = ResolveWritableStatePath(
+                options.Audit.DatabasePath,
+                "data/defense-events.db",
+                contentRootPath,
+                "/usr/local/var/lib/ai-scraping-defense/defense-events.db",
+                OperatingSystem.IsMacOS());
+        }
+        else
+        {
+            options.Audit.DatabasePath = string.IsNullOrWhiteSpace(options.Audit.DatabasePath)
+                ? "data/defense-events.db"
+                : options.Audit.DatabasePath.Trim();
+        }
 
         options.Audit.MaxRecentEvents = Math.Max(1, options.Audit.MaxRecentEvents);
 
@@ -351,8 +369,7 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
 builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
-builder.Services.AddSingleton<IDefenseEventStore, SqliteDefenseEventStore>();
-builder.Services.AddSingleton<IIntakeDeliveryStore, SqliteIntakeDeliveryStore>();
+builder.Services.AddAuditStorage();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
@@ -387,7 +404,6 @@ builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IWebhookEventInbox, SqliteWebhookEventInbox>();
 builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
 builder.Services.AddSingleton<ICommunityReporter, CommunityReporter>();
 builder.Services.AddSingleton<ISmtpAlertSender, SmtpAlertSender>();
@@ -1003,8 +1019,9 @@ public partial class Program
             return false;
         }
 
-        var normalizedContentRoot = Path.GetFullPath(contentRootPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedContentRoot = contentRootPath
+            .Replace('\\', '/')
+            .TrimEnd('/');
 
         return normalizedContentRoot.StartsWith(
             "/usr/local/lib/ai-scraping-defense/",
@@ -1037,6 +1054,30 @@ public partial class Program
         return NormalizeRoutePrefix(
             path,
             "/metrics");
+    }
+
+    private static string NormalizeAuditStorageProvider(string? provider)
+    {
+        var candidate = string.IsNullOrWhiteSpace(provider)
+            ? AuditStorageProviders.Sqlite
+            : provider.Trim();
+
+        if (string.Equals(candidate, AuditStorageProviders.Postgres, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(candidate, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuditStorageProviders.Postgres;
+        }
+
+        if (string.Equals(candidate, AuditStorageProviders.SqlServer, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(candidate, "SqlServer", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(candidate, "MSSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuditStorageProviders.SqlServer;
+        }
+
+        return string.Equals(candidate, AuditStorageProviders.Sqlite, StringComparison.OrdinalIgnoreCase)
+            ? AuditStorageProviders.Sqlite
+            : candidate;
     }
 
     private static string NormalizeRoutePrefix(string path, string fallback)

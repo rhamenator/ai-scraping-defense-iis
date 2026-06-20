@@ -16,7 +16,7 @@ Included in v1:
 - protected operator dashboard on top of the authenticated management API
 - authenticated `/analyze` intake for externally confirmed malicious events
 - configurable alert dispatch and outbound community reporting for processed intake events
-- durable SQLite-backed audit and webhook inbox persistence
+- durable SQLite, PostgreSQL, or SQL Server-backed audit and webhook inbox persistence
 - configurable community blocklist sync with operator-visible status
 - peer sync with authenticated export and explicit trust modes
 - PostgreSQL-backed Markov tarpit content and deterministic render variants
@@ -26,7 +26,7 @@ Included in v1:
 Explicitly deferred from v1:
 
 - separate runtime deployments for `EdgeGateway`, `EscalationEngine`, and `TarpitApi`
-- SQL Server support
+- SQL Server support for audit and webhook intake storage
 
 Deferred split-runtime work is tracked in [runtime_topologies.md](runtime_topologies.md).
 
@@ -53,9 +53,9 @@ Post-v1 operator UI parity and workflow improvements are tracked in [operator_ui
 The storage model for commercial v1 is intentionally narrow:
 
 - `Redis` is the required operational store for hot state.
-- `SQLite` is the supported durable store for audit history and webhook intake in v1.
-- `PostgreSQL` is the planned next production relational backend after v1.
-- `SQL Server` is deferred until there is customer demand.
+- `SQLite` is the default durable store for audit history and webhook intake in v1.
+- `PostgreSQL` is supported for production audit history and webhook intake.
+- `SQL Server` is supported for audit history and webhook intake in Microsoft-heavy environments.
 
 This keeps the provider surface small while still allowing a clean path to larger-scale persistence later.
 

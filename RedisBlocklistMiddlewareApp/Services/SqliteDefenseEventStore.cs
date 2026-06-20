@@ -29,7 +29,8 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
 
         _connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = resolvedDatabasePath
+            DataSource = resolvedDatabasePath,
+            Pooling = false
         }.ToString();
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
 

@@ -1,11 +1,11 @@
 # Operator Runbook
 
-This runbook covers the first commercial .NET deployment shape: one ASP.NET Core service with Redis for hot state, SQLite for durable audit/intake storage, and optional PostgreSQL for the tarpit Markov corpus.
+This runbook covers the first commercial .NET deployment shape: one ASP.NET Core service with Redis for hot state, selectable durable audit/intake storage, and optional PostgreSQL for the tarpit Markov corpus.
 
 ## Prerequisites
 
 - Redis reachable from the application
-- Write access to the configured SQLite audit path
+- Write access to the configured SQLite audit path, or a reachable PostgreSQL/SQL Server database for relational audit storage
 - Optional PostgreSQL instance if `DefenseEngine:Tarpit:PostgresMarkov:Enabled=true`
 - Configured management API key for operator access
 - Configured intake API key if `/analyze` is enabled
@@ -35,7 +35,8 @@ At minimum, set:
 - `DefenseEngine:Intake:ApiKey` if webhook intake is required
 - `DefenseEngine:Intake:Alerting:*` if webhook, Slack, or SMTP alerts are required
 - `DefenseEngine:Intake:CommunityReporting:*` if outbound community reporting is required
-- `DefenseEngine:Audit:DatabasePath`
+- `DefenseEngine:Audit:Provider`
+- `DefenseEngine:Audit:DatabasePath` for SQLite, or `DefenseEngine:Audit:ConnectionString` for PostgreSQL/SQL Server
 - `DefenseEngine:Networking:ClientIpResolutionMode`
 
 When behind a reverse proxy or CDN:
@@ -176,9 +177,19 @@ The bundled observability overlay provisions:
 
 See [observability_pack.md](observability_pack.md) for the packaged monitoring assets and default alert rules.
 
+## Audit Storage
+
+`DefenseEngine:Audit:Provider` controls the durable store for defense decisions, intake delivery records, and the webhook inbox queue.
+
+- `Sqlite` is the default and uses `DefenseEngine:Audit:DatabasePath`.
+- `Postgres` uses `DefenseEngine:Audit:ConnectionString`.
+- `SqlServer` uses `DefenseEngine:Audit:ConnectionString`.
+
+`ConnectionStrings:AuditDatabase` is also honored when `DefenseEngine:Audit:ConnectionString` is blank.
+
 ## Backup and Recovery
 
-- Back up the SQLite audit database at `DefenseEngine:Audit:DatabasePath`
+- Back up the configured audit database: SQLite file, PostgreSQL database, or SQL Server database
 - Back up Redis if you rely on durable Redis persistence for operational recovery
 - Back up PostgreSQL if you maintain a curated Markov corpus
 

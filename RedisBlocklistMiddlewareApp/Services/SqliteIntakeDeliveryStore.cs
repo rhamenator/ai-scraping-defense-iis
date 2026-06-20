@@ -28,7 +28,8 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
 
         _connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = resolvedDatabasePath
+            DataSource = resolvedDatabasePath,
+            Pooling = false
         }.ToString();
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
         EnsureSchema();

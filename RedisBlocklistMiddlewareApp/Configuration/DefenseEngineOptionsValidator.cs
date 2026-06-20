@@ -54,6 +54,21 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 "DefenseEngine:Observability:PrometheusEndpointPath must not resolve to the root path '/'.");
         }
 
+        if (!string.Equals(options.Audit.Provider, AuditStorageProviders.Sqlite, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(options.Audit.Provider, AuditStorageProviders.Postgres, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(options.Audit.Provider, AuditStorageProviders.SqlServer, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"DefenseEngine:Audit:Provider must be '{AuditStorageProviders.Sqlite}', '{AuditStorageProviders.Postgres}', or '{AuditStorageProviders.SqlServer}'.");
+        }
+
+        if (!string.Equals(options.Audit.Provider, AuditStorageProviders.Sqlite, StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(options.Audit.ConnectionString))
+        {
+            errors.Add(
+                "DefenseEngine:Audit:ConnectionString is required when DefenseEngine:Audit:Provider is 'Postgres' or 'SqlServer'.");
+        }
+
         if (!string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Auto, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Local, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(options.Escalation.Routing.PreferredPrimaryRoute, ThreatModelRoutes.Remote, StringComparison.OrdinalIgnoreCase))

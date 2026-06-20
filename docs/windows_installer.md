@@ -15,7 +15,7 @@ Supported Windows installer runtimes:
 - .NET SDK `10.0.104` for building the publish output
 - Inno Setup 6 for compiling the installer executable
 - Administrative rights on the target host for service installation
-- Reachable Redis, and optional PostgreSQL if Markov tarpit mode is enabled
+- Reachable Redis, optional PostgreSQL or SQL Server for audit storage, and optional PostgreSQL if Markov tarpit mode is enabled
 
 ## Build The Installer
 
@@ -56,7 +56,7 @@ If you want to inspect the staged payload without compiling Inno Setup:
 
 The setup can optionally start the service at the end of installation, but that should only be selected after valid production configuration is in place.
 
-The service runs as `LocalService` by default. The installer grants that identity modify rights on the `data` and `logs` directories so the app can persist SQLite audit data and tarpit artifacts.
+The service runs as `LocalService` by default. The installer grants that identity modify rights on the `data` and `logs` directories so the app can persist SQLite audit data and tarpit artifacts. PostgreSQL and SQL Server audit providers use `DefenseEngine:Audit:ConnectionString` instead of the local SQLite file.
 
 ## Configuration Notes
 
@@ -65,7 +65,8 @@ The installer does not inject environment-specific secrets. Before or immediatel
 - `DefenseEngine:Redis:ConnectionString`
 - `DefenseEngine:Management:ApiKey`
 - `DefenseEngine:Intake:ApiKey` if `/analyze` is enabled
-- `DefenseEngine:Audit:DatabasePath` if you want to override the default relative SQLite path
+- `DefenseEngine:Audit:Provider`
+- `DefenseEngine:Audit:DatabasePath` for SQLite, or `DefenseEngine:Audit:ConnectionString` for PostgreSQL/SQL Server
 - `DefenseEngine:Networking:*` if the service runs behind a proxy or CDN
 
 On a fresh machine, the default Redis configuration points at loopback and is intentionally rejected in `Production`. That means service startup will fail until you either supply a real Redis connection string or explicitly allow the loopback configuration for a non-production lab host.

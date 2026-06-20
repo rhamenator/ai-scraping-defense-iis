@@ -32,7 +32,7 @@ Use this checklist before cutting a commercial release candidate.
 
 ## Data and Operations
 
-- SQLite audit path is persistent and writable
+- Audit storage is configured: SQLite path is persistent and writable, or PostgreSQL/SQL Server connection string is reachable
 - Redis persistence/backup expectations are defined
 - PostgreSQL schema is initialized if Markov tarpit mode is enabled
 - operator runbook has been validated against the target environment

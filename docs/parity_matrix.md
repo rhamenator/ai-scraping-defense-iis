@@ -23,6 +23,6 @@ Status legend:
 | Alerting and operator/community reporting | Implemented | Confirmed malicious intake events can dispatch generic webhook alerts, Slack Incoming Webhook alerts, SMTP alerts, and configurable community reports with durable delivery visibility. | Add provider-specific enrichments only when operators show real demand. |
 | Structured telemetry export | Implemented | Prometheus metrics, OTLP trace export, packaged scrape/alert config, and a bundled Grafana dashboard are included. | Tune thresholds and dashboard panels against production traffic after deployment. |
 | Independent multi-service deployment | Deferred | v1 intentionally ships as a single deployable ASP.NET Core runtime. | Split into independently deployed roles only when operations justify it. |
-| SQL Server support | Deferred | Redis + SQLite + PostgreSQL are the supported data stores for v1. | Revisit only if customer demand justifies the extra provider surface. |
+| SQL Server support | Implemented | SQL Server can be selected for durable audit and webhook intake storage via `DefenseEngine:Audit:Provider=SqlServer`. | Broaden integration-test coverage when a CI SQL Server service is available. |
 
 Commercial v1 now covers the defined commercial parity scope. Additional work should be driven by measured operator demand rather than inherited backlog assumptions.

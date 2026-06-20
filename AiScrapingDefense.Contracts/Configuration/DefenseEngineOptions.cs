@@ -140,9 +140,22 @@ public sealed class QueueOptions
 
 public sealed class AuditOptions
 {
+    public string Provider { get; set; } = AuditStorageProviders.Sqlite;
+
     public string DatabasePath { get; set; } = "data/defense-events.db";
 
+    public string ConnectionString { get; set; } = string.Empty;
+
     public int MaxRecentEvents { get; set; } = 500;
+}
+
+public static class AuditStorageProviders
+{
+    public const string Sqlite = "Sqlite";
+
+    public const string Postgres = "Postgres";
+
+    public const string SqlServer = "SqlServer";
 }
 
 public sealed class EscalationOptions

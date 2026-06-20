@@ -78,7 +78,9 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 #### **DefenseEngine:Audit**
 
-* **DatabasePath**: Path to the SQLite database file used for durable defense-event storage. Relative paths are resolved from the application content root.
+* **Provider**: Durable audit/intake storage provider. Supported values are `Sqlite`, `Postgres`, and `SqlServer`.
+* **DatabasePath**: Path to the SQLite database file when `Provider` is `Sqlite`. Relative paths are resolved from the application content root.
+* **ConnectionString**: PostgreSQL or SQL Server connection string when `Provider` is `Postgres` or `SqlServer`. `ConnectionStrings:AuditDatabase` is used as a fallback when this value is blank.
 * **MaxRecentEvents**: Maximum number of persisted events returned from the recent-events feed.
 
 #### **DefenseEngine:Escalation**

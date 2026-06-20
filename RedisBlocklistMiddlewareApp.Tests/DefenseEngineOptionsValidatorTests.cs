@@ -48,4 +48,40 @@ public sealed class DefenseEngineOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(result.Failures, failure => failure.Contains("Challenge <= Tarpit <= Throttle <= Block", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Validate_RejectsUnknownAuditProvider()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var result = validator.Validate(
+            null,
+            new DefenseEngineOptions
+            {
+                Audit = new AuditOptions
+                {
+                    Provider = "Oracle"
+                }
+            });
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, failure => failure.Contains("Audit:Provider", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_RequiresConnectionStringForRelationalAuditProvider()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var result = validator.Validate(
+            null,
+            new DefenseEngineOptions
+            {
+                Audit = new AuditOptions
+                {
+                    Provider = AuditStorageProviders.Postgres
+                }
+            });
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, failure => failure.Contains("Audit:ConnectionString", StringComparison.Ordinal));
+    }
 }

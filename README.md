@@ -20,7 +20,7 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - A lightweight authenticated event feed at `/defense/events` for recent decisions.
 - Authenticated operator metrics and blocklist management endpoints under `/defense/*`.
 - A protected operator dashboard at `/defense/dashboard` backed by the same management API.
-- An authenticated `/analyze` webhook endpoint with durable SQLite-backed intake for confirmed malicious events.
+- An authenticated `/analyze` webhook endpoint with durable SQLite, PostgreSQL, or SQL Server-backed intake for confirmed malicious events.
 - Configurable webhook, Slack, and SMTP alert dispatch for processed intake events.
 - Configurable outbound community reporting for processed intake events.
 - Optional community blocklist feed sync with authenticated status surfaced under `/defense/community-blocklist/status`.
@@ -83,9 +83,9 @@ Peer export endpoint:
 ## Supported Data Stores
 
 - `Redis`: required for hot operational state such as blocklists and short-window frequency counters.
-- `SQLite`: supported for local development, demos, and single-node/lightweight production installs as the durable audit and webhook intake store.
-- `PostgreSQL`: supported for the Markov-backed tarpit corpus and remains the primary production relational direction for richer content and larger-scale persistence.
-- `SQL Server`: deferred. It is not a commercial v1 target unless customer demand justifies the extra provider and test surface.
+- `SQLite`: default for local development, demos, and single-node/lightweight production installs as the durable audit and webhook intake store.
+- `PostgreSQL`: supported for production audit, webhook intake, and Markov-backed tarpit content.
+- `SQL Server`: supported as an audit and webhook intake backend for Microsoft-heavy environments.
 
 ## Escalation Extensions
 
@@ -134,7 +134,7 @@ Key areas:
 
 For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
 
-Defense decisions are now persisted to SQLite via `DefenseEngine:Audit:DatabasePath`, which keeps recent event history available across restarts.
+Defense decisions and webhook intake records are persisted through `DefenseEngine:Audit`. The default provider is SQLite via `DatabasePath`; production deployments can set `Provider` to `Postgres` or `SqlServer` and provide `ConnectionString` instead.
 
 In `Production`, startup now fails fast if Redis still points at a loopback endpoint like `localhost` unless you explicitly opt in with `DefenseEngine:Redis:AllowLoopbackConnectionStringInProduction`.
 

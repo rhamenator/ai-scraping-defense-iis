@@ -11,7 +11,7 @@ The issue-backed implementation sequence is broken into explicit tracks in [agen
 | Upstream role | Current .NET status | Next target |
 | --- | --- | --- |
 | Nginx/Lua edge filter | Implemented as ASP.NET Core middleware in the `AiScrapingDefense.EdgeGateway` host | Separate runtime deployment only if production topology justifies it |
-| AI Service webhook | Implemented as authenticated `/analyze` plus durable SQLite-backed intake | Add richer alerting/reporting and optional isolated runtime boundary |
+| AI Service webhook | Implemented as authenticated `/analyze` plus selectable durable intake storage | Add richer alerting/reporting and optional isolated runtime boundary |
 | Escalation Engine | Implemented in its own solution project with baseline scoring, reputation-provider hooks, and an optional OpenAI-compatible model adapter | Add more provider types, richer telemetry, and optional isolated runtime boundary |
 | Tarpit API | Implemented as deterministic page generation with PostgreSQL-backed Markov support and multiple render variants | Add streaming/archive rotation parity and deeper crawl-wasting content sources |
 | Admin UI | Implemented as the protected `/defense/dashboard` operator console | Add richer workflows, search, and operator ergonomics |
