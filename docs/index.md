@@ -1,6 +1,8 @@
 # AI Scraping Defense Documentation
 
-This documentation index is for the current .NET implementation in this repository, not the older IIS/Python deployment path.
+This documentation index is for the current .NET implementation. The older
+Python services and IIS/FastCGI examples remain available as a read-only,
+unsupported [historical archive](../archive/legacy-python-iis/README.md).
 
 ## Start here
 

@@ -103,7 +103,7 @@ See [docs/local_model_training.md](docs/local_model_training.md) for the local m
 
 ## PostgreSQL Tarpit
 
-The tarpit can now switch from fixed synthetic paragraphs to a PostgreSQL-backed Markov corpus under `DefenseEngine:Tarpit:PostgresMarkov`. When enabled, the app reads `markov_words` and `markov_sequences` tables and uses the durable corpus to generate deterministic crawl-wasting paragraphs. The base schema is in [init_markov.sql](/home/rich/dev/ai-scraping-defense-iis/db/init_markov.sql).
+The tarpit can now switch from fixed synthetic paragraphs to a PostgreSQL-backed Markov corpus under `DefenseEngine:Tarpit:PostgresMarkov`. When enabled, the app reads `markov_words` and `markov_sequences` tables and uses the durable corpus to generate deterministic crawl-wasting paragraphs. The base schema is in [init_markov.sql](db/init_markov.sql).
 
 ## Configuration
 
