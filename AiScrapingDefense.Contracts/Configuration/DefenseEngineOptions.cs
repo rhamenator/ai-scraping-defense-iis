@@ -10,6 +10,8 @@ public sealed class DefenseEngineOptions
 
     public NetworkingOptions Networking { get; set; } = new();
 
+    public CloudflareOptions Cloudflare { get; set; } = new();
+
     public ManagementOptions Management { get; set; } = new();
 
     public IntakeOptions Intake { get; set; } = new();
@@ -136,6 +138,8 @@ public sealed class IntakeOptions
 public sealed class QueueOptions
 {
     public int Capacity { get; set; } = 1024;
+
+    public int WebhookLeaseTimeoutMinutes { get; set; } = 5;
 }
 
 public sealed class AuditOptions
@@ -147,6 +151,19 @@ public sealed class AuditOptions
     public string ConnectionString { get; set; } = string.Empty;
 
     public int MaxRecentEvents { get; set; } = 500;
+}
+
+public sealed class CloudflareOptions
+{
+    public bool Enabled { get; set; }
+
+    public bool RecommendUnderAttackMode { get; set; } = true;
+
+    public int MinimumRecentDecisions { get; set; } = 50;
+
+    public double MinimumBlockedRate { get; set; } = 0.50d;
+
+    public int MinimumDistinctBlockedOrigins { get; set; } = 20;
 }
 
 public static class AuditStorageProviders

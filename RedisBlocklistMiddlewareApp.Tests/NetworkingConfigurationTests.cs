@@ -121,6 +121,26 @@ public sealed class NetworkingConfigurationTests
     }
 
     [Fact]
+    public void Validator_AndForwardedHeadersSetup_AcceptCloudflareCidrRanges()
+    {
+        var configured = new DefenseEngineOptions
+        {
+            Networking = new NetworkingOptions
+            {
+                ClientIpResolutionMode = ClientIpResolutionModes.TrustedProxy,
+                TrustedProxies = ["173.245.48.0/20", "2400:cb00::/32"]
+            }
+        };
+
+        Assert.True(new DefenseEngineOptionsValidator().Validate(null, configured).Succeeded);
+        var forwarded = new ForwardedHeadersOptions();
+        CreateSetup(configured).Configure(forwarded);
+#pragma warning disable ASPDEPR005 // The application targets .NET 8, where KnownIPNetworks is unavailable.
+        Assert.Equal(2, forwarded.KnownNetworks.Count);
+#pragma warning restore ASPDEPR005
+    }
+
+    [Fact]
     public void Validator_RejectsRootTarpitPathPrefix()
     {
         var validator = new DefenseEngineOptionsValidator();

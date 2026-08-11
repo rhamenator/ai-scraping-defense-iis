@@ -75,11 +75,20 @@ public sealed class RedisBlocklistMiddleware
             activity?.SetTag("ip", ipAddress);
             activity?.SetTag("reason", evaluation.BlockReason);
 
-            await _blocklistService.BlockAsync(
+            var blockApplied = await _blocklistService.BlockAsync(
                 ipAddress,
                 evaluation.BlockReason,
                 evaluation.Signals,
                 context.RequestAborted);
+
+            if (!blockApplied)
+            {
+                _logger.LogWarning(
+                    "Immediate block was rejected for trusted infrastructure address {IpAddress}; allowing the request to continue.",
+                    ipAddress);
+                await _next(context);
+                return;
+            }
 
             _eventStore.Add(new DefenseDecision(
                 ipAddress,
@@ -150,12 +159,19 @@ public sealed class RedisBlocklistMiddleware
     private bool ShouldBypassInspection(PathString path)
     {
         var value = path.Value ?? string.Empty;
-        return value.StartsWith(_options.Tarpit.PathPrefix, StringComparison.OrdinalIgnoreCase) ||
-               value.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ||
+        return IsPathOrChild(value, _options.Tarpit.PathPrefix) ||
+               IsPathOrChild(value, "/health") ||
                (_options.Observability.EnablePrometheusEndpoint &&
-                value.StartsWith(_options.Observability.PrometheusEndpointPath, StringComparison.OrdinalIgnoreCase)) ||
-               value.StartsWith("/defense", StringComparison.OrdinalIgnoreCase) ||
-               value.StartsWith("/analyze", StringComparison.OrdinalIgnoreCase) ||
-               value.StartsWith("/peer-sync", StringComparison.OrdinalIgnoreCase);
+                IsPathOrChild(value, _options.Observability.PrometheusEndpointPath)) ||
+               IsPathOrChild(value, "/defense") ||
+               IsPathOrChild(value, "/analyze") ||
+               IsPathOrChild(value, "/peer-sync");
+    }
+
+    private static bool IsPathOrChild(string value, string prefix)
+    {
+        var normalizedPrefix = prefix.TrimEnd('/');
+        return value.Equals(normalizedPrefix, StringComparison.OrdinalIgnoreCase) ||
+               value.StartsWith($"{normalizedPrefix}/", StringComparison.OrdinalIgnoreCase);
     }
 }

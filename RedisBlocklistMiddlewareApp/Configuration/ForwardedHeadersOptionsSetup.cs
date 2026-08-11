@@ -35,6 +35,16 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
             if (IPAddress.TryParse(trustedProxyAddress, out var trustedProxy))
             {
                 options.KnownProxies.Add(trustedProxy);
+                continue;
+            }
+
+            var parts = trustedProxyAddress.Split('/', StringSplitOptions.TrimEntries);
+            if (parts.Length == 2 &&
+                IPAddress.TryParse(parts[0], out var networkAddress) &&
+                int.TryParse(parts[1], out var prefixLength))
+            {
+                options.KnownNetworks.Add(
+                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(networkAddress, prefixLength));
             }
         }
     }

@@ -684,11 +684,19 @@ public partial class Program
                 });
             }
 
-            await blocklistService.BlockAsync(
+            var blockApplied = await blocklistService.BlockAsync(
                 normalizedIp,
                 string.IsNullOrWhiteSpace(reason) ? "manual_block" : reason.Trim(),
                 ["manual_block"],
                 cancellationToken);
+
+            if (!blockApplied)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "Refusing to block a configured trusted proxy or CDN address."
+                });
+            }
 
             return Results.Accepted($"/defense/blocklist?ip={Uri.EscapeDataString(normalizedIp)}", new
             {
@@ -761,11 +769,18 @@ public partial class Program
 
             if (string.Equals(updatedAction, ContainmentActions.Blocked, StringComparison.OrdinalIgnoreCase))
             {
-                await blocklistService.BlockAsync(
+                var blockApplied = await blocklistService.BlockAsync(
                     decision.IpAddress,
                     "operator_feedback_override",
                     ["operator_feedback_override"],
                     cancellationToken);
+                if (!blockApplied)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = "Refusing to block a configured trusted proxy or CDN address."
+                    });
+                }
             }
 
             return Results.Accepted("/defense/feedback?count=50", feedback);

@@ -27,31 +27,23 @@ public sealed class SuspiciousRequestQueue : ISuspiciousRequestQueue
         _telemetry.UpdateQueueDepth(0, _capacity);
     }
 
-    public async ValueTask<bool> QueueAsync(
+    public ValueTask<bool> QueueAsync(
         SuspiciousRequest request,
         CancellationToken cancellationToken)
     {
-        try
+        if (cancellationToken.IsCancellationRequested)
         {
-            while (await _channel.Writer.WaitToWriteAsync(cancellationToken))
-            {
-                var depth = Interlocked.Increment(ref _depth);
-                if (_channel.Writer.TryWrite(request))
-                {
-                    _telemetry.UpdateQueueDepth(depth, _capacity);
-                    return true;
-                }
-
-                depth = Interlocked.Decrement(ref _depth);
-                _telemetry.UpdateQueueDepth(depth, _capacity);
-            }
-
-            return false;
+            return ValueTask.FromResult(false);
         }
-        catch (OperationCanceledException)
+
+        if (!_channel.Writer.TryWrite(request))
         {
-            return false;
+            return ValueTask.FromResult(false);
         }
+
+        var depth = Interlocked.Increment(ref _depth);
+        _telemetry.UpdateQueueDepth(depth, _capacity);
+        return ValueTask.FromResult(true);
     }
 
     public IAsyncEnumerable<SuspiciousRequest> ReadAllAsync(CancellationToken cancellationToken)

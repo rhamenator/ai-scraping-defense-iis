@@ -79,7 +79,7 @@ public sealed class RedisPublicBlocklistService : IPublicBlocklistService
             ? "public_blocklist"
             : source.Trim();
 
-        await _blocklistService.BlockAsync(
+        var blockApplied = await _blocklistService.BlockAsync(
             ipAddress,
             normalizedReason,
             [normalizedSource, "public_blocklist_report"],
@@ -87,7 +87,7 @@ public sealed class RedisPublicBlocklistService : IPublicBlocklistService
 
         return new PublicBlocklistReportResponse(
             ipAddress,
-            Blocked: true,
+            Blocked: blockApplied,
             normalizedReason);
     }
 

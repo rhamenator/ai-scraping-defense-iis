@@ -103,18 +103,25 @@ public sealed class PeerSyncRunner
 
                     if (string.Equals(peer.TrustMode, PeerTrustModes.BlockList, StringComparison.OrdinalIgnoreCase))
                     {
-                        await _blocklistService.BlockAsync(
+                        var blockApplied = await _blocklistService.BlockAsync(
                             normalizedIp,
                             $"peer_sync:{peerName}",
                             combinedSignals,
                             cancellationToken);
-
-                        blockedCount++;
-                        blockedForPeer++;
+                        if (blockApplied)
+                        {
+                            blockedCount++;
+                            blockedForPeer++;
+                        }
+                        else
+                        {
+                            observedCount++;
+                            observedForPeer++;
+                        }
                         _eventStore.Add(CreateImportedDecision(
                             normalizedIp,
-                            "blocked",
-                            90,
+                            blockApplied ? "blocked" : "observed",
+                            blockApplied ? 90 : 0,
                             summary,
                             combinedSignals,
                             signal.ObservedAtUtc));

@@ -74,14 +74,21 @@ public sealed class CommunityBlocklistSyncRunner
                         continue;
                     }
 
-                    await _blocklistService.BlockAsync(
+                    var blockApplied = await _blocklistService.BlockAsync(
                         normalizedIp,
                         $"community_blocklist:{sourceName}",
                         [$"community_blocklist:{sourceName}"],
                         cancellationToken);
-
-                    importedCount++;
-                    importedForSource++;
+                    if (blockApplied)
+                    {
+                        importedCount++;
+                        importedForSource++;
+                    }
+                    else
+                    {
+                        rejectedCount++;
+                        rejectedForSource++;
+                    }
                 }
 
                 if (truncatedCount > 0)

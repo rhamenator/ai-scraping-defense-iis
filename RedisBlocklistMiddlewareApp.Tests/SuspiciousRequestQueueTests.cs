@@ -8,7 +8,7 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class SuspiciousRequestQueueTests
 {
     [Fact]
-    public async Task QueueAsync_WaitsForCapacityInsteadOfDroppingOldestRequest()
+    public async Task QueueAsync_ShedsNewWorkWhenQueueIsFull()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var queue = CreateQueue(capacity: 1);
@@ -17,18 +17,13 @@ public sealed class SuspiciousRequestQueueTests
 
         Assert.True(await queue.QueueAsync(first, cancellationToken));
 
-        using var secondWriteCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        secondWriteCts.CancelAfter(TimeSpan.FromSeconds(2));
-        var secondWriteTask = queue.QueueAsync(second, secondWriteCts.Token).AsTask();
-
-        await Task.Delay(100, cancellationToken);
-        Assert.False(secondWriteTask.IsCompleted);
+        Assert.False(await queue.QueueAsync(second, cancellationToken));
 
         var enumerator = queue.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("/first", enumerator.Current.Path);
 
-        Assert.True(await secondWriteTask);
+        Assert.True(await queue.QueueAsync(second, cancellationToken));
 
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal("/second", enumerator.Current.Path);

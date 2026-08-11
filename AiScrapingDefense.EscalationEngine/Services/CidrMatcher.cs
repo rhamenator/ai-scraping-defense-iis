@@ -3,7 +3,7 @@ using System.Net.Sockets;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
-internal static class CidrMatcher
+public static class CidrMatcher
 {
     public static bool Contains(string cidr, string ipAddress)
     {

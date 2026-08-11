@@ -4,7 +4,7 @@ public interface IBlocklistService
 {
     Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken);
 
-    Task BlockAsync(
+    Task<bool> BlockAsync(
         string ipAddress,
         string reason,
         IReadOnlyCollection<string> signals,

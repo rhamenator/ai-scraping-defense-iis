@@ -17,12 +17,15 @@ public sealed class SqliteWebhookEventInbox : IWebhookEventInbox
         SingleWriter = false
     });
     private readonly object _gate = new();
+    private readonly TimeSpan _leaseTimeout;
 
     public SqliteWebhookEventInbox(
         IOptions<DefenseEngineOptions> options,
         IHostEnvironment environment)
     {
         var databasePath = options.Value.Audit.DatabasePath;
+        _leaseTimeout = TimeSpan.FromMinutes(
+            Math.Max(1, options.Value.Queue.WebhookLeaseTimeoutMinutes));
         var resolvedDatabasePath = Path.IsPathRooted(databasePath)
             ? databasePath
             : Path.Combine(environment.ContentRootPath, databasePath);
@@ -225,8 +228,12 @@ public sealed class SqliteWebhookEventInbox : IWebhookEventInbox
                 SET
                     status = 'pending',
                     leased_at_utc = NULL
-                WHERE status = 'processing';
+                WHERE status = 'processing'
+                  AND (leased_at_utc IS NULL OR leased_at_utc < $leaseCutoffUtc);
                 """;
+            command.Parameters.AddWithValue(
+                "$leaseCutoffUtc",
+                (DateTimeOffset.UtcNow - _leaseTimeout).UtcDateTime.ToString("O"));
             command.ExecuteNonQuery();
 
             using var countCommand = connection.CreateCommand();

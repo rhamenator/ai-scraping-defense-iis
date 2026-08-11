@@ -46,17 +46,26 @@ public sealed class DefenseAnalysisService : BackgroundService
 
                 if (assessment.ShouldBlock)
                 {
-                    await _blocklistService.BlockAsync(
+                    var blockApplied = await _blocklistService.BlockAsync(
                         request.IpAddress,
                         assessment.DecisionReason,
                         assessment.Signals,
                         stoppingToken);
-
-                    _logger.LogWarning(
-                        "Blocked IP {IpAddress} after queued analysis with score {Score} and frequency {Frequency}.",
-                        request.IpAddress,
-                        assessment.Score,
-                        assessment.Frequency);
+                    if (blockApplied)
+                    {
+                        _logger.LogWarning(
+                            "Blocked IP {IpAddress} after queued analysis with score {Score} and frequency {Frequency}.",
+                            request.IpAddress,
+                            assessment.Score,
+                            assessment.Frequency);
+                    }
+                    else
+                    {
+                        action = ContainmentActions.Observed;
+                        _logger.LogWarning(
+                            "Queued block was rejected because {IpAddress} is configured trusted infrastructure.",
+                            request.IpAddress);
+                    }
                 }
                 else
                 {

@@ -174,10 +174,10 @@ public sealed class CommunityBlocklistSyncRunnerTests
             return Task.FromResult(false);
         }
 
-        public Task BlockAsync(string ipAddress, string reason, IReadOnlyCollection<string> signals, CancellationToken cancellationToken)
+        public Task<bool> BlockAsync(string ipAddress, string reason, IReadOnlyCollection<string> signals, CancellationToken cancellationToken)
         {
             BlockCalls.Add((ipAddress, reason, signals));
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)

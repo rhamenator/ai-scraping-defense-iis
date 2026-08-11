@@ -199,14 +199,14 @@ public sealed class WebhookIntakeProcessingServiceTests
             return Task.FromResult(false);
         }
 
-        public Task BlockAsync(
+        public Task<bool> BlockAsync(
             string ipAddress,
             string reason,
             IReadOnlyCollection<string> signals,
             CancellationToken cancellationToken)
         {
             BlockCalls.Add((ipAddress, reason, signals));
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)

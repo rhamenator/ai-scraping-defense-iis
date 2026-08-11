@@ -501,7 +501,8 @@ public abstract class RelationalWebhookEventInbox : IWebhookEventInbox
         _connectionString = options.Value.Audit.ConnectionString;
         _dialect = dialect;
         EnsureSchema();
-        ResetLeases();
+        ResetExpiredLeases(TimeSpan.FromMinutes(
+            Math.Max(1, options.Value.Queue.WebhookLeaseTimeoutMinutes)));
     }
 
     public Task<long> EnqueueAsync(IntakeWebhookEvent webhookEvent, CancellationToken cancellationToken)
@@ -608,7 +609,7 @@ public abstract class RelationalWebhookEventInbox : IWebhookEventInbox
         command.ExecuteNonQuery();
     }
 
-    private void ResetLeases()
+    private void ResetExpiredLeases(TimeSpan leaseTimeout)
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
@@ -618,8 +619,13 @@ public abstract class RelationalWebhookEventInbox : IWebhookEventInbox
             SET
                 status = 'pending',
                 leased_at_utc = NULL
-            WHERE status = 'processing';
+            WHERE status = 'processing'
+              AND (leased_at_utc IS NULL OR leased_at_utc < @leaseCutoffUtc);
             """;
+        AddParameter(
+            command,
+            "@leaseCutoffUtc",
+            (DateTimeOffset.UtcNow - leaseTimeout).UtcDateTime.ToString("O"));
         command.ExecuteNonQuery();
 
         using var countCommand = connection.CreateCommand();

@@ -65,6 +65,32 @@ public sealed class OperatorRecommendationServiceTests
         Assert.Equal("Not evaluated", hotPathRecommendation.CurrentValue);
     }
 
+    [Fact]
+    public void GetRecommendations_AdvisesCloudflareOnlyForDistributedAttackEvidence()
+    {
+        var observedAtUtc = DateTimeOffset.UtcNow;
+        var decisions = Enumerable.Range(0, 60)
+            .Select(index => new DefenseDecision(
+                $"198.51.100.{index}",
+                index < 40 ? "blocked" : "observed",
+                index < 40 ? 90 : 20,
+                2,
+                $"/resource/{index % 5}",
+                ["signal"],
+                "summary",
+                observedAtUtc,
+                observedAtUtc))
+            .ToArray();
+        var service = CreateService(decisions, options => options.Cloudflare.Enabled = true);
+
+        var recommendation = Assert.Single(
+            service.GetRecommendations().Recommendations,
+            item => item.Id == "enable-cloudflare-under-attack-mode");
+
+        Assert.Equal("cloudflare", recommendation.Category);
+        Assert.Contains("originating IP", recommendation.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static OperatorRecommendationService CreateService(
         IReadOnlyList<DefenseDecision> decisions,
         Action<DefenseEngineOptions>? configure = null)

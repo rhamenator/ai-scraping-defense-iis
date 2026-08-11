@@ -18,13 +18,13 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         }
 
         var invalidTrustedProxies = networking.TrustedProxies
-            .Where(proxy => !IPAddress.TryParse(proxy, out _))
+            .Where(proxy => !IsValidProxyOrNetwork(proxy))
             .ToArray();
 
         if (invalidTrustedProxies.Length > 0)
         {
             errors.Add(
-                $"DefenseEngine:Networking:TrustedProxies contains invalid IP addresses: {string.Join(", ", invalidTrustedProxies)}.");
+                $"DefenseEngine:Networking:TrustedProxies contains invalid IP addresses or CIDR ranges: {string.Join(", ", invalidTrustedProxies)}.");
         }
 
         if (string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy, StringComparison.OrdinalIgnoreCase) &&
@@ -88,6 +88,27 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);
+    }
+
+    private static bool IsValidProxyOrNetwork(string value)
+    {
+        if (IPAddress.TryParse(value, out _))
+        {
+            return true;
+        }
+
+        var parts = value.Split('/', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 ||
+            !IPAddress.TryParse(parts[0], out var address) ||
+            !int.TryParse(parts[1], out var prefixLength))
+        {
+            return false;
+        }
+
+        var maximumPrefix = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+            ? 32
+            : 128;
+        return prefixLength >= 0 && prefixLength <= maximumPrefix;
     }
 
     private static bool IsEmptyEquivalentRoute(string? path)

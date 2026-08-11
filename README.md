@@ -114,6 +114,8 @@ Key areas:
 - `DefenseEngine:Redis`
 - `DefenseEngine:Heuristics`
 - `DefenseEngine:Networking`
+- `DefenseEngine:Cloudflare`
+  - When enabled, the dashboard recommends considering Cloudflare Under Attack Mode only after the configured attack-evidence thresholds are met. It does not make Cloudflare API changes automatically.
 - `DefenseEngine:Management`
   - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
 - `DefenseEngine:Intake`
@@ -133,6 +135,8 @@ Key areas:
 - `DefenseEngine:Observability`
 
 For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
+
+For Cloudflare, populate `TrustedProxies` with Cloudflare's published CIDR ranges and enable `DefenseEngine:Cloudflare`. Forwarded Headers middleware then restores the originating client IP before detection; configured proxy/CDN addresses are rejected by every blocklist insertion path. Cloudflare remains an ingress protection layer only—ordinary outbound model, webhook, feed, and backend traffic is sent directly to its configured destination so it does not add avoidable Cloudflare traffic cost.
 
 Defense decisions and webhook intake records are persisted through `DefenseEngine:Audit`. The default provider is SQLite via `DatabasePath`; production deployments can set `Provider` to `Postgres` or `SqlServer` and provide `ConnectionString` instead.
 

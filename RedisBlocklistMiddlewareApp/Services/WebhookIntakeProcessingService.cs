@@ -52,7 +52,7 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
                     ? item.Event.Details.Signals
                     : [$"webhook_event:{item.Event.EventType}"];
 
-                await _blocklistService.BlockAsync(
+                var blockApplied = await _blocklistService.BlockAsync(
                     normalizedIp,
                     reason,
                     signals,
@@ -60,28 +60,32 @@ public sealed class WebhookIntakeProcessingService : BackgroundService
 
                 _eventStore.Add(new DefenseDecision(
                     normalizedIp,
-                    "blocked",
-                    100,
+                    blockApplied ? "blocked" : "observed",
+                    blockApplied ? 100 : 0,
                     1,
                     item.Event.Details.Path ?? "/",
                     signals,
-                    $"Blocked from webhook intake: {reason}",
+                    blockApplied
+                        ? $"Blocked from webhook intake: {reason}"
+                        : "Webhook block rejected for configured trusted infrastructure.",
                     item.Event.TimestampUtc,
                     DateTimeOffset.UtcNow,
                     new DefenseScoreBreakdown(
-                        100,
+                        blockApplied ? 100 : 0,
                         0,
-                        100,
-                        true,
+                        blockApplied ? 100 : 0,
+                        blockApplied,
                         [
                             new DefenseScoreContribution(
                                 "webhook_intake",
-                                100,
+                                blockApplied ? 100 : 0,
                                 signals,
                                 $"Webhook intake supplied a blocking verdict: {reason}")
                         ])));
 
-                _telemetry.RecordDecision("blocked", "webhook_intake");
+                _telemetry.RecordDecision(
+                    blockApplied ? "blocked" : "observed",
+                    "webhook_intake");
                 var alertDeliveries = await _alertDispatcher.DispatchAsync(item.Event, stoppingToken);
                 foreach (var delivery in alertDeliveries)
                 {

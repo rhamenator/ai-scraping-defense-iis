@@ -1,6 +1,7 @@
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Data.Sqlite;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
@@ -46,6 +47,27 @@ public sealed class WebhookEventInboxTests
         Assert.Equal(claimed.Id, secondEnumerator.Current.Id);
     }
 
+    [Fact]
+    public async Task NewInbox_DoesNotStealAnActiveProcessingLease()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var harness = SqliteInboxHarness.Create();
+        var firstInbox = harness.CreateInbox();
+        await firstInbox.EnqueueAsync(CreateEvent("198.51.100.12"), cancellationToken);
+
+        await using var enumerator = firstInbox.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
+        Assert.True(await enumerator.MoveNextAsync());
+
+        _ = harness.CreateInbox();
+
+        using var connection = new SqliteConnection($"Data Source={harness.DatabasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT status FROM webhook_intake_events WHERE id = $id";
+        command.Parameters.AddWithValue("$id", enumerator.Current.Id);
+        Assert.Equal("processing", command.ExecuteScalar());
+    }
+
     private static IntakeWebhookEvent CreateEvent(string ipAddress)
     {
         return new IntakeWebhookEvent(
@@ -78,6 +100,8 @@ public sealed class WebhookEventInboxTests
         }
 
         public IOptions<DefenseEngineOptions> Options { get; }
+
+        public string DatabasePath => Path.Combine(_rootPath, "intake.db");
 
         public static SqliteInboxHarness Create()
         {

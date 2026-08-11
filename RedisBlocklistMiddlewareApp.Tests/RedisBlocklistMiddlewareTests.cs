@@ -37,6 +37,25 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_DoesNotBypassPathsThatOnlyShareAHealthPrefix()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.10"));
+
+        await middleware.InvokeAsync(CreateContext("/health-sensitive"));
+
+        Assert.False(nextState.WasCalled);
+        Assert.Equal(1, blocklist.IsBlockedCallCount);
+    }
+
+    [Fact]
     public async Task InvokeAsync_BypassesDefenseEndpoints()
     {
         var blocklist = new FakeBlocklistService { IsBlockedResult = true };
@@ -211,6 +230,28 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_AllowsRequestWhenInfrastructureBlockIsRejected()
+    {
+        var blocklist = new FakeBlocklistService { BlockAsyncResult = false };
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(
+                new RequestSignalEvaluation(true, "known_bad_user_agent", ["known_bad_user_agent:GPTBot"])),
+            new FakeSuspiciousRequestQueue(),
+            eventStore,
+            new FakeClientIpResolver("173.245.48.10"));
+
+        await middleware.InvokeAsync(CreateContext("/products"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Empty(eventStore.Decisions);
+        Assert.Single(blocklist.BlockCalls);
+    }
+
+    [Fact]
     public async Task InvokeAsync_QueuesSuspiciousRequests_AndRendersTarpit()
     {
         var queue = new FakeSuspiciousRequestQueue();
@@ -317,6 +358,8 @@ public sealed class RedisBlocklistMiddlewareTests
     {
         public bool IsBlockedResult { get; set; }
 
+        public bool BlockAsyncResult { get; set; } = true;
+
         public int IsBlockedCallCount { get; private set; }
 
         public List<(string IpAddress, string Reason, IReadOnlyCollection<string> Signals)> BlockCalls { get; } = [];
@@ -327,14 +370,14 @@ public sealed class RedisBlocklistMiddlewareTests
             return Task.FromResult(IsBlockedResult);
         }
 
-        public Task BlockAsync(
+        public Task<bool> BlockAsync(
             string ipAddress,
             string reason,
             IReadOnlyCollection<string> signals,
             CancellationToken cancellationToken)
         {
             BlockCalls.Add((ipAddress, reason, signals));
-            return Task.CompletedTask;
+            return Task.FromResult(BlockAsyncResult);
         }
 
         public Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
