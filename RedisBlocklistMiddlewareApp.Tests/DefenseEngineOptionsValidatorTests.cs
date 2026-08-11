@@ -5,6 +5,31 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class DefenseEngineOptionsValidatorTests
 {
     [Fact]
+    public void Validate_RejectsReservedSplitTopologyInsteadOfIgnoringIt()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var result = validator.Validate(
+            null,
+            new DefenseEngineOptions
+            {
+                Topology = new TopologyOptions { Mode = RuntimeTopologyModes.Split }
+            });
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, failure =>
+            failure.Contains("not implemented", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsSingleTopology()
+    {
+        var validator = new DefenseEngineOptionsValidator();
+        var result = validator.Validate(null, new DefenseEngineOptions());
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
     public void Validate_RejectsUnknownPrimaryModelRoute()
     {
         var validator = new DefenseEngineOptionsValidator();

@@ -55,7 +55,7 @@ Optional but commonly used:
 - `DefenseEngine:Networking:ClientIpResolutionMode=TrustedProxy`
 - `DefenseEngine:Networking:TrustedProxies` (when using proxy/CDN headers)
 
-Optional split-runtime settings (post-v1 topology):
+Reserved split-runtime settings (post-v1 design; not implemented):
 
 - `DefenseEngine:Topology:Mode=Split`
 - `DefenseEngine:Services:EscalationEngine:BaseUrl`
@@ -63,7 +63,7 @@ Optional split-runtime settings (post-v1 topology):
 - `DefenseEngine:Services:TarpitApi:BaseUrl`
 - `DefenseEngine:Services:TarpitApi:ApiKey`
 
-If split-runtime settings are omitted, deployment remains in single deployable mode.
+The current release supports only `DefenseEngine:Topology:Mode=Single`. Setting `Split` fails startup validation rather than being silently ignored. The endpoint and API-key settings below document the future contract and are not active configuration yet.
 
 ## 4) File-System Permissions
 
@@ -95,7 +95,7 @@ After site start/recycle:
 
 ## 7) Split Runtime Validation (Optional)
 
-When `DefenseEngine:Topology:Mode=Split` is enabled:
+When split-runtime support is implemented in a future release:
 
 1. Verify `EscalationEngine` and `TarpitApi` health endpoints are reachable from `EdgeGateway`.
 2. Verify service-to-service API keys are required and validated.

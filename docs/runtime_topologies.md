@@ -1,6 +1,6 @@
 # Runtime Topologies
 
-This document defines supported runtime topology modes for the .NET stack and establishes the contract for optional split deployments.
+This document defines the supported single-runtime topology and the reserved contract for a future optional split deployment.
 
 ## Goals
 
@@ -9,7 +9,7 @@ This document defines supported runtime topology modes for the .NET stack and es
 - provide configuration contracts that allow operators to split runtimes incrementally
 - define validation checks for both single-node and split deployments
 
-## Supported Modes
+## Runtime Modes
 
 ### Mode A: Single Deployable (default)
 
@@ -20,14 +20,14 @@ This document defines supported runtime topology modes for the .NET stack and es
 
 This mode is the commercial v1 baseline and remains supported after split-runtime enablement.
 
-### Mode B: Optional Split Runtime (post-v1)
+### Mode B: Optional Split Runtime (reserved, not implemented)
 
 - `EdgeGateway` runs as the ingress-facing process.
 - `EscalationEngine` runs as a separate process with provider/model dependencies.
 - `TarpitApi` runs as a separate process focused on tarpit response generation.
 - Contracts between runtimes are authenticated service-to-service HTTP calls.
 
-Split-runtime mode is optional and should be enabled only when production topology, isolation, or scaling requirements justify it.
+The project boundaries exist, but they are class libraries inside the single deployable; they are not independently executable services yet. Setting `DefenseEngine__Topology__Mode=Split` is rejected during startup so the setting cannot fail silently while the monolith continues running. The remaining sections define the implementation contract, not a currently supported deployment.
 
 ## Runtime Boundaries
 
@@ -53,7 +53,7 @@ Split-runtime mode is optional and should be enabled only when production topolo
 
 ## Configuration Contract
 
-When split mode is enabled, configure explicit service endpoints and service keys:
+The future split implementation is expected to use explicit service endpoints and service keys:
 
 - `DefenseEngine__Topology__Mode=Split`
 - `DefenseEngine__Services__EscalationEngine__BaseUrl`
@@ -61,7 +61,7 @@ When split mode is enabled, configure explicit service endpoints and service key
 - `DefenseEngine__Services__TarpitApi__BaseUrl`
 - `DefenseEngine__Services__TarpitApi__ApiKey`
 
-When these settings are missing, the platform must continue operating in single deployable mode (`DefenseEngine__Topology__Mode=Single` or default).
+Today, use `DefenseEngine__Topology__Mode=Single` (or omit it). `Split`, unknown values, and misspellings fail startup validation.
 
 ## Validation Checklist
 
@@ -72,7 +72,7 @@ When these settings are missing, the platform must continue operating in single 
 3. `POST /analyze` works with configured intake key.
 4. Tarpit route responds and logs expected metadata.
 
-### Split Runtime validation
+### Future split-runtime acceptance criteria
 
 1. `EdgeGateway` health endpoint is healthy.
 2. `EscalationEngine` health endpoint is healthy and rejects missing/invalid service key.

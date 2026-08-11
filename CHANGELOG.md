@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject the reserved `Topology:Mode=Split` setting at startup instead of silently running the single-process topology, and clarify that the split contract is not yet implemented.
+- Preserve the retired Python/IIS implementation under `archive/legacy-python-iis` with provenance and restoration instructions instead of deleting it.
+- Exercise SQL Server decision, feedback, delivery, and webhook-inbox persistence with a real container-backed integration test.
+- Fix SQL Server webhook claims by selecting the lease columns in the updatable CTE before changing their values.
+
 ### Added
 
 * Windows installer tooling for the .NET runtime, including Windows service support, release staging scripts, and an Inno Setup manifest.
@@ -19,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Documentation navigation and parity planning references were updated across `docs/index.md`, `docs/commercial_scope.md`, and `docs/dotnet_parity_roadmap.md` to align with the new baseline documents.
+* The unsupported Python services and their IIS/FastCGI examples were moved to `archive/legacy-python-iis` with provenance and restoration guidance instead of being deleted.
 
 ## [1.0.0] - 2026-03-15
 

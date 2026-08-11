@@ -31,6 +31,21 @@ public sealed class DefenseEngineOptions
     public TarpitOptions Tarpit { get; set; } = new();
 
     public ObservabilityOptions Observability { get; set; } = new();
+
+    public TopologyOptions Topology { get; set; } = new();
+}
+
+public sealed class TopologyOptions
+{
+    public string Mode { get; set; } = RuntimeTopologyModes.Single;
+}
+
+public static class RuntimeTopologyModes
+{
+    public const string Single = "Single";
+
+    // Reserved for the documented post-v1 split-runtime implementation.
+    public const string Split = "Split";
 }
 
 public sealed class RedisOptions

@@ -10,6 +10,17 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         var errors = new List<string>();
         var networking = options.Networking;
 
+        if (string.Equals(options.Topology.Mode, RuntimeTopologyModes.Split, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                "DefenseEngine:Topology:Mode='Split' is reserved for a post-v1 runtime and is not implemented. Use 'Single' so requests are not silently handled by the monolith.");
+        }
+        else if (!string.Equals(options.Topology.Mode, RuntimeTopologyModes.Single, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"DefenseEngine:Topology:Mode must be '{RuntimeTopologyModes.Single}'.");
+        }
+
         if (!string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.Direct, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy, StringComparison.OrdinalIgnoreCase))
         {

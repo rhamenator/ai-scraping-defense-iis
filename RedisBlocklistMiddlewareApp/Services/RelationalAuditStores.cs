@@ -1124,7 +1124,9 @@ public sealed class RelationalAuditDialect
         (
             SELECT TOP (1)
                 id,
-                payload_json
+                payload_json,
+                status,
+                leased_at_utc
             FROM webhook_intake_events WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE status = 'pending'
             ORDER BY id
