@@ -2,6 +2,13 @@
 
 Thank you for considering contributing to this project! We aim to build a robust, ethical, and effective defense against unwanted AI scraping, and community contributions are vital.
 
+## Choose the Right Channel
+
+- Use the structured bug, feature, documentation, or support form when opening an issue.
+- Read [SUPPORT.md](SUPPORT.md) before requesting usage help.
+- Report vulnerabilities privately according to [SECURITY.md](SECURITY.md); never put vulnerability details in a public issue.
+- Follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) in all project interactions.
+
 ## Attribution
 
 If you use this project or its components in your own work (open-source or commercial), you must:
@@ -33,6 +40,18 @@ We welcome meaningful contributions, including but not limited to:
 6. **Commit Your Changes:** Use clear and descriptive commit messages: `git commit -am 'feat: Add advanced header analysis heuristic'`
 7. **Push to Your Fork:** `git push origin feature/your-new-feature`
 8. **Submit a Pull Request:** Open a PR against the `main` branch of the original repository. Fill out the PR template clearly.
+
+## Validation
+
+For changes to the .NET solution, run:
+
+```powershell
+dotnet restore anti-scraping-defense-iis.sln
+dotnet build anti-scraping-defense-iis.sln --no-restore
+dotnet test anti-scraping-defense-iis.sln --no-build
+```
+
+Run any installer or deployment checks relevant to the files you changed, and include exact results in the pull request.
 
 ## Code Style (Example)
 
