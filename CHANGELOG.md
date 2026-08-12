@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve the retired Python/IIS implementation under `archive/legacy-python-iis` with provenance and restoration instructions instead of deleting it.
 - Exercise SQL Server decision, feedback, delivery, and webhook-inbox persistence with a real container-backed integration test.
 - Fix SQL Server webhook claims by selecting the lease columns in the updatable CTE before changing their values.
+- Removed a high-severity SSH.NET advisory from integration-test infrastructure by
+  upgrading Testcontainers and enforcing the patched transitive dependency floor.
 
 ### Added
 
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * macOS packaging scripts and CI workflows for unsigned `osx-x64` and `osx-arm64` `.pkg` artifacts, plus operator guidance for SmartScreen and Gatekeeper warnings.
 * Windows ARM64 installer packaging and release automation alongside the existing Windows x64 installer path.
 * Post-v1 parity baseline documents for optional split runtime topology, escalation scoring/provider expansion, tarpit content strategy, community blocklist + peer coordination, observability/telemetry export, multi-node durability/coordination, and operator UI workflow parity.
+* Repository-wide NuGet audit enforcement and weekly NuGet/GitHub Actions dependency updates.
 
 ### Changed
 
