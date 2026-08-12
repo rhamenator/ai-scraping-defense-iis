@@ -25,10 +25,10 @@ jobs:
           - language: csharp
             build-mode: manual
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Setup .NET SDK
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: 10.0.104
       - name: Initialize CodeQL
