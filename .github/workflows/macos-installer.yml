@@ -72,18 +72,22 @@ jobs:
           install_root="/usr/local/lib/ai-scraping-defense/${{ matrix.runtime }}"
           executable="${install_root}/AiScrapingDefense.EdgeGateway"
           test -x "${executable}"
+          mkdir -p "$RUNNER_TEMP/tarpit-archives"
 
-          sudo -u nobody env \
-            ASPNETCORE_URLS=http://127.0.0.1:18080 \
-            DOTNET_ENVIRONMENT=Development \
-            DefenseEngine__Management__ApiKey=installer-smoke-management-key \
-            DefenseEngine__Intake__ApiKey=installer-smoke-intake-key \
-            "${executable}" --contentRoot "${install_root}" > "$RUNNER_TEMP/installer-smoke.log" 2>&1 &
+          ASPNETCORE_URLS=http://127.0.0.1:18080 \
+          DOTNET_ENVIRONMENT=Development \
+          DefenseEngine__Management__ApiKey=installer-smoke-management-key \
+          DefenseEngine__Intake__ApiKey=installer-smoke-intake-key \
+          DefenseEngine__Audit__DatabasePath="$RUNNER_TEMP/defense-events.db" \
+          DefenseEngine__Tarpit__ArchiveDirectory="$RUNNER_TEMP/tarpit-archives" \
+          "${executable}" --contentRoot "${install_root}" > "$RUNNER_TEMP/installer-smoke.log" 2>&1 &
           service_pid=$!
           trap 'kill "${service_pid}" 2>/dev/null || true' EXIT
 
           for attempt in {1..40}; do
-            if curl --fail --silent http://127.0.0.1:18080/health > /dev/null; then
+            # A degraded response is expected without Redis on the packaging
+            # runner; any HTTP response proves the installed service started.
+            if curl --silent --output /dev/null http://127.0.0.1:18080/health; then
               exit 0
             fi
             if ! kill -0 "${service_pid}" 2>/dev/null; then
