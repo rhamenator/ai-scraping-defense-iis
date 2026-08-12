@@ -1,5 +1,5 @@
 services:
-  app:
+  edge-gateway:
     environment:
       DefenseEngine__Observability__EnablePrometheusEndpoint: "true"
       DefenseEngine__Observability__PrometheusEndpointPath: /metrics
@@ -19,7 +19,7 @@ services:
       - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/observability/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     depends_on:
-      app:
+      edge-gateway:
         condition: service_started
       otel-collector:
         condition: service_started

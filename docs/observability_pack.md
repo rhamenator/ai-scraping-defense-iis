@@ -5,22 +5,24 @@ This repository ships a starter observability bundle for the commercial .NET dep
 ## Included Assets
 
 - `compose.observability.yaml` extends the base compose stack with Prometheus, Grafana, and an OpenTelemetry Collector.
-- `deploy/observability/prometheus/prometheus.yml` scrapes the app and collector metrics.
+- `deploy/observability/prometheus/prometheus.yml` scrapes the edge gateway and collector metrics.
 - `deploy/observability/prometheus/alert_rules.yml` provides starter rules for block spikes, queue pressure, sync failures, and intake-delivery failures.
 - `deploy/observability/grafana/...` provisions a dashboard and data source automatically.
-- `deploy/observability/otel-collector-config.yaml` receives OTLP traces from the app and exports them through the collector's debug exporter by default.
+- `deploy/observability/otel-collector-config.yaml` receives OTLP traces from the edge gateway and exports them through the collector's debug exporter by default.
 
 ## Running the Stack
 
 Start the base runtime plus observability services:
 
 ```bash
+cp compose.env.example .env
+# Replace every placeholder in .env with an independent random value.
 docker compose -f compose.yaml -f compose.observability.yaml up --build
 ```
 
 The stack will expose:
 
-- app: `http://localhost:8080`
+- edge gateway: `http://localhost:8080`
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
 - OTLP gRPC: `localhost:4317`
@@ -69,10 +71,10 @@ For a real production trace backend, replace the `debug` exporter in `deploy/obs
 Validate the compose configuration:
 
 ```bash
-docker compose -f compose.yaml -f compose.observability.yaml config
+docker compose --env-file .env -f compose.yaml -f compose.observability.yaml config
 ```
 
-Check that the app metrics are visible:
+Check that the edge gateway metrics are visible:
 
 ```bash
 curl http://localhost:8080/metrics

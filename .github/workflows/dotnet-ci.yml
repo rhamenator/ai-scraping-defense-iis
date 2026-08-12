@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.104
 
@@ -30,4 +30,4 @@ jobs:
         run: dotnet test anti-scraping-defense-iis.sln --no-build
 
       - name: Validate Observability Compose Stack
-        run: docker compose -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml
+        run: docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml

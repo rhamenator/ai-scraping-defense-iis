@@ -10,7 +10,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - app:8080
+          - edge-gateway:8080
 
   - job_name: otel-collector
     static_configs:
