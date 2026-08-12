@@ -32,6 +32,10 @@ public sealed class DefenseStackFixture : IAsyncLifetime
 
     public string IntakeApiKey => "integration-intake-key";
 
+    public string RedisConnectionString => _redisContainer.GetConnectionString();
+
+    public string PostgresConnectionString => _postgresContainer.GetConnectionString();
+
     public async ValueTask InitializeAsync()
     {
         await _redisContainer.StartAsync();
@@ -45,7 +49,9 @@ public sealed class DefenseStackFixture : IAsyncLifetime
         await _redisContainer.DisposeAsync();
     }
 
-    public async Task<IntegrationTestHost> CreateHostAsync(IReadOnlyDictionary<string, string?>? overrides = null)
+    public async Task<IntegrationTestHost> CreateHostAsync(
+        IReadOnlyDictionary<string, string?>? overrides = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         const int redisDatabaseBase = 0;
         var auditDirectory = Path.Combine(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
@@ -129,6 +135,7 @@ public sealed class DefenseStackFixture : IAsyncLifetime
                         options.Observability.EnablePrometheusEndpoint = enablePrometheusEndpoint;
                         options.Observability.OtlpEndpoint = otlpEndpoint;
                     });
+                    configureServices?.Invoke(services);
                 });
             });
 

@@ -108,3 +108,5 @@ static bool IsValidAssessmentRequest(SuspiciousRequest request)
         request.Signals is not null && request.Signals.Count <= 128 &&
         request.Signals.All(signal => signal is not null && signal.Length <= 512);
 }
+
+public sealed class EscalationEngineAssemblyMarker;

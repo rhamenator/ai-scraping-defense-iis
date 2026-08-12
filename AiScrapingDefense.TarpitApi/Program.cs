@@ -39,3 +39,5 @@ app.MapGet("/tarpit/{**path}", async (
     return Results.Content(pageService.GeneratePage(normalizedPath, clientIp), "text/html");
 });
 app.Run();
+
+public sealed class TarpitApiAssemblyMarker;

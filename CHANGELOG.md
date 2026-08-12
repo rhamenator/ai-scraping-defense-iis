@@ -9,15 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-12
+
 ### Fixed
 
-- Reject the reserved `Topology:Mode=Split` setting at startup instead of silently running the single-process topology, and clarify that the split contract is not yet implemented.
+- Clamp Raft TCP connection timeouts to the lower election timeout so failed peer connections cannot stall leader election.
+- Keep the observability Compose overlay and Prometheus target aligned with the split `edge-gateway` service name.
+- Validate split-topology service URLs and credentials at startup instead of silently accepting an incomplete deployment contract.
 - Preserve the retired Python/IIS implementation under `archive/legacy-python-iis` with provenance and restoration instructions instead of deleting it.
 - Exercise SQL Server decision, feedback, delivery, and webhook-inbox persistence with a real container-backed integration test.
 - Fix SQL Server webhook claims by selecting the lease columns in the updatable CTE before changing their values.
 
 ### Added
 
+* Three-node Raft integration coverage for leader election, log replication, failover, and post-failover replication.
+* End-to-end split-topology coverage across the edge gateway, escalation engine, and dedicated tarpit runtime.
+* Operator dashboard search, action filtering, and full decision drill-down.
 * Windows installer tooling for the .NET runtime, including Windows service support, release staging scripts, and an Inno Setup manifest.
 * macOS packaging scripts and CI workflows for unsigned `osx-x64` and `osx-arm64` `.pkg` artifacts, plus operator guidance for SmartScreen and Gatekeeper warnings.
 * Windows ARM64 installer packaging and release automation alongside the existing Windows x64 installer path.

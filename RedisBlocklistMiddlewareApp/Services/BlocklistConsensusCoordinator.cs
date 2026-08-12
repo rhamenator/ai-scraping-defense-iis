@@ -117,7 +117,12 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
                 LowerElectionTimeout = _options.LowerElectionTimeoutMilliseconds,
                 UpperElectionTimeout = _options.UpperElectionTimeoutMilliseconds,
                 RequestTimeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds),
-                ConnectTimeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds),
+                // DotNext requires the TCP connect timeout not to exceed the
+                // lower election timeout; otherwise failed peer dials can
+                // stall voting long enough to prevent a stable election.
+                ConnectTimeout = TimeSpan.FromMilliseconds(Math.Min(
+                    _options.RequestTimeoutSeconds * 1000L,
+                    _options.LowerElectionTimeoutMilliseconds)),
                 LoggerFactory = _loggerFactory
             };
 

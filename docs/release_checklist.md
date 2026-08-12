@@ -8,7 +8,7 @@ Use this checklist before cutting a commercial release candidate.
 - `dotnet test anti-scraping-defense-iis.sln`
 - `docker build -t ai-scraping-defense-dotnet .`
 - `docker compose up --build` smoke run succeeds
-- `docker compose -f compose.yaml -f compose.observability.yaml config` validates the packaged monitoring overlay
+- `docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config` validates the packaged monitoring overlay
 
 ## Runtime Validation
 

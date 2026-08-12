@@ -24,6 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AiScrapingDefense.EscalationEngine\AiScrapingDefense.EscalationEngine.csproj" />
+    <ProjectReference Include="..\AiScrapingDefense.TarpitApi\AiScrapingDefense.TarpitApi.csproj" />
     <ProjectReference Include="..\RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj" />
   </ItemGroup>
 

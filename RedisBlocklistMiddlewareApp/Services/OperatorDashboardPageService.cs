@@ -263,11 +263,11 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       letter-spacing: 0.06em;
     }
 
-    input, button {
+    input, select, button {
       font: inherit;
     }
 
-    input {
+    input, select {
       width: 100%;
       padding: 14px 16px;
       border-radius: 14px;
@@ -276,7 +276,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       color: var(--ink);
     }
 
-    input:focus {
+    input:focus, select:focus {
       outline: 2px solid rgba(141, 42, 30, 0.18);
       border-color: rgba(141, 42, 30, 0.38);
     }
@@ -337,11 +337,42 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       display: none !important;
     }
 
+    .decision-tools {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(140px, auto) auto;
+      gap: 10px;
+      margin: 14px 0;
+      align-items: end;
+    }
+
+    .decision-detail {
+      margin-top: 14px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 18px;
+    }
+
+    .detail-grid p {
+      min-width: 0;
+    }
+
+    tr[data-event-index] { cursor: pointer; }
+    tr[data-event-index]:hover { background: rgba(141, 42, 30, 0.045); }
+    tr[data-event-index].selected { background: rgba(141, 42, 30, 0.09); }
+
     @media (max-width: 960px) {
       .hero-grid,
       .panel-grid,
       .metric-grid,
       .status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .decision-tools,
+      .detail-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -419,6 +450,21 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <button id="loadMoreButton" class="secondary" type="button">Load 100</button>
           </div>
         </div>
+        <div class="decision-tools">
+          <label>
+            Search decisions
+            <input id="eventSearchInput" type="search" placeholder="IP, path, signal, summary…">
+          </label>
+          <label>
+            Action
+            <select id="eventActionFilter">
+              <option value="all">All actions</option>
+              <option value="blocked">Blocked</option>
+              <option value="observed">Observed</option>
+            </select>
+          </label>
+          <span id="eventMatchCount" class="status-pill">0 matches</span>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -437,6 +483,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             </tbody>
           </table>
         </div>
+        <section id="eventDetail" class="status-card decision-detail" aria-live="polite">
+          <h3>Decision detail</h3>
+          <p class="mono">Select a decision row to inspect its complete summary, signals, routing, containment, and adapter evidence.</p>
+        </section>
       </section>
 
       <aside class="panel">
@@ -494,7 +544,9 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
   <script>
     const state = {
       authenticated: false,
-      eventCount: 50
+      eventCount: 50,
+      events: [],
+      selectedEventIndex: null
     };
 
     const loginForm = document.getElementById("loginForm");
@@ -508,6 +560,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     const sessionCopy = document.getElementById("sessionCopy");
     const errorBanner = document.getElementById("errorBanner");
     const eventsTableBody = document.getElementById("eventsTableBody");
+    const eventSearchInput = document.getElementById("eventSearchInput");
+    const eventActionFilter = document.getElementById("eventActionFilter");
+    const eventMatchCount = document.getElementById("eventMatchCount");
+    const eventDetail = document.getElementById("eventDetail");
     const recommendationsList = document.getElementById("recommendationsList");
     const blocklistResult = document.getElementById("blocklistResult");
     const ipInput = document.getElementById("ipInput");
@@ -522,6 +578,19 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       refreshEvents();
     });
     logoutButton.addEventListener("click", logout);
+    eventSearchInput.addEventListener("input", renderEvents);
+    eventActionFilter.addEventListener("change", renderEvents);
+    eventsTableBody.addEventListener("click", event => {
+      const row = event.target instanceof Element
+        ? event.target.closest("tr[data-event-index]")
+        : null;
+      if (!row) {
+        return;
+      }
+      state.selectedEventIndex = Number(row.dataset.eventIndex);
+      renderEvents();
+      renderEventDetail(state.events[state.selectedEventIndex]);
+    });
 
     loginForm.addEventListener("submit", async event => {
       event.preventDefault();
@@ -604,13 +673,51 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 
     async function refreshEvents() {
       const events = await fetchJson("/defense/events?count=" + encodeURIComponent(state.eventCount));
+      state.events = events;
+      if (state.selectedEventIndex !== null && !state.events[state.selectedEventIndex]) {
+        state.selectedEventIndex = null;
+      }
+      renderEvents();
+      renderEventDetail(state.selectedEventIndex === null
+        ? null
+        : state.events[state.selectedEventIndex]);
+    }
 
-      if (!events.length) {
+    function renderEvents() {
+      const query = eventSearchInput.value.trim().toLowerCase();
+      const action = eventActionFilter.value;
+      const matches = state.events
+        .map((event, index) => ({ event, index }))
+        .filter(({ event }) => {
+          if (action !== "all" && String(event.action).toLowerCase() !== action) {
+            return false;
+          }
+          if (!query) {
+            return true;
+          }
+          const searchable = [
+            event.ipAddress,
+            event.path,
+            event.action,
+            event.summary,
+            ...(event.signals || []),
+            ...(event.breakdown?.contributorNames || []),
+            ...(event.breakdown?.adapterVerdicts || []).flatMap(verdict => [verdict.adapter, verdict.classification])
+          ].filter(Boolean).join(" ").toLowerCase();
+          return searchable.includes(query);
+        });
+
+      eventMatchCount.textContent = `${number(matches.length)} match${matches.length === 1 ? "" : "es"}`;
+      if (!state.events.length) {
         eventsTableBody.innerHTML = '<tr><td colspan="7" class="empty">No defense decisions are stored yet.</td></tr>';
         return;
       }
+      if (!matches.length) {
+        eventsTableBody.innerHTML = '<tr><td colspan="7" class="empty">No decisions match the current search and action filter.</td></tr>';
+        return;
+      }
 
-      eventsTableBody.innerHTML = events.map(event => {
+      eventsTableBody.innerHTML = matches.map(({ event, index }) => {
         const actionClass = event.action === "blocked" ? "blocked" : "observed";
         const signalHtml = (event.signals || []).map(signal => '<span class="chip">' + escapeHtml(signal) + '</span>').join("");
         const contributorHtml = (event.breakdown?.contributorNames || []).map(source => '<span class="chip">' + escapeHtml(source) + '</span>').join("");
@@ -625,7 +732,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         ].filter(Boolean).join('');
 
         return `
-          <tr>
+          <tr data-event-index="${index}" class="${state.selectedEventIndex === index ? 'selected' : ''}" title="Open decision detail">
             <td><span class="chip ${actionClass}">${escapeHtml(event.action)}</span></td>
             <td class="mono">${escapeHtml(event.ipAddress)}</td>
             <td class="mono">${escapeHtml(event.path)}</td>
@@ -635,6 +742,33 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <td>${formatDate(event.observedAtUtc)}</td>
           </tr>`;
       }).join("");
+    }
+
+    function renderEventDetail(event) {
+      if (!event) {
+        eventDetail.innerHTML = '<h3>Decision detail</h3><p class="mono">Select a decision row to inspect its complete summary, signals, routing, containment, and adapter evidence.</p>';
+        return;
+      }
+
+      const routing = event.breakdown?.routing;
+      const containment = event.breakdown?.containment;
+      const adapters = event.breakdown?.adapterVerdicts || [];
+      eventDetail.innerHTML = `
+        <div class="status-bar">
+          <h3>Decision detail</h3>
+          <span class="chip ${event.action === "blocked" ? "blocked" : "observed"}">${escapeHtml(event.action)}</span>
+        </div>
+        <div class="detail-grid">
+          <p><strong>IP</strong><br><span class="mono">${escapeHtml(event.ipAddress)}</span></p>
+          <p><strong>Observed</strong><br><span class="mono">${formatDate(event.observedAtUtc)}</span></p>
+          <p><strong>Path</strong><br><span class="mono">${escapeHtml(event.path)}</span></p>
+          <p><strong>Score / frequency</strong><br><span class="mono">${number(event.score)} / ${number(event.frequency)}</span></p>
+        </div>
+        <p><strong>Summary</strong><br>${escapeHtml(event.summary || "No summary recorded.")}</p>
+        <p><strong>Signals</strong><br>${(event.signals || []).map(signal => '<span class="chip">' + escapeHtml(signal) + '</span>').join("") || '<span class="empty">none</span>'}</p>
+        <p><strong>Routing</strong><br><span class="mono">${routing ? escapeHtml(routing.primaryRoute + ' → ' + routing.effectiveRoute) : "not recorded"}</span></p>
+        <p><strong>Containment</strong><br><span class="mono">${containment ? escapeHtml(containment.action + ' / ' + containment.reason + ' / ' + (containment.contributor || 'unknown')) : "not recorded"}</span></p>
+        <p><strong>Adapter evidence</strong><br>${adapters.map(verdict => '<span class="chip">' + escapeHtml(verdict.adapter + ': ' + verdict.classification) + '</span>').join("") || '<span class="empty">none</span>'}</p>`;
     }
 
     async function refreshRecommendations() {
@@ -776,6 +910,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       document.getElementById("metricObserved").textContent = "0";
       document.getElementById("metricLatest").textContent = "none";
       eventsTableBody.innerHTML = '<tr><td colspan="7" class="empty">Sign in to load recent defense decisions.</td></tr>';
+      state.events = [];
+      state.selectedEventIndex = null;
+      eventMatchCount.textContent = "0 matches";
+      renderEventDetail(null);
       recommendationsList.innerHTML = '<h3>Operator guidance</h3><p class="mono">Sign in to load tuning recommendations.</p>';
       document.getElementById("intakeStatusCopy").textContent = "Waiting for session.";
       document.getElementById("communityStatusCopy").textContent = "Waiting for session.";
