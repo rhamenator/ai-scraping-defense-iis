@@ -63,7 +63,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 #### **DefenseEngine:Networking**
 
 * **ClientIpResolutionMode**: Controls whether the app trusts only the direct socket peer (`Direct`) or enables `X-Forwarded-For` processing from explicitly trusted proxies (`TrustedProxy`).
-* **TrustedProxies**: Explicit reverse-proxy IPs whose forwarded headers should be trusted. This list must be empty in `Direct` mode and must be populated in `TrustedProxy` mode.
+* **TrustedProxies**: Explicit non-CDN reverse-proxy or TLS-collector IPs whose forwarded and `X-ASD-TLS-*` headers should be trusted.
+* **TrustedCdnProxies**: Explicit CDN edge IPs/CIDRs. Cloudflare `CF-*` identity and fingerprint headers are trusted only from this list when the Cloudflare integration is enabled. Both trust lists must be empty in `Direct` mode; at least one must be populated in `TrustedProxy` mode.
 
 #### **DefenseEngine:Management**
 

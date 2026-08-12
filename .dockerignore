@@ -8,6 +8,7 @@ venv
 logs
 archives
 archive
+artifacts
 secrets
 *.db
 *.sqlite3

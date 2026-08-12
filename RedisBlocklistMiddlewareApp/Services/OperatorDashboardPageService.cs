@@ -2,14 +2,14 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public interface IOperatorDashboardPageService
 {
-  string Render();
+    string Render();
 }
 
 public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 {
-  public string Render()
-  {
-    return """
+    public string Render()
+    {
+        return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -846,5 +846,5 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 </body>
 </html>
 """;
-  }
+    }
 }

@@ -187,6 +187,9 @@ public sealed class McpModelAdapter : IThreatModelAdapter
             signals = context.Signals,
             frequency = context.Frequency,
             base_signal_score = context.BaseSignalScore,
+            tls_ja3 = context.TlsFingerprint?.Ja3,
+            tls_ja4 = context.TlsFingerprint?.Ja4,
+            tls_fingerprint_source = context.TlsFingerprint?.Source,
             frequency_score = context.FrequencyScore,
             headers = new Dictionary<string, string>()
         };

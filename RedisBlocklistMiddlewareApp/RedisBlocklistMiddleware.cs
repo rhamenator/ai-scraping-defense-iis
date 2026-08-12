@@ -130,7 +130,8 @@ public sealed class RedisBlocklistMiddleware
                     context.Request.QueryString.ToString(),
                     context.Request.Headers.UserAgent.ToString(),
                     evaluation.Signals,
-                    DateTimeOffset.UtcNow),
+                    DateTimeOffset.UtcNow,
+                    TlsFingerprintCaptureMiddleware.GetFingerprint(context)),
                 context.RequestAborted);
 
             if (!queued)
@@ -143,6 +144,17 @@ public sealed class RedisBlocklistMiddleware
             if (_options.Heuristics.TarpitSuspiciousRequests)
             {
                 var originalPath = context.Request.Path.HasValue ? context.Request.Path.Value! : "/";
+                if (string.Equals(
+                        _options.Topology.Mode,
+                        RuntimeTopologyModes.Split,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Response.Redirect(
+                        BuildSplitTarpitUrl(_options.Topology.TarpitPublicBaseUrl, originalPath),
+                        permanent: false,
+                        preserveMethod: true);
+                    return;
+                }
                 context.Request.Headers["X-Tarpit-Reason"] = string.Join(';', evaluation.Signals);
                 var content = _tarpitPageService.GeneratePage(originalPath, ipAddress);
                 _telemetry.RecordTarpitRender();
@@ -156,15 +168,26 @@ public sealed class RedisBlocklistMiddleware
         await _next(context);
     }
 
+    internal static string BuildSplitTarpitUrl(string baseUrl, string path)
+    {
+        var encodedPath = string.Join(
+            '/',
+            path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Select(Uri.EscapeDataString));
+        return $"{baseUrl.TrimEnd('/')}/tarpit/{encodedPath}";
+    }
+
     private bool ShouldBypassInspection(PathString path)
     {
         var value = path.Value ?? string.Empty;
         return IsPathOrChild(value, _options.Tarpit.PathPrefix) ||
                IsPathOrChild(value, "/health") ||
+               IsPathOrChild(value, "/live") ||
                (_options.Observability.EnablePrometheusEndpoint &&
                 IsPathOrChild(value, _options.Observability.PrometheusEndpointPath)) ||
                IsPathOrChild(value, "/defense") ||
                IsPathOrChild(value, "/analyze") ||
+               IsPathOrChild(value, "/internal/consensus") ||
                IsPathOrChild(value, "/peer-sync");
     }
 

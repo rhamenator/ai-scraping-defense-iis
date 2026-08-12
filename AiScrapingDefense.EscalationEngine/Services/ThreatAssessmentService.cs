@@ -132,7 +132,8 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
             request.Signals,
             frequency,
             baseSignalScore,
-            frequencyScore);
+            frequencyScore,
+            request.TlsFingerprint);
 
         foreach (var provider in _reputationProviders)
         {

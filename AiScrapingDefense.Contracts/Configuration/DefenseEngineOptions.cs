@@ -33,18 +33,57 @@ public sealed class DefenseEngineOptions
     public ObservabilityOptions Observability { get; set; } = new();
 
     public TopologyOptions Topology { get; set; } = new();
+
+    public ConsensusOptions Consensus { get; set; } = new();
+}
+
+public sealed class ConsensusOptions
+{
+    public bool Enabled { get; set; }
+
+    public string ListenAddress { get; set; } = "0.0.0.0";
+
+    public string AdvertisedHost { get; set; } = string.Empty;
+
+    public int Port { get; set; } = 3262;
+
+    public string StoragePath { get; set; } = "data/raft";
+
+    public string SharedSecret { get; set; } = string.Empty;
+
+    public int RequestTimeoutSeconds { get; set; } = 10;
+
+    public int LowerElectionTimeoutMilliseconds { get; set; } = 600;
+
+    public int UpperElectionTimeoutMilliseconds { get; set; } = 1200;
+
+    public ConsensusMemberOptions[] Members { get; set; } = [];
+}
+
+public sealed class ConsensusMemberOptions
+{
+    public string RaftEndpoint { get; set; } = string.Empty;
+
+    public string ApiBaseUrl { get; set; } = string.Empty;
 }
 
 public sealed class TopologyOptions
 {
     public string Mode { get; set; } = RuntimeTopologyModes.Single;
+
+    public string EscalationBaseUrl { get; set; } = string.Empty;
+
+    public string TarpitPublicBaseUrl { get; set; } = string.Empty;
+
+    public string ServiceToken { get; set; } = string.Empty;
+
+    public int RequestTimeoutSeconds { get; set; } = 10;
 }
 
 public static class RuntimeTopologyModes
 {
     public const string Single = "Single";
 
-    // Reserved for the documented post-v1 split-runtime implementation.
     public const string Split = "Split";
 }
 
@@ -121,6 +160,8 @@ public sealed class NetworkingOptions
     public string ClientIpResolutionMode { get; set; } = ClientIpResolutionModes.Direct;
 
     public string[] TrustedProxies { get; set; } = [];
+
+    public string[] TrustedCdnProxies { get; set; } = [];
 }
 
 public static class ClientIpResolutionModes

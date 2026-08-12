@@ -128,7 +128,7 @@ public sealed class NetworkingConfigurationTests
             Networking = new NetworkingOptions
             {
                 ClientIpResolutionMode = ClientIpResolutionModes.TrustedProxy,
-                TrustedProxies = ["173.245.48.0/20", "2400:cb00::/32"]
+                TrustedCdnProxies = ["173.245.48.0/20", "2400:cb00::/32"]
             }
         };
 
@@ -138,6 +138,24 @@ public sealed class NetworkingConfigurationTests
 #pragma warning disable ASPDEPR005 // The application targets .NET 8, where KnownIPNetworks is unavailable.
         Assert.Equal(2, forwarded.KnownNetworks.Count);
 #pragma warning restore ASPDEPR005
+    }
+
+    [Fact]
+    public void Validator_RejectsInvalidTrustedCdnProxyAddresses()
+    {
+        var options = new DefenseEngineOptions
+        {
+            Networking = new NetworkingOptions
+            {
+                ClientIpResolutionMode = ClientIpResolutionModes.TrustedProxy,
+                TrustedCdnProxies = ["not-a-cdn-range"]
+            }
+        };
+
+        var result = new DefenseEngineOptionsValidator().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains("not-a-cdn-range", StringComparison.Ordinal));
     }
 
     [Fact]

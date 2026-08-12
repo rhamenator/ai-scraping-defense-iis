@@ -1,12 +1,15 @@
 services:
-  app:
+  edge-gateway:
     build:
       context: .
       dockerfile: Dockerfile
+      target: edge
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
+      escalation-engine:
+        condition: service_started
+      tarpit-api:
         condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -14,12 +17,16 @@ services:
       ConnectionStrings__RedisConnection: redis:6379
       DefenseEngine__Redis__ConnectionString: redis:6379
       DefenseEngine__Redis__AllowLoopbackConnectionStringInProduction: "true"
-      DefenseEngine__Management__ApiKey: change-me-management-key
-      DefenseEngine__Intake__ApiKey: change-me-intake-key
+      DefenseEngine__Topology__Mode: Split
+      DefenseEngine__Topology__EscalationBaseUrl: http://escalation-engine:8080
+      DefenseEngine__Topology__TarpitPublicBaseUrl: http://localhost:18082
+      DefenseEngine__Topology__ServiceToken: ${ASD_SPLIT_SERVICE_TOKEN:?Set ASD_SPLIT_SERVICE_TOKEN to a random value of at least 32 characters}
+      DefenseEngine__Management__ApiKey: ${ASD_MANAGEMENT_API_KEY:?Set ASD_MANAGEMENT_API_KEY to a random value}
+      DefenseEngine__Intake__ApiKey: ${ASD_INTAKE_API_KEY:?Set ASD_INTAKE_API_KEY to a random value}
       DefenseEngine__Audit__DatabasePath: /app/data/defense-events.db
       DefenseEngine__Tarpit__ResponseDelayMilliseconds: "0"
       DefenseEngine__Tarpit__PostgresMarkov__Enabled: "true"
-      DefenseEngine__Tarpit__PostgresMarkov__ConnectionString: Host=postgres;Database=markov;Username=postgres;Password=postgres
+      DefenseEngine__Tarpit__PostgresMarkov__ConnectionString: "Host=postgres;Database=markov;Username=postgres;Password=${ASD_POSTGRES_PASSWORD:?Set ASD_POSTGRES_PASSWORD}"
       DefenseEngine__Observability__EnablePrometheusEndpoint: "true"
       DefenseEngine__Observability__PrometheusEndpointPath: /metrics
     ports:
@@ -28,6 +35,38 @@ services:
       - "18080:8080"
     volumes:
       - app-data:/app/data
+
+  escalation-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: escalation
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      DefenseEngine__Redis__ConnectionString: redis:6379
+      DefenseEngine__Redis__FrequencyDatabase: "3"
+      DefenseEngine__Topology__ServiceToken: ${ASD_SPLIT_SERVICE_TOKEN:?Set ASD_SPLIT_SERVICE_TOKEN to a random value of at least 32 characters}
+
+  tarpit-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tarpit
+    depends_on:
+      postgres:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      DefenseEngine__Tarpit__ResponseDelayMilliseconds: "0"
+      DefenseEngine__Tarpit__PostgresMarkov__Enabled: "true"
+      DefenseEngine__Tarpit__PostgresMarkov__ConnectionString: "Host=postgres;Database=markov;Username=postgres;Password=${ASD_POSTGRES_PASSWORD:?Set ASD_POSTGRES_PASSWORD}"
+    ports:
+      - "18082:8080"
 
   redis:
     image: redis:7.2-alpine
@@ -49,7 +88,7 @@ services:
     environment:
       POSTGRES_DB: markov
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${ASD_POSTGRES_PASSWORD:?Set ASD_POSTGRES_PASSWORD}
     ports:
       # Bind PostgreSQL to 15432 so the stack can run alongside an existing
       # local Postgres instance that already uses host port 5432.

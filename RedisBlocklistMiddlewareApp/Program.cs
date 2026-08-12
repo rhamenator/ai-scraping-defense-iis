@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -11,8 +12,14 @@ using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 1024 * 1024;
+});
 builder.Host.UseWindowsService(options =>
 {
     options.ServiceName = "AiScrapingDefense";
@@ -145,6 +152,48 @@ builder.Services
             .Where(proxy => !string.IsNullOrWhiteSpace(proxy))
             .Select(proxy => proxy.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        options.Networking.TrustedCdnProxies = options.Networking.TrustedCdnProxies
+            .Where(proxy => !string.IsNullOrWhiteSpace(proxy))
+            .Select(proxy => proxy.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        options.Topology.Mode = string.IsNullOrWhiteSpace(options.Topology.Mode)
+            ? RuntimeTopologyModes.Single
+            : options.Topology.Mode.Trim();
+        options.Topology.EscalationBaseUrl = options.Topology.EscalationBaseUrl.Trim().TrimEnd('/');
+        options.Topology.TarpitPublicBaseUrl = options.Topology.TarpitPublicBaseUrl.Trim().TrimEnd('/');
+        options.Topology.ServiceToken = options.Topology.ServiceToken.Trim();
+        options.Topology.RequestTimeoutSeconds = Math.Max(1, options.Topology.RequestTimeoutSeconds);
+
+        options.Consensus.ListenAddress = string.IsNullOrWhiteSpace(options.Consensus.ListenAddress)
+            ? "0.0.0.0"
+            : options.Consensus.ListenAddress.Trim();
+        options.Consensus.AdvertisedHost = options.Consensus.AdvertisedHost.Trim();
+        options.Consensus.Port = Math.Clamp(options.Consensus.Port, 1, 65535);
+        options.Consensus.StoragePath = ResolveWritableStatePath(
+            options.Consensus.StoragePath,
+            "data/raft",
+            contentRootPath,
+            "/usr/local/var/lib/ai-scraping-defense/raft",
+            OperatingSystem.IsMacOS());
+        options.Consensus.SharedSecret = options.Consensus.SharedSecret.Trim();
+        options.Consensus.RequestTimeoutSeconds = Math.Max(1, options.Consensus.RequestTimeoutSeconds);
+        options.Consensus.LowerElectionTimeoutMilliseconds =
+            Math.Max(150, options.Consensus.LowerElectionTimeoutMilliseconds);
+        options.Consensus.UpperElectionTimeoutMilliseconds = Math.Max(
+            options.Consensus.LowerElectionTimeoutMilliseconds + 100,
+            options.Consensus.UpperElectionTimeoutMilliseconds);
+        options.Consensus.Members = options.Consensus.Members
+            .Where(member => member is not null)
+            .Select(member => new ConsensusMemberOptions
+            {
+                RaftEndpoint = member.RaftEndpoint.Trim(),
+                ApiBaseUrl = member.ApiBaseUrl.Trim().TrimEnd('/')
+            })
+            .GroupBy(member => member.RaftEndpoint, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
             .ToArray();
 
         options.Audit.Provider = NormalizeAuditStorageProvider(options.Audit.Provider);
@@ -367,7 +416,19 @@ builder.Services.AddOpenTelemetry()
     });
 
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
-builder.Services.AddSingleton<IBlocklistService, RedisBlocklistService>();
+builder.Services.AddSingleton<RedisBlocklistService>();
+var configuredConsensusEnabled = builder.Configuration.GetValue<bool>(
+    $"{DefenseEngineOptions.SectionName}:Consensus:Enabled");
+if (configuredConsensusEnabled)
+{
+    builder.Services.AddSingleton<BlocklistConsensusCoordinator>();
+    builder.Services.AddSingleton<IBlocklistService, ConsensusBlocklistService>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<BlocklistConsensusCoordinator>());
+}
+else
+{
+    builder.Services.AddSingleton<IBlocklistService>(sp => sp.GetRequiredService<RedisBlocklistService>());
+}
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
 builder.Services.AddAuditStorage();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
@@ -388,7 +449,15 @@ builder.Services.AddSingleton<IContainmentDecisionContributor, ExplicitVerdictCo
 builder.Services.AddSingleton<IContainmentDecisionContributor, FrequencyContainmentContributor>();
 builder.Services.AddSingleton<IContainmentDecisionContributor, ThresholdBandContainmentContributor>();
 builder.Services.AddSingleton<IContainmentPolicyEngine, ContainmentPolicyEngine>();
-builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
+var configuredTopologyMode = builder.Configuration[$"{DefenseEngineOptions.SectionName}:Topology:Mode"];
+if (string.Equals(configuredTopologyMode, RuntimeTopologyModes.Split, StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IThreatAssessmentService, RemoteThreatAssessmentService>();
+}
+else
+{
+    builder.Services.AddSingleton<IThreatAssessmentService, ThreatAssessmentService>();
+}
 builder.Services.AddSingleton<ICommunityBlocklistFeedClient, HttpCommunityBlocklistFeedClient>();
 builder.Services.AddSingleton<ICommunityBlocklistSyncStatusStore, CommunityBlocklistSyncStatusStore>();
 builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
@@ -418,6 +487,31 @@ var runtimeOptions = app.Services.GetRequiredService<IOptions<DefenseEngineOptio
 var tarpitRoutePattern = Program.GetTarpitRoutePattern(runtimeOptions);
 var advertisedEndpoints = Program.GetAdvertisedEndpoints(runtimeOptions);
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        if (exception is ConsensusUnavailableException)
+        {
+            logger.LogWarning(exception, "A blocklist mutation could not reach Raft quorum.");
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Blocklist consensus is temporarily unavailable. Retry after quorum is restored."
+            });
+            return;
+        }
+
+        logger.LogError(exception, "An unhandled request failure occurred.");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { error = "An internal error occurred." });
+    });
+});
+
+app.UseMiddleware<TlsFingerprintCaptureMiddleware>();
+
 if (Program.ShouldUseForwardedHeaders(runtimeOptions))
 {
     app.UseForwardedHeaders();
@@ -441,6 +535,7 @@ app.MapGet("/", () => Results.Ok(new
 app.MapGet("/health", async (
     IRedisConnectionProvider redisConnectionProvider,
     IOptions<DefenseEngineOptions> options,
+    IServiceProvider services,
     ILogger<Program> logger,
     CancellationToken cancellationToken) =>
 {
@@ -448,7 +543,16 @@ app.MapGet("/health", async (
     {
         var redis = await redisConnectionProvider.GetAsync(cancellationToken);
         await redis.GetDatabase(options.Value.Redis.BlocklistDatabase).PingAsync();
-        return Results.Ok(new { status = "healthy" });
+        var consensus = services.GetService<BlocklistConsensusCoordinator>();
+        var consensusStatus = consensus?.GetStatus();
+        if (consensusStatus is { Enabled: true } &&
+            (!consensusStatus.Started || string.IsNullOrWhiteSpace(consensusStatus.LeaderEndPoint)))
+        {
+            return Results.Json(
+                new { status = "degraded", consensus = consensusStatus },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        return Results.Ok(new { status = "healthy", consensus = consensusStatus });
     }
     catch (Exception ex)
     {
@@ -462,6 +566,37 @@ app.MapGet("/health", async (
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
+
+app.MapGet("/live", () => Results.Ok(new { status = "alive" }));
+
+if (runtimeOptions.Consensus.Enabled)
+{
+    app.MapPost("/internal/consensus/commands", async (
+        ConsensusCommand command,
+        HttpContext context,
+        BlocklistConsensusCoordinator consensus,
+        CancellationToken cancellationToken) =>
+    {
+        if (!Program.IsBearerTokenValid(
+                context.Request.Headers.Authorization.ToString(),
+                runtimeOptions.Consensus.SharedSecret))
+        {
+            return Results.Unauthorized();
+        }
+
+        try
+        {
+            var committed = await consensus.ReplicateOnLeaderAsync(command, cancellationToken);
+            return committed
+                ? Results.Ok(new ConsensusMutationResponse(true))
+                : Results.Conflict(new ConsensusMutationResponse(false, "not_leader_or_no_quorum"));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new ConsensusMutationResponse(false, exception.Message));
+        }
+    });
+}
 
 Program.MapManagementEndpoints(app, runtimeOptions);
 Program.MapIntakeEndpoints(app, runtimeOptions);
@@ -479,6 +614,19 @@ app.MapGet(tarpitRoutePattern, async (
     CancellationToken cancellationToken) =>
 {
     var tarpitOptions = options.Value.Tarpit;
+
+    if (string.Equals(
+            options.Value.Topology.Mode,
+            RuntimeTopologyModes.Split,
+            StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Redirect(
+            RedisBlocklistMiddleware.BuildSplitTarpitUrl(
+                options.Value.Topology.TarpitPublicBaseUrl,
+                path ?? string.Empty),
+            permanent: false,
+            preserveMethod: true);
+    }
 
     if (tarpitOptions.ResponseDelayMilliseconds > 0)
     {
@@ -509,12 +657,33 @@ app.Run();
 
 public partial class Program
 {
+    public static bool IsBearerTokenValid(string authorizationHeader, string expectedToken)
+    {
+        const string prefix = "Bearer ";
+        if (string.IsNullOrWhiteSpace(expectedToken) ||
+            !authorizationHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var suppliedBytes = Encoding.UTF8.GetBytes(authorizationHeader[prefix.Length..].Trim());
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
+        return suppliedBytes.Length == expectedBytes.Length &&
+            CryptographicOperations.FixedTimeEquals(suppliedBytes, expectedBytes);
+    }
+
     public static IReadOnlyDictionary<string, string> GetAdvertisedEndpoints(DefenseEngineOptions runtimeOptions)
     {
         var endpoints = new Dictionary<string, string>
         {
             ["health"] = "/health",
-            ["tarpit"] = $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
+            ["liveness"] = "/live",
+            ["tarpit"] = string.Equals(
+                runtimeOptions.Topology.Mode,
+                RuntimeTopologyModes.Split,
+                StringComparison.OrdinalIgnoreCase)
+                    ? $"{runtimeOptions.Topology.TarpitPublicBaseUrl}/tarpit/{{path}}"
+                    : $"{runtimeOptions.Tarpit.PathPrefix}/{{path}}"
         };
 
         if (ShouldExposeManagementEndpoints(runtimeOptions))
@@ -649,6 +818,15 @@ public partial class Program
         {
             return Results.Ok(statusStore.GetStatus());
         });
+
+        if (runtimeOptions.Consensus.Enabled)
+        {
+            management.MapGet("/consensus/status", (
+                [FromServices] BlocklistConsensusCoordinator consensus) =>
+            {
+                return Results.Ok(consensus.GetStatus());
+            });
+        }
 
         management.MapGet("/blocklist", async (
             [FromQuery] string ip,

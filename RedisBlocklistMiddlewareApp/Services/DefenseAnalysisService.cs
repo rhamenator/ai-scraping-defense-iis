@@ -96,6 +96,32 @@ public sealed class DefenseAnalysisService : BackgroundService
                     ex,
                     "Queued analysis failed for suspicious request from {IpAddress}.",
                     request.IpAddress);
+
+                try
+                {
+                    var failureSignals = request.Signals
+                        .Append("analysis_runtime_failure")
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    _eventStore.Add(new DefenseDecision(
+                        request.IpAddress,
+                        ContainmentActions.Observed,
+                        0,
+                        0,
+                        request.Path,
+                        failureSignals,
+                        "Threat assessment failed; the request was retained as a degraded observation for operator review.",
+                        request.ObservedAtUtc,
+                        DateTimeOffset.UtcNow));
+                    _telemetry.RecordDecision(ContainmentActions.Observed, "analysis_runtime_failure");
+                }
+                catch (Exception persistenceException)
+                {
+                    _logger.LogCritical(
+                        persistenceException,
+                        "The degraded analysis decision for {IpAddress} could not be persisted.",
+                        request.IpAddress);
+                }
             }
         }
     }

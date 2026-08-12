@@ -10,15 +10,81 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         var errors = new List<string>();
         var networking = options.Networking;
 
+        if (!string.Equals(options.Topology.Mode, RuntimeTopologyModes.Split, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(options.Topology.Mode, RuntimeTopologyModes.Single, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"DefenseEngine:Topology:Mode must be '{RuntimeTopologyModes.Single}' or '{RuntimeTopologyModes.Split}'.");
+        }
+
         if (string.Equals(options.Topology.Mode, RuntimeTopologyModes.Split, StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add(
-                "DefenseEngine:Topology:Mode='Split' is reserved for a post-v1 runtime and is not implemented. Use 'Single' so requests are not silently handled by the monolith.");
+            if (!IsAbsoluteHttpUrl(options.Topology.EscalationBaseUrl))
+            {
+                errors.Add("DefenseEngine:Topology:EscalationBaseUrl must be an absolute HTTP(S) URL in Split mode.");
+            }
+            if (!IsAbsoluteHttpUrl(options.Topology.TarpitPublicBaseUrl))
+            {
+                errors.Add("DefenseEngine:Topology:TarpitPublicBaseUrl must be an absolute HTTP(S) URL in Split mode.");
+            }
+            if (string.IsNullOrWhiteSpace(options.Topology.ServiceToken) || options.Topology.ServiceToken.Length < 32)
+            {
+                errors.Add("DefenseEngine:Topology:ServiceToken must contain at least 32 characters in Split mode.");
+            }
         }
-        else if (!string.Equals(options.Topology.Mode, RuntimeTopologyModes.Single, StringComparison.OrdinalIgnoreCase))
+
+        if (options.Consensus.Enabled)
         {
-            errors.Add(
-                $"DefenseEngine:Topology:Mode must be '{RuntimeTopologyModes.Single}'.");
+            if (!IPAddress.TryParse(options.Consensus.ListenAddress, out _))
+            {
+                errors.Add("DefenseEngine:Consensus:ListenAddress must be an IPv4 or IPv6 address.");
+            }
+            if (string.IsNullOrWhiteSpace(options.Consensus.AdvertisedHost) ||
+                !Uri.CheckHostName(options.Consensus.AdvertisedHost.Trim('[', ']')).Equals(UriHostNameType.Dns) &&
+                !IPAddress.TryParse(options.Consensus.AdvertisedHost.Trim('[', ']'), out _))
+            {
+                errors.Add("DefenseEngine:Consensus:AdvertisedHost must be a DNS host name or IP address.");
+            }
+            if (string.IsNullOrWhiteSpace(options.Consensus.StoragePath))
+            {
+                errors.Add("DefenseEngine:Consensus:StoragePath is required when consensus is enabled.");
+            }
+            if (string.IsNullOrWhiteSpace(options.Consensus.SharedSecret) || options.Consensus.SharedSecret.Length < 32)
+            {
+                errors.Add("DefenseEngine:Consensus:SharedSecret must contain at least 32 characters when consensus is enabled.");
+            }
+            if (options.Consensus.Members.Length != 1 &&
+                (options.Consensus.Members.Length < 3 || options.Consensus.Members.Length % 2 == 0))
+            {
+                errors.Add("DefenseEngine:Consensus:Members must contain one development member or an odd production quorum of at least three members.");
+            }
+
+            var invalidRaftEndpoints = options.Consensus.Members
+                .Where(member => !TryParseRaftEndpoint(member.RaftEndpoint, out _, out _))
+                .Select(member => member.RaftEndpoint)
+                .ToArray();
+            if (invalidRaftEndpoints.Length > 0)
+            {
+                errors.Add($"DefenseEngine:Consensus:Members contains invalid Raft endpoints: {string.Join(", ", invalidRaftEndpoints)}.");
+            }
+
+            var invalidApiUrls = options.Consensus.Members
+                .Where(member => !IsAbsoluteHttpUrl(member.ApiBaseUrl))
+                .Select(member => member.ApiBaseUrl)
+                .ToArray();
+            if (invalidApiUrls.Length > 0)
+            {
+                errors.Add($"DefenseEngine:Consensus:Members contains invalid API base URLs: {string.Join(", ", invalidApiUrls)}.");
+            }
+
+            var advertisedEndpoint = FormatRaftEndpoint(
+                options.Consensus.AdvertisedHost,
+                options.Consensus.Port);
+            if (!options.Consensus.Members.Any(member =>
+                    string.Equals(member.RaftEndpoint, advertisedEndpoint, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"DefenseEngine:Consensus:Members must contain this node's advertised endpoint '{advertisedEndpoint}'.");
+            }
         }
 
         if (!string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.Direct, StringComparison.OrdinalIgnoreCase) &&
@@ -38,18 +104,29 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 $"DefenseEngine:Networking:TrustedProxies contains invalid IP addresses or CIDR ranges: {string.Join(", ", invalidTrustedProxies)}.");
         }
 
-        if (string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy, StringComparison.OrdinalIgnoreCase) &&
-            networking.TrustedProxies.Length == 0)
+        var invalidTrustedCdnProxies = networking.TrustedCdnProxies
+            .Where(proxy => !IsValidProxyOrNetwork(proxy))
+            .ToArray();
+
+        if (invalidTrustedCdnProxies.Length > 0)
         {
             errors.Add(
-                "DefenseEngine:Networking:TrustedProxies must contain at least one IP address when ClientIpResolutionMode is 'TrustedProxy'.");
+                $"DefenseEngine:Networking:TrustedCdnProxies contains invalid IP addresses or CIDR ranges: {string.Join(", ", invalidTrustedCdnProxies)}.");
+        }
+
+        if (string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy, StringComparison.OrdinalIgnoreCase) &&
+            networking.TrustedProxies.Length == 0 &&
+            networking.TrustedCdnProxies.Length == 0)
+        {
+            errors.Add(
+                "DefenseEngine:Networking:TrustedProxies or TrustedCdnProxies must contain at least one IP address when ClientIpResolutionMode is 'TrustedProxy'.");
         }
 
         if (string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.Direct, StringComparison.OrdinalIgnoreCase) &&
-            networking.TrustedProxies.Length > 0)
+            (networking.TrustedProxies.Length > 0 || networking.TrustedCdnProxies.Length > 0))
         {
             errors.Add(
-                "DefenseEngine:Networking:TrustedProxies must be empty when ClientIpResolutionMode is 'Direct'.");
+                "DefenseEngine:Networking:TrustedProxies and TrustedCdnProxies must be empty when ClientIpResolutionMode is 'Direct'.");
         }
 
         if (IsEmptyEquivalentRoute(options.Tarpit.PathPrefix))
@@ -130,5 +207,35 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         }
 
         return path.Trim().Trim('/').Length == 0;
+    }
+
+    private static bool IsAbsoluteHttpUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    private static bool TryParseRaftEndpoint(string? value, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        if (string.IsNullOrWhiteSpace(value) ||
+            !Uri.TryCreate($"tcp://{value.Trim()}", UriKind.Absolute, out var uri) ||
+            string.IsNullOrWhiteSpace(uri.Host) ||
+            uri.Port is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        host = uri.Host;
+        port = uri.Port;
+        return true;
+    }
+
+    private static string FormatRaftEndpoint(string host, int port)
+    {
+        var normalizedHost = host.Trim().Trim('[', ']');
+        return IPAddress.TryParse(normalizedHost, out var address) &&
+            address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+                ? $"[{address}]:{port}"
+                : $"{normalizedHost}:{port}";
     }
 }

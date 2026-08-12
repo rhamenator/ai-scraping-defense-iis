@@ -134,9 +134,9 @@ Key areas:
   - `JavaScriptDecoyFileCount`, `MinJavaScriptDecoyFileSizeKb`, and `MaxJavaScriptDecoyFileSizeKb` control generated JavaScript archive contents.
 - `DefenseEngine:Observability`
 
-For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy` and populate `DefenseEngine:Networking:TrustedProxies` with the proxy IPs you explicitly trust.
+For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy`. Put ordinary TLS collectors/reverse proxies in `DefenseEngine:Networking:TrustedProxies` and CDN edges in the separate `TrustedCdnProxies` list.
 
-For Cloudflare, populate `TrustedProxies` with Cloudflare's published CIDR ranges and enable `DefenseEngine:Cloudflare`. Forwarded Headers middleware then restores the originating client IP before detection; configured proxy/CDN addresses are rejected by every blocklist insertion path. Cloudflare remains an ingress protection layer only—ordinary outbound model, webhook, feed, and backend traffic is sent directly to its configured destination so it does not add avoidable Cloudflare traffic cost.
+For Cloudflare, populate `TrustedCdnProxies` with Cloudflare's published CIDR ranges and enable `DefenseEngine:Cloudflare`. Forwarded Headers middleware then restores the originating client IP before detection; configured proxy/CDN addresses are rejected by every blocklist insertion path. Cloudflare fingerprint headers are accepted only from `TrustedCdnProxies`, while collector headers are accepted only from ordinary `TrustedProxies`, preventing either trust boundary from falling through to the other. Cloudflare remains an ingress protection layer only—ordinary outbound model, webhook, feed, and backend traffic is sent directly to its configured destination so it does not add avoidable Cloudflare traffic cost.
 
 Defense decisions and webhook intake records are persisted through `DefenseEngine:Audit`. The default provider is SQLite via `DatabasePath`; production deployments can set `Provider` to `Postgres` or `SqlServer` and provide `ConnectionString` instead.
 
@@ -160,7 +160,7 @@ The repository now includes:
 - a macOS installer workflow at [.github/workflows/macos-installer.yml](.github/workflows/macos-installer.yml)
 - a tagged-release image workflow at [.github/workflows/release-images.yml](.github/workflows/release-images.yml)
 
-Use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL.
+Copy `compose.env.example` to `.env`, replace every value with an independent random secret, then use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL. Compose fails before startup when a required secret is absent.
 Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.
 Use `./installer/Build-WindowsInstaller.ps1 -Version <semver>` on Windows to produce a `win-x64` installer, or pass `-Runtime win-arm64` for the ARM64 variant.
 Use `./installer/macos/build-macos-packages.sh <semver>` on macOS to produce `.pkg` installers for `osx-x64` and `osx-arm64`.

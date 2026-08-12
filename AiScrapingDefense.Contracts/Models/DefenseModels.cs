@@ -9,7 +9,13 @@ public sealed record SuspiciousRequest(
     string QueryString,
     string UserAgent,
     IReadOnlyList<string> Signals,
-    DateTimeOffset ObservedAtUtc);
+    DateTimeOffset ObservedAtUtc,
+    TlsClientFingerprint? TlsFingerprint = null);
+
+public sealed record TlsClientFingerprint(
+    string? Ja3,
+    string? Ja4,
+    string Source);
 
 public sealed record DefenseDecision(
     string IpAddress,

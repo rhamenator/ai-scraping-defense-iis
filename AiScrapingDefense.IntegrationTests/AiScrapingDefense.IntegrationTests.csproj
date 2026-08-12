@@ -27,4 +27,10 @@
     <ProjectReference Include="..\RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\db\init_markov.sql"
+          Link="db\init_markov.sql"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

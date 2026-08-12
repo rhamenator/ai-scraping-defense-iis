@@ -36,12 +36,42 @@ public sealed class RedisBlocklistService : IBlocklistService
         IReadOnlyCollection<string> signals,
         CancellationToken cancellationToken)
     {
-        if (IsTrustedInfrastructureAddress(ipAddress))
+        return await BlockUntilAsync(
+            ipAddress,
+            reason,
+            signals,
+            DateTimeOffset.UtcNow.AddMinutes(Math.Max(1, _options.BlockDurationMinutes)),
+            cancellationToken);
+    }
+
+    internal DateTimeOffset GetBlockExpirationUtc() =>
+        DateTimeOffset.UtcNow.AddMinutes(Math.Max(1, _options.BlockDurationMinutes));
+
+    internal bool CanBlock(string ipAddress) => !IsTrustedInfrastructureAddress(ipAddress);
+
+    internal async Task<bool> BlockUntilAsync(
+        string ipAddress,
+        string reason,
+        IReadOnlyCollection<string> signals,
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken)
+    {
+        if (!CanBlock(ipAddress))
         {
             _logger.LogWarning(
                 "Refusing to block configured trusted proxy or CDN address {IpAddress}.",
                 ipAddress);
             return false;
+        }
+
+        var remaining = expiresAtUtc - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            _logger.LogDebug(
+                "Skipped expired block command for {IpAddress}; it expired at {ExpiresAtUtc}.",
+                ipAddress,
+                expiresAtUtc);
+            return true;
         }
 
         var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
@@ -56,7 +86,7 @@ public sealed class RedisBlocklistService : IBlocklistService
         return await database.StringSetAsync(
             GetBlocklistKey(ipAddress),
             payload,
-            TimeSpan.FromMinutes(Math.Max(1, _options.BlockDurationMinutes)));
+            remaining);
     }
 
     public async Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
@@ -73,7 +103,9 @@ public sealed class RedisBlocklistService : IBlocklistService
 
     private bool IsTrustedInfrastructureAddress(string ipAddress)
     {
-        return _networkingOptions.TrustedProxies.Any(entry =>
+        return _networkingOptions.TrustedProxies
+            .Concat(_networkingOptions.TrustedCdnProxies)
+            .Any(entry =>
             string.Equals(entry, ipAddress, StringComparison.OrdinalIgnoreCase) ||
             (entry.Contains('/') && CidrMatcher.Contains(entry, ipAddress)));
     }

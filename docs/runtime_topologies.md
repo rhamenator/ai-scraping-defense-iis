@@ -1,88 +1,51 @@
-# Runtime Topologies
+# Runtime topologies
 
-This document defines the supported single-runtime topology and the reserved contract for a future optional split deployment.
+The .NET implementation supports both a single process and three independently scalable runtimes.
 
-## Goals
+## Single runtime (default)
 
-- preserve the current single deployable mode as the default production path
-- define clear runtime boundaries for `EdgeGateway`, `EscalationEngine`, and `TarpitApi`
-- provide configuration contracts that allow operators to split runtimes incrementally
-- define validation checks for both single-node and split deployments
+`AiScrapingDefense.EdgeGateway.dll` hosts edge inspection, escalation, and tarpit rendering in one process. Redis remains required for hot state. SQLite is the default event store; PostgreSQL and SQL Server are available for shared durable audit data.
 
-## Runtime Modes
+```text
+DefenseEngine__Topology__Mode=Single
+```
 
-### Mode A: Single Deployable (default)
+## Split runtimes
 
-- One ASP.NET Core deployment hosts the full defense pipeline.
-- Internal service calls remain in-process.
-- Redis remains required for hot operational state.
-- SQLite remains the default durable event store, with PostgreSQL and SQL Server available through `DefenseEngine:Audit:Provider`.
+Split mode runs these Dockerfile targets independently:
 
-This mode is the commercial v1 baseline and remains supported after split-runtime enablement.
+- `edge`: public request inspection, blocklist decisions, audit, and control APIs
+- `escalation`: authenticated `POST /v1/assess` scoring/model service
+- `tarpit`: public, unprivileged `GET /tarpit/{path}` decoy renderer
 
-### Mode B: Optional Split Runtime (reserved, not implemented)
+Required edge configuration:
 
-- `EdgeGateway` runs as the ingress-facing process.
-- `EscalationEngine` runs as a separate process with provider/model dependencies.
-- `TarpitApi` runs as a separate process focused on tarpit response generation.
-- Contracts between runtimes are authenticated service-to-service HTTP calls.
+```text
+DefenseEngine__Topology__Mode=Split
+DefenseEngine__Topology__EscalationBaseUrl=http://escalation-engine:8080
+DefenseEngine__Topology__TarpitPublicBaseUrl=https://tarpit.example.com
+DefenseEngine__Topology__ServiceToken=<random value of at least 32 characters>
+```
 
-The project boundaries exist, but they are class libraries inside the single deployable; they are not independently executable services yet. Setting `DefenseEngine__Topology__Mode=Split` is rejected during startup so the setting cannot fail silently while the monolith continues running. The remaining sections define the implementation contract, not a currently supported deployment.
+The escalation runtime must receive the same service token. Edge-to-escalation calls use a bearer token, a bounded timeout, and three attempts. A failed assessment is logged and persisted as an `observed` decision with `analysis_runtime_failure`; it is not silently discarded.
 
-## Runtime Boundaries
+The tarpit is intentionally public: suspicious clients receive a method-preserving `307` redirect and fetch the decoy directly. Ordinary traffic remains on the protected application origin, so it does not incur tarpit-origin or Cloudflare egress. The tarpit exposes no management or mutation API.
 
-### EdgeGateway boundary
+Both modes expose `/live` for process liveness and `/health` for dependency/readiness checks. Do not use `/health` as a Kubernetes liveness probe: a dependency or quorum outage should remove a pod from service, not restart a healthy process.
 
-- accepts inbound traffic and applies request-inspection policy
-- performs blocklist checks and tarpit/allow routing decisions
-- forwards analysis payloads to `EscalationEngine` when split mode is enabled
-- calls `TarpitApi` for tarpit response generation when split mode is enabled
+## Client identity and Cloudflare
 
-### EscalationEngine boundary
+Use `TrustedProxy` mode only with explicit addresses. Put ordinary proxies and Envoy collectors in `Networking:TrustedProxies`; put Cloudflare's published ranges in `Networking:TrustedCdnProxies`. Cloudflare identity and fingerprint headers are accepted only from the CDN list when `DefenseEngine:Cloudflare:Enabled` is true. Collector headers are accepted only from the non-CDN list, with no fallback across trust boundaries. Missing, malformed, or spoofed origin headers produce `unknown`; the proxy or Cloudflare edge address is never substituted as the block target.
 
-- accepts authenticated analysis intake from `EdgeGateway`
-- applies scoring, enrichment, and optional model/provider adapters
-- writes audit and webhook inbox records through shared persistence policy
-- emits operator-visible events/metrics
+Cloudflare integration only produces an operator recommendation to enable Under Attack Mode when the integration is enabled and the attack thresholds are met. It never automatically changes the zone mode. Normal outbound traffic is not proxied through Cloudflare by these runtimes.
 
-### TarpitApi boundary
+## Validation
 
-- accepts authenticated tarpit render requests from `EdgeGateway`
-- generates deterministic or Markov-backed tarpit responses
-- enforces rendering/time budgets to avoid control-plane contention
+1. `/live` returns 200 for every runtime.
+2. `/health` returns 200 after Redis and the Raft leader (if enabled) are ready.
+3. Escalation rejects a missing or invalid service token.
+4. A suspicious request reaches remote assessment and redirects to the public tarpit.
+5. An unavailable escalation runtime creates a visible degraded audit decision.
+6. The public edge never treats a configured proxy/CDN address as the originating client.
 
-## Configuration Contract
-
-The future split implementation is expected to use explicit service endpoints and service keys:
-
-- `DefenseEngine__Topology__Mode=Split`
-- `DefenseEngine__Services__EscalationEngine__BaseUrl`
-- `DefenseEngine__Services__EscalationEngine__ApiKey`
-- `DefenseEngine__Services__TarpitApi__BaseUrl`
-- `DefenseEngine__Services__TarpitApi__ApiKey`
-
-Today, use `DefenseEngine__Topology__Mode=Single` (or omit it). `Split`, unknown values, and misspellings fail startup validation.
-
-## Validation Checklist
-
-### Single Deployable validation
-
-1. `GET /health` reports healthy.
-2. `GET /` returns endpoint advertisement payload.
-3. `POST /analyze` works with configured intake key.
-4. Tarpit route responds and logs expected metadata.
-
-### Future split-runtime acceptance criteria
-
-1. `EdgeGateway` health endpoint is healthy.
-2. `EscalationEngine` health endpoint is healthy and rejects missing/invalid service key.
-3. `TarpitApi` health endpoint is healthy and rejects missing/invalid service key.
-4. End-to-end suspicious request flow reaches escalation and tarpit via remote calls.
-5. Failure of one downstream runtime degrades safely (deny-by-policy or bounded fallback) and is visible in metrics/logs.
-
-## Operator Guidance
-
-- Start with Mode A unless a clear isolation/scaling requirement exists.
-- Move to Mode B one boundary at a time (`EscalationEngine` first, then `TarpitApi`).
-- Keep the same API-key hygiene and trusted-proxy controls used in single-node mode.
-- Run release-checklist validation after each topology transition.
+`compose.yaml` is the local split-runtime example. `deploy/kubernetes/split-consensus.yaml` is the three-edge-node example.

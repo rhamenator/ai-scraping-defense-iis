@@ -83,7 +83,8 @@ public sealed record ThreatAssessmentContext(
     IReadOnlyList<string> Signals,
     long Frequency,
     int BaseSignalScore,
-    int FrequencyScore);
+    int FrequencyScore,
+    TlsClientFingerprint? TlsFingerprint = null);
 
 public sealed record ReputationAssessment(
     string Source,

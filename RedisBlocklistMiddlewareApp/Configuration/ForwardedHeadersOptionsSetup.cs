@@ -30,7 +30,9 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
 
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-        foreach (var trustedProxyAddress in _options.Networking.TrustedProxies)
+        foreach (var trustedProxyAddress in _options.Networking.TrustedProxies
+                     .Concat(_options.Networking.TrustedCdnProxies)
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (IPAddress.TryParse(trustedProxyAddress, out var trustedProxy))
             {

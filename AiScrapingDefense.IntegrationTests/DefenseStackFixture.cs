@@ -228,7 +228,7 @@ public sealed class DefenseStackFixture : IAsyncLifetime
 
     private async Task InitializeMarkovSchemaAsync()
     {
-        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "db", "init_markov.sql"));
+        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "init_markov.sql"));
 
         await using var connection = new NpgsqlConnection(_postgresContainer.GetConnectionString());
         await connection.OpenAsync();
