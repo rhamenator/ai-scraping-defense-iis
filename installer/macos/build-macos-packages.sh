@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 VERSION="${1:-0.0.0-local}"
 OUTPUT_ROOT="${2:-artifacts/macos-installer}"
 CONFIGURATION="${CONFIGURATION:-Release}"
+RUNTIME="${RUNTIME:-all}"
 SERVICE_LABEL="com.aiscrapingdefense.edgegateway"
 SERVICE_USER="nobody"
 SERVICE_GROUP="nobody"
@@ -125,8 +126,19 @@ EOF
   shasum -a 256 "${pkg_path}" | awk '{ print tolower($1) " *" $2 }' > "${pkg_path}.sha256"
 }
 
-publish_runtime osx-x64
-publish_runtime osx-arm64
+case "${RUNTIME}" in
+  all)
+    publish_runtime osx-x64
+    publish_runtime osx-arm64
+    ;;
+  osx-x64|osx-arm64)
+    publish_runtime "${RUNTIME}"
+    ;;
+  *)
+    echo "Unsupported RUNTIME '${RUNTIME}'; expected all, osx-x64, or osx-arm64." >&2
+    exit 1
+    ;;
+esac
 
 release_notes_path="${REPO_ROOT}/${OUTPUT_ROOT}/output/macos-release-notes.md"
 {

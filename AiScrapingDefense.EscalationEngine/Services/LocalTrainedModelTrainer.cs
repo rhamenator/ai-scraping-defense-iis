@@ -1,10 +1,35 @@
 using System.Text.Json;
+#if !NO_MLNET
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Trainers.FastTree;
+#endif
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
+#if NO_MLNET
+public sealed class LocalTrainedModelTrainer
+{
+    public LocalTrainedModelTrainer(int? seed = 1)
+    {
+    }
+
+    public LocalTrainedModelArtifacts TrainAndSave(
+        IEnumerable<LocalModelTrainingDocument> documents,
+        string modelPath,
+        string modelVersion,
+        float maliciousProbabilityThreshold)
+    {
+        throw new PlatformNotSupportedException(
+            "Local Microsoft.ML model training is not supported on macOS ARM64.");
+    }
+
+    public static string GetMetadataPath(string modelPath)
+    {
+        return modelPath + ".metadata.json";
+    }
+}
+#else
 public sealed class LocalTrainedModelTrainer
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -81,3 +106,4 @@ public sealed class LocalTrainedModelTrainer
         return modelPath + ".metadata.json";
     }
 }
+#endif

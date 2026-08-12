@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
+#if !NO_MLNET
 using Microsoft.ML.Data;
+#endif
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
@@ -197,7 +199,9 @@ public sealed class LocalModelTrainingRow : LocalModelFeatureVector
 
 public sealed class LocalModelPrediction
 {
+#if !NO_MLNET
     [ColumnName("PredictedLabel")]
+#endif
     public bool PredictedLabel { get; set; }
 
     public float Probability { get; set; }

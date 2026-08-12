@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Three-node Raft integration coverage for leader election, log replication, failover, and post-failover replication.
 * End-to-end split-topology coverage across the edge gateway, escalation engine, and dedicated tarpit runtime.
 * Operator dashboard search, action filtering, and full decision drill-down.
+* Apple Silicon installer support with an explicit fail-closed fallback for the
+  optional Microsoft.ML adapter, whose native targets do not support `osx-arm64`.
 * Windows installer tooling for the .NET runtime, including Windows service support, release staging scripts, and an Inno Setup manifest.
 * macOS packaging scripts and CI workflows for unsigned `osx-x64` and `osx-arm64` `.pkg` artifacts, plus operator guidance for SmartScreen and Gatekeeper warnings.
 * Windows ARM64 installer packaging and release automation alongside the existing Windows x64 installer path.

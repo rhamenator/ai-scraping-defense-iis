@@ -7,6 +7,12 @@ The macOS build produces separate `.pkg` installers for:
 - `osx-x64`
 - `osx-arm64`
 
+The Apple Silicon package keeps the local heuristic and remote/provider model
+paths available, but disables the optional in-process Microsoft.ML trained-model
+adapter because Microsoft.ML 5.0 does not support the `osx-arm64` runtime. The
+adapter fails closed by returning no model override, allowing the remaining
+assessment layers to continue normally.
+
 For this application shape, `.pkg` is a better fit than `.dmg` because the install needs to place files under system locations and register a `launchd` service definition.
 
 ## Prerequisites
@@ -23,6 +29,11 @@ From the repository root on macOS:
 ```bash
 ./installer/macos/build-macos-packages.sh 1.0.0
 ```
+
+Local builds produce both runtimes by default. Release automation sets
+`RUNTIME=osx-x64` on a macOS Intel runner and `RUNTIME=osx-arm64` on an Apple
+Silicon runner so each published package is built and exercised on matching
+hardware rather than relying on cross-compilation.
 
 Outputs:
 

@@ -2,11 +2,47 @@ using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+#if !NO_MLNET
 using Microsoft.ML;
+#endif
 using RedisBlocklistMiddlewareApp.Configuration;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
+#if NO_MLNET
+public sealed class LocalTrainedModelAdapter : IThreatModelAdapter
+{
+    private readonly LocalTrainedModelOptions _options;
+    private readonly ILogger<LocalTrainedModelAdapter> _logger;
+    private int _warningLogged;
+
+    public LocalTrainedModelAdapter(
+        IOptions<DefenseEngineOptions> options,
+        IHostEnvironment environment,
+        ILogger<LocalTrainedModelAdapter> logger)
+    {
+        _options = options.Value.Escalation.LocalTrainedModel;
+        _logger = logger;
+    }
+
+    public string Name => "local_trained_model";
+
+    public string Route => ThreatModelRoutes.Local;
+
+    public Task<ModelAssessment?> AssessAsync(
+        ThreatAssessmentContext context,
+        CancellationToken cancellationToken)
+    {
+        if (_options.Enabled && Interlocked.Exchange(ref _warningLogged, 1) == 0)
+        {
+            _logger.LogWarning(
+                "The local Microsoft.ML trained-model adapter is unavailable on macOS ARM64; continuing with the remaining assessment adapters.");
+        }
+
+        return Task.FromResult<ModelAssessment?>(null);
+    }
+}
+#else
 public sealed class LocalTrainedModelAdapter : IThreatModelAdapter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -199,3 +235,4 @@ public sealed class LocalTrainedModelAdapter : IThreatModelAdapter
         PredictionEngine<LocalModelFeatureVector, LocalModelPrediction> Engine,
         LocalTrainedModelMetadata Metadata);
 }
+#endif

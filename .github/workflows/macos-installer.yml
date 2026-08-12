@@ -13,7 +13,15 @@ on:
 
 jobs:
   build-installer:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            runtime: osx-x64
+          - os: macos-15
+            runtime: osx-arm64
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
 
@@ -45,7 +53,48 @@ jobs:
 
       - name: Build macOS Packages
         shell: bash
+        env:
+          RUNTIME: ${{ matrix.runtime }}
         run: ./installer/macos/build-macos-packages.sh "${{ steps.version.outputs.version }}"
+
+      - name: Install and smoke test package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(find artifacts/macos-installer/output -maxdepth 1 -name '*-${{ matrix.runtime }}.pkg' -print -quit)"
+          if [[ -z "${package}" ]]; then
+            echo "The ${{ matrix.runtime }} package was not produced." >&2
+            exit 1
+          fi
+
+          sudo installer -pkg "${package}" -target /
+
+          install_root="/usr/local/lib/ai-scraping-defense/${{ matrix.runtime }}"
+          executable="${install_root}/AiScrapingDefense.EdgeGateway"
+          test -x "${executable}"
+
+          ASPNETCORE_URLS=http://127.0.0.1:18080 \
+          DOTNET_ENVIRONMENT=Development \
+          DefenseEngine__Management__ApiKey=installer-smoke-management-key \
+          DefenseEngine__Intake__ApiKey=installer-smoke-intake-key \
+          "${executable}" --contentRoot "${install_root}" > "$RUNNER_TEMP/installer-smoke.log" 2>&1 &
+          service_pid=$!
+          trap 'kill "${service_pid}" 2>/dev/null || true' EXIT
+
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:18080/health > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${service_pid}" 2>/dev/null; then
+              cat "$RUNNER_TEMP/installer-smoke.log" >&2
+              exit 1
+            fi
+            sleep 0.5
+          done
+
+          cat "$RUNNER_TEMP/installer-smoke.log" >&2
+          echo "Installed edge gateway did not become healthy." >&2
+          exit 1
 
       - name: Import Apple Installer Certificate
         shell: bash
@@ -94,7 +143,7 @@ jobs:
       - name: Upload macOS Installer Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ai-scraping-defense-macos-installer-${{ steps.version.outputs.version }}
+          name: ai-scraping-defense-macos-installer-${{ steps.version.outputs.version }}-${{ matrix.runtime }}
           path: |
             artifacts/macos-installer/output/*.pkg
             artifacts/macos-installer/output/*.sha256
