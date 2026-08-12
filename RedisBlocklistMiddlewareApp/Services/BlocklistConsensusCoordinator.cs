@@ -169,8 +169,14 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
                 return;
             }
 
-            await cluster.StopAsync(cancellationToken);
-            cluster.Dispose();
+            try
+            {
+                await cluster.StopAsync(cancellationToken);
+            }
+            finally
+            {
+                cluster.Dispose();
+            }
         }
         finally
         {

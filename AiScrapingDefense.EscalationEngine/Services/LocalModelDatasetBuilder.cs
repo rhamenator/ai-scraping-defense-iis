@@ -252,13 +252,11 @@ public sealed class LocalModelDatasetBuilder
 
         if (!string.IsNullOrWhiteSpace(userAgent))
         {
-            foreach (var knownBadUserAgent in _heuristics.KnownBadUserAgents)
+            var knownBadUserAgent = _heuristics.KnownBadUserAgents.FirstOrDefault(
+                candidate => userAgent.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+            if (knownBadUserAgent is not null)
             {
-                if (userAgent.Contains(knownBadUserAgent, StringComparison.OrdinalIgnoreCase))
-                {
-                    signals.Add($"known_bad_user_agent:{knownBadUserAgent}");
-                    break;
-                }
+                signals.Add($"known_bad_user_agent:{knownBadUserAgent}");
             }
         }
         else if (_heuristics.CheckEmptyUserAgent)
@@ -276,13 +274,11 @@ public sealed class LocalModelDatasetBuilder
             signals.Add("generic_accept_any");
         }
 
-        foreach (var suspiciousPath in _heuristics.SuspiciousPathSubstrings)
+        var suspiciousPath = _heuristics.SuspiciousPathSubstrings.FirstOrDefault(
+            candidate => path.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+        if (suspiciousPath is not null)
         {
-            if (path.Contains(suspiciousPath, StringComparison.OrdinalIgnoreCase))
-            {
-                signals.Add($"suspicious_path:{suspiciousPath}");
-                break;
-            }
+            signals.Add($"suspicious_path:{suspiciousPath}");
         }
 
         if (queryString.Length > 200)

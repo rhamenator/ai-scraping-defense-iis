@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix SQL Server webhook claims by selecting the lease columns in the updatable CTE before changing their values.
 - Removed a high-severity SSH.NET advisory from integration-test infrastructure by
   upgrading Testcontainers and enforcing the patched transitive dependency floor.
+- Hardened logging and Raft disposal paths, corrected retry-delay precision, and
+  pinned third-party installer publishing actions to an audited commit.
 
 ### Added
 

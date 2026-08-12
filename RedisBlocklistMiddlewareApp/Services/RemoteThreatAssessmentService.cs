@@ -58,7 +58,7 @@ public sealed class RemoteThreatAssessmentService : IThreatAssessmentService
 
             if (attempt < 3)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken);
+                await Task.Delay(TimeSpan.FromMilliseconds(100d * attempt), cancellationToken);
             }
         }
 

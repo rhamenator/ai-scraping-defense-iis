@@ -537,6 +537,7 @@ public abstract class RelationalWebhookEventInbox : IWebhookEventInbox
             {
                 while (_signalChannel.Reader.TryRead(out _))
                 {
+                    // Drain coalesced wake-up signals before claiming the next row.
                 }
             }
         }

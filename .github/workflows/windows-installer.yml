@@ -127,7 +127,7 @@ jobs:
 
       - name: Publish Stable Installer To GitHub Release
         if: github.ref_type == 'tag' && steps.version.outputs.prerelease != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             artifacts/installer/output/*.exe
@@ -137,7 +137,7 @@ jobs:
 
       - name: Publish Prerelease Installer To GitHub Release
         if: github.ref_type == 'tag' && steps.version.outputs.prerelease == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             artifacts/installer/output/*.exe

@@ -19,15 +19,14 @@ public sealed class RequestSignalEvaluator : IRequestSignalEvaluator
         var userAgent = context.Request.Headers.UserAgent.ToString();
         if (!string.IsNullOrWhiteSpace(userAgent))
         {
-            foreach (var knownBadUserAgent in _options.KnownBadUserAgents)
+            var knownBadUserAgent = _options.KnownBadUserAgents.FirstOrDefault(
+                candidate => userAgent.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+            if (knownBadUserAgent is not null)
             {
-                if (userAgent.Contains(knownBadUserAgent, StringComparison.OrdinalIgnoreCase))
-                {
-                    return new RequestSignalEvaluation(
-                        true,
-                        "known_bad_user_agent",
-                        [$"known_bad_user_agent:{knownBadUserAgent}"]);
-                }
+                return new RequestSignalEvaluation(
+                    true,
+                    "known_bad_user_agent",
+                    [$"known_bad_user_agent:{knownBadUserAgent}"]);
             }
         }
 
@@ -54,13 +53,11 @@ public sealed class RequestSignalEvaluator : IRequestSignalEvaluator
         }
 
         var path = context.Request.Path.Value ?? "/";
-        foreach (var suspiciousPath in _options.SuspiciousPathSubstrings)
+        var suspiciousPath = _options.SuspiciousPathSubstrings.FirstOrDefault(
+            candidate => path.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+        if (suspiciousPath is not null)
         {
-            if (path.Contains(suspiciousPath, StringComparison.OrdinalIgnoreCase))
-            {
-                signals.Add($"suspicious_path:{suspiciousPath}");
-                break;
-            }
+            signals.Add($"suspicious_path:{suspiciousPath}");
         }
 
         if ((context.Request.QueryString.Value?.Length ?? 0) > 200)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using Microsoft.Extensions.Logging;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
@@ -263,7 +264,9 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
 
         _logger.LogInformation(
             "Threat assessment completed for {IpAddress} with score {Score}, frequency {Frequency}, explicit malicious verdict {ExplicitVerdict}, action {Action}.",
-            request.IpAddress,
+            IPAddress.TryParse(request.IpAddress, out var loggedAddress)
+                ? loggedAddress.ToString()
+                : "invalid",
             totalScore,
             frequency,
             explicitMaliciousVerdict,
