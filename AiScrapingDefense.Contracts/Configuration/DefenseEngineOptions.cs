@@ -12,6 +12,8 @@ public sealed class DefenseEngineOptions
 
     public CloudflareOptions Cloudflare { get; set; } = new();
 
+    public TlsFingerprintOptions TlsFingerprints { get; set; } = new();
+
     public ManagementOptions Management { get; set; } = new();
 
     public IntakeOptions Intake { get; set; } = new();
@@ -220,6 +222,16 @@ public sealed class CloudflareOptions
     public double MinimumBlockedRate { get; set; } = 0.50d;
 
     public int MinimumDistinctBlockedOrigins { get; set; } = 20;
+}
+
+public sealed class TlsFingerprintOptions
+{
+    public string AttestationKey { get; set; } = string.Empty;
+
+    public string PreviousAttestationKey { get; set; } = string.Empty;
+
+    public int AttestationMaxAgeSeconds { get; set; } = 60;
+
 }
 
 public static class AuditStorageProviders

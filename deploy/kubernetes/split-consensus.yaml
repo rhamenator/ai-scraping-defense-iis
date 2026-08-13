@@ -13,6 +13,8 @@ stringData:
   # Replace every value before applying this manifest outside an isolated lab.
   management-api-key: replace-with-a-random-management-key-of-at-least-32-chars
   split-service-token: replace-with-a-random-service-token-of-at-least-32-chars
+  tls-fingerprint-attestation-key: replace-with-at-least-32-random-characters
+  # tls-fingerprint-attestation-previous-key: set-only-during-a-rolling-rotation
   consensus-shared-secret: replace-with-a-random-consensus-secret-of-at-least-32-chars
   postgres-password: replace-with-a-random-postgres-password
 ---
@@ -98,6 +100,17 @@ spec:
                 secretKeyRef:
                   name: defense-secrets
                   key: split-service-token
+            - name: DefenseEngine__TlsFingerprints__AttestationKey
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: tls-fingerprint-attestation-key
+            - name: DefenseEngine__TlsFingerprints__PreviousAttestationKey
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: tls-fingerprint-attestation-previous-key
+                  optional: true
             - name: DefenseEngine__Management__ApiKey
               valueFrom:
                 secretKeyRef:
@@ -219,6 +232,17 @@ spec:
                 secretKeyRef:
                   name: defense-secrets
                   key: split-service-token
+            - name: DefenseEngine__TlsFingerprints__AttestationKey
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: tls-fingerprint-attestation-key
+            - name: DefenseEngine__TlsFingerprints__PreviousAttestationKey
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: tls-fingerprint-attestation-previous-key
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

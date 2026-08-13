@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
+using RedisBlocklistMiddlewareApp.Security;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
@@ -14,12 +15,14 @@ public sealed class McpModelAdapter : IThreatModelAdapter
 
     private readonly McpModelAdapterOptions _options;
     private readonly ILogger<McpModelAdapter> _logger;
+    private readonly TlsFingerprintOptions _tlsOptions;
 
     public McpModelAdapter(
         IOptions<DefenseEngineOptions> options,
         ILogger<McpModelAdapter> logger)
     {
         _options = options.Value.Escalation.McpModel;
+        _tlsOptions = options.Value.TlsFingerprints;
         _logger = logger;
     }
 
@@ -175,8 +178,17 @@ public sealed class McpModelAdapter : IThreatModelAdapter
         };
     }
 
-    private static object BuildClassifyPayload(ThreatAssessmentContext context)
+    private object BuildClassifyPayload(ThreatAssessmentContext context)
     {
+        var fingerprint = TlsFingerprintAttestation.Normalize(context.TlsFingerprint);
+        var attestation = fingerprint?.Verified == true
+            ? TlsFingerprintAttestation.Create(
+                fingerprint,
+                context.IpAddress,
+                context.Method,
+                context.Path,
+                _tlsOptions.AttestationKey)
+            : null;
         return new
         {
             ip = context.IpAddress,
@@ -187,9 +199,10 @@ public sealed class McpModelAdapter : IThreatModelAdapter
             signals = context.Signals,
             frequency = context.Frequency,
             base_signal_score = context.BaseSignalScore,
-            tls_ja3 = context.TlsFingerprint?.Ja3,
-            tls_ja4 = context.TlsFingerprint?.Ja4,
-            tls_fingerprint_source = context.TlsFingerprint?.Source,
+            tls_ja3 = fingerprint?.Ja3,
+            tls_ja4 = fingerprint?.Ja4,
+            tls_fingerprint_source = fingerprint?.Source,
+            tls_fingerprint_attestation = attestation,
             frequency_score = context.FrequencyScore,
             headers = new Dictionary<string, string>()
         };

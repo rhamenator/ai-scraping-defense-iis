@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -51,7 +52,48 @@ public sealed class RemoteThreatAssessmentServiceTests
         Assert.Contains("three attempts", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static RemoteThreatAssessmentService CreateService(HttpMessageHandler handler)
+    [Fact]
+    public async Task AssessAsync_AttestsOnlyServerVerifiedTlsFingerprint()
+    {
+        const string key = "0123456789abcdef0123456789abcdef";
+        SuspiciousRequest? forwarded = null;
+        var handler = new SequenceHandler((_, message) =>
+        {
+            var json = message.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            forwarded = JsonSerializer.Deserialize<SuspiciousRequest>(
+                json,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(CreateResult())
+            };
+        });
+        var service = CreateService(handler, key);
+        var request = CreateRequest() with
+        {
+            TlsFingerprint = new TlsClientFingerprint(
+                "72a589da586844d7f0818ce684948eea",
+                "t13d1516h2_8daaf6152771_e5627efa2ab1",
+                "envoy",
+                Verified: true)
+        };
+
+        await service.AssessAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(forwarded?.TlsFingerprint?.Attestation);
+        Assert.False(forwarded!.TlsFingerprint!.Verified);
+        Assert.True(Security.TlsFingerprintAttestation.Verify(
+            forwarded.TlsFingerprint,
+            forwarded.IpAddress,
+            forwarded.Method,
+            forwarded.Path,
+            key,
+            60));
+    }
+
+    private static RemoteThreatAssessmentService CreateService(
+        HttpMessageHandler handler,
+        string attestationKey = "")
     {
         var options = Options.Create(new DefenseEngineOptions
         {
@@ -61,6 +103,11 @@ public sealed class RemoteThreatAssessmentServiceTests
                 EscalationBaseUrl = "http://escalation.test",
                 ServiceToken = new string('s', 32),
                 RequestTimeoutSeconds = 2
+            },
+            TlsFingerprints = new TlsFingerprintOptions
+            {
+                AttestationKey = attestationKey,
+                AttestationMaxAgeSeconds = 60
             }
         });
         return new RemoteThreatAssessmentService(new HttpClient(handler), options);

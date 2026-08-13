@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
+using RedisBlocklistMiddlewareApp.Security;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
@@ -10,6 +11,7 @@ public sealed class RemoteThreatAssessmentService : IThreatAssessmentService
 {
     private readonly HttpClient _client;
     private readonly TopologyOptions _options;
+    private readonly TlsFingerprintOptions _tlsOptions;
 
     public RemoteThreatAssessmentService(
         HttpClient client,
@@ -17,6 +19,7 @@ public sealed class RemoteThreatAssessmentService : IThreatAssessmentService
     {
         _client = client;
         _options = options.Value.Topology;
+        _tlsOptions = options.Value.TlsFingerprints;
         _client.BaseAddress = new Uri(_options.EscalationBaseUrl + "/", UriKind.Absolute);
         _client.Timeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds);
         _client.DefaultRequestHeaders.Authorization =
@@ -27,6 +30,7 @@ public sealed class RemoteThreatAssessmentService : IThreatAssessmentService
         SuspiciousRequest request,
         CancellationToken cancellationToken)
     {
+        request = BindTrustedFingerprint(request);
         Exception? lastFailure = null;
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -65,5 +69,33 @@ public sealed class RemoteThreatAssessmentService : IThreatAssessmentService
         throw new HttpRequestException(
             "The escalation runtime remained unavailable after three attempts.",
             lastFailure);
+    }
+
+    private SuspiciousRequest BindTrustedFingerprint(SuspiciousRequest request)
+    {
+        var fingerprint = TlsFingerprintAttestation.Normalize(request.TlsFingerprint);
+        if (fingerprint is null || !fingerprint.Verified)
+        {
+            return request with
+            {
+                TlsFingerprint = fingerprint is null
+                    ? null
+                    : fingerprint with { Verified = false, Attestation = null }
+            };
+        }
+        var token = TlsFingerprintAttestation.Create(
+            fingerprint,
+            request.IpAddress,
+            request.Method,
+            request.Path,
+            _tlsOptions.AttestationKey);
+        return request with
+        {
+            TlsFingerprint = fingerprint with
+            {
+                Verified = false,
+                Attestation = token
+            }
+        };
     }
 }

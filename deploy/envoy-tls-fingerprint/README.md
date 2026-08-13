@@ -12,9 +12,7 @@ the validated values to the defense origin.
 - Do not expose the origin directly, because direct clients must not be able to
   assert `X-ASD-TLS-JA3` or `X-ASD-TLS-JA4`.
 
-When Cloudflare terminates client TLS, the origin cannot recreate the original
-fingerprint. Enable Cloudflare's managed transform for `cf-ja3-hash` and
-`cf-ja4`, and accept those headers only when the immediate peer is in the
-configured Cloudflare CIDRs. These fields can legitimately be absent. The
-Cloudflare peer address is infrastructure and must never be used as the block
-target; only the validated originating client IP may be blocked.
+Do not place this direct-termination sample unchanged behind Cloudflare; it
+would fingerprint Cloudflare's connection. Cloudflare does not automatically
+send JA3/JA4 origin headers. Follow `docs/tls_fingerprint_attestation.md` for
+the Worker and origin-authentication boundary.

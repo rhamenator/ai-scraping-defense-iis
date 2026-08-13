@@ -55,7 +55,7 @@ public sealed partial class TlsFingerprintCaptureMiddleware
         var cloudflareJa3 = NormalizeJa3(headers["CF-JA3-Hash"]);
         var cloudflareJa4 = NormalizeJa4(headers["CF-JA4"]);
         return cloudflareJa3 is not null || cloudflareJa4 is not null
-            ? new TlsClientFingerprint(cloudflareJa3, cloudflareJa4, "cloudflare")
+            ? new TlsClientFingerprint(cloudflareJa3, cloudflareJa4, "cloudflare", Verified: true)
             : null;
     }
 
@@ -63,8 +63,9 @@ public sealed partial class TlsFingerprintCaptureMiddleware
     {
         var envoyJa3 = NormalizeJa3(headers["X-ASD-TLS-JA3"]);
         var envoyJa4 = NormalizeJa4(headers["X-ASD-TLS-JA4"]);
+        var source = NormalizeSource(headers["X-ASD-TLS-Source"]) ?? "envoy";
         return envoyJa3 is not null || envoyJa4 is not null
-            ? new TlsClientFingerprint(envoyJa3, envoyJa4, "envoy")
+            ? new TlsClientFingerprint(envoyJa3, envoyJa4, source, Verified: true)
             : null;
     }
 
@@ -115,9 +116,18 @@ public sealed partial class TlsFingerprintCaptureMiddleware
         return candidate is not null && Ja4Pattern().IsMatch(candidate) ? candidate : null;
     }
 
+    private static string? NormalizeSource(string? value)
+    {
+        var candidate = value?.Trim().ToLowerInvariant();
+        return candidate is not null && SourcePattern().IsMatch(candidate) ? candidate : null;
+    }
+
     [GeneratedRegex("^[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
     private static partial Regex Ja3Pattern();
 
     [GeneratedRegex("^[a-z0-9]{10}_[0-9a-f]{12}_[0-9a-f]{12}$", RegexOptions.CultureInvariant)]
     private static partial Regex Ja4Pattern();
+
+    [GeneratedRegex("^[a-z0-9_-]{1,32}$", RegexOptions.CultureInvariant)]
+    private static partial Regex SourcePattern();
 }

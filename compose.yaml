@@ -21,6 +21,9 @@ services:
       DefenseEngine__Topology__EscalationBaseUrl: http://escalation-engine:8080
       DefenseEngine__Topology__TarpitPublicBaseUrl: http://localhost:18082
       DefenseEngine__Topology__ServiceToken: ${ASD_SPLIT_SERVICE_TOKEN:?Set ASD_SPLIT_SERVICE_TOKEN to a random value of at least 32 characters}
+      DefenseEngine__TlsFingerprints__AttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_KEY:-}
+      DefenseEngine__TlsFingerprints__PreviousAttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_PREVIOUS_KEY:-}
+      DefenseEngine__TlsFingerprints__AttestationMaxAgeSeconds: "60"
       DefenseEngine__Management__ApiKey: ${ASD_MANAGEMENT_API_KEY:?Set ASD_MANAGEMENT_API_KEY to a random value}
       DefenseEngine__Intake__ApiKey: ${ASD_INTAKE_API_KEY:?Set ASD_INTAKE_API_KEY to a random value}
       DefenseEngine__Audit__DatabasePath: /app/data/defense-events.db
@@ -50,6 +53,9 @@ services:
       DefenseEngine__Redis__ConnectionString: redis:6379
       DefenseEngine__Redis__FrequencyDatabase: "3"
       DefenseEngine__Topology__ServiceToken: ${ASD_SPLIT_SERVICE_TOKEN:?Set ASD_SPLIT_SERVICE_TOKEN to a random value of at least 32 characters}
+      DefenseEngine__TlsFingerprints__AttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_KEY:-}
+      DefenseEngine__TlsFingerprints__PreviousAttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_PREVIOUS_KEY:-}
+      DefenseEngine__TlsFingerprints__AttestationMaxAgeSeconds: "60"
 
   tarpit-api:
     build:

@@ -37,6 +37,9 @@ Both modes expose `/live` for process liveness and `/health` for dependency/read
 
 Use `TrustedProxy` mode only with explicit addresses. Put ordinary proxies and Envoy collectors in `Networking:TrustedProxies`; put Cloudflare's published ranges in `Networking:TrustedCdnProxies`. Cloudflare identity and fingerprint headers are accepted only from the CDN list when `DefenseEngine:Cloudflare:Enabled` is true. Collector headers are accepted only from the non-CDN list, with no fallback across trust boundaries. Missing, malformed, or spoofed origin headers produce `unknown`; the proxy or Cloudflare edge address is never substituted as the block target.
 
+Fingerprint provenance crossing the split-runtime or MCP boundary must also use
+the HMAC contract in [Trusted TLS fingerprints](tls_fingerprint_attestation.md).
+
 Cloudflare integration only produces an operator recommendation to enable Under Attack Mode when the integration is enabled and the attack thresholds are met. It never automatically changes the zone mode. Normal outbound traffic is not proxied through Cloudflare by these runtimes.
 
 ## Validation

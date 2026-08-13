@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 using RedisBlocklistMiddlewareApp.Services;
+using RedisBlocklistMiddlewareApp.Security;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,15 @@ if (string.IsNullOrWhiteSpace(runtimeOptions.Topology.ServiceToken) ||
     throw new InvalidOperationException(
         "DefenseEngine:Topology:ServiceToken must contain at least 32 characters.");
 }
+if ((!string.IsNullOrEmpty(runtimeOptions.TlsFingerprints.AttestationKey) &&
+     runtimeOptions.TlsFingerprints.AttestationKey.Length < 32) ||
+    (!string.IsNullOrEmpty(runtimeOptions.TlsFingerprints.PreviousAttestationKey) &&
+     runtimeOptions.TlsFingerprints.PreviousAttestationKey.Length < 32) ||
+    runtimeOptions.TlsFingerprints.AttestationMaxAgeSeconds <= 0)
+{
+    throw new InvalidOperationException(
+        "TLS fingerprint attestation requires a key of at least 32 characters and a positive max age.");
+}
 
 app.MapGet("/health", async (IConnectionMultiplexer redis) =>
 {
@@ -77,6 +87,7 @@ app.MapPost("/v1/assess", async (
     {
         return Results.BadRequest(new { error = "The assessment request is invalid or exceeds a field limit." });
     }
+    request = VerifyTlsFingerprint(request, runtimeOptions.TlsFingerprints);
     var result = await assessmentService.AssessAsync(request, cancellationToken);
     return Results.Ok(result);
 });
@@ -107,6 +118,33 @@ static bool IsValidAssessmentRequest(SuspiciousRequest request)
         request.UserAgent is not null && request.UserAgent.Length <= 2048 &&
         request.Signals is not null && request.Signals.Count <= 128 &&
         request.Signals.All(signal => signal is not null && signal.Length <= 512);
+}
+
+static SuspiciousRequest VerifyTlsFingerprint(
+    SuspiciousRequest request,
+    TlsFingerprintOptions options)
+{
+    var fingerprint = TlsFingerprintAttestation.Normalize(request.TlsFingerprint);
+    if (fingerprint is null)
+    {
+        return request with { TlsFingerprint = null };
+    }
+    var verified = TlsFingerprintAttestation.Verify(
+        fingerprint,
+        request.IpAddress,
+        request.Method,
+        request.Path,
+        options.AttestationKey,
+        options.AttestationMaxAgeSeconds,
+        previousKey: options.PreviousAttestationKey);
+    return request with
+    {
+        TlsFingerprint = fingerprint with
+        {
+            Verified = verified,
+            Attestation = null
+        }
+    };
 }
 
 public sealed class EscalationEngineAssemblyMarker;

@@ -15,7 +15,9 @@ public sealed record SuspiciousRequest(
 public sealed record TlsClientFingerprint(
     string? Ja3,
     string? Ja4,
-    string Source);
+    string Source,
+    bool Verified = false,
+    string? Attestation = null);
 
 public sealed record DefenseDecision(
     string IpAddress,

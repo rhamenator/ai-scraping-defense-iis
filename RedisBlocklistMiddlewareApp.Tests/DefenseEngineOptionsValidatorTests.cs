@@ -199,4 +199,24 @@ public sealed class DefenseEngineOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains(result.Failures, failure => failure.Contains("Audit:ConnectionString", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Validate_RejectsShortTlsAttestationRotationKeys()
+    {
+        var result = new DefenseEngineOptionsValidator().Validate(
+            null,
+            new DefenseEngineOptions
+            {
+                TlsFingerprints = new TlsFingerprintOptions
+                {
+                    AttestationKey = new string('c', 32),
+                    PreviousAttestationKey = "too-short"
+                }
+            });
+
+        Assert.True(result.Failed);
+        Assert.Contains(
+            result.Failures,
+            failure => failure.Contains("PreviousAttestationKey", StringComparison.Ordinal));
+    }
 }

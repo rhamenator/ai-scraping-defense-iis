@@ -10,6 +10,21 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         var errors = new List<string>();
         var networking = options.Networking;
 
+        if (!string.IsNullOrEmpty(options.TlsFingerprints.AttestationKey) &&
+            options.TlsFingerprints.AttestationKey.Length < 32)
+        {
+            errors.Add("DefenseEngine:TlsFingerprints:AttestationKey must contain at least 32 characters when configured.");
+        }
+        if (!string.IsNullOrEmpty(options.TlsFingerprints.PreviousAttestationKey) &&
+            options.TlsFingerprints.PreviousAttestationKey.Length < 32)
+        {
+            errors.Add("DefenseEngine:TlsFingerprints:PreviousAttestationKey must contain at least 32 characters when configured.");
+        }
+        if (options.TlsFingerprints.AttestationMaxAgeSeconds <= 0)
+        {
+            errors.Add("DefenseEngine:TlsFingerprints:AttestationMaxAgeSeconds must be positive.");
+        }
+
         if (!string.Equals(options.Topology.Mode, RuntimeTopologyModes.Split, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(options.Topology.Mode, RuntimeTopologyModes.Single, StringComparison.OrdinalIgnoreCase))
         {

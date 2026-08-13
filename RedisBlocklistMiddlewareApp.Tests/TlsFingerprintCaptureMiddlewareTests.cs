@@ -20,6 +20,7 @@ public sealed class TlsFingerprintCaptureMiddlewareTests
 
         var fingerprint = TlsFingerprintCaptureMiddleware.GetFingerprint(trusted);
         Assert.NotNull(fingerprint);
+        Assert.True(fingerprint.Verified);
         Assert.Equal(Ja3, fingerprint.Ja3);
         Assert.Equal(Ja4, fingerprint.Ja4);
         Assert.Equal("envoy", fingerprint.Source);
