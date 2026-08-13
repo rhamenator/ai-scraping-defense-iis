@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dispose Raft clusters asynchronously during failed startup and host shutdown,
+  and retry the three-node integration fixture only when ephemeral port binding
+  loses its unavoidable discovery race.
+
 ## [1.0.2] - 2026-08-12
 
 ### Fixed

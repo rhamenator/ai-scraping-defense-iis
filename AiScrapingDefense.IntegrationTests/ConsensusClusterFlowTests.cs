@@ -23,6 +23,24 @@ public sealed class ConsensusClusterFlowTests
     public async Task ThreeNodeCluster_ElectsLeader_ReplicatesLog_AndFailsOver()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                await ExerciseThreeNodeClusterAsync(cancellationToken);
+                return;
+            }
+            catch (Exception exception) when (
+                attempt < 3 && IsAddressAlreadyInUse(exception))
+            {
+                // Ephemeral-port discovery and Raft binding cannot be atomic.
+                // Retry the isolated cluster if another process wins that race.
+            }
+        }
+    }
+
+    private async Task ExerciseThreeNodeClusterAsync(CancellationToken cancellationToken)
+    {
         var ports = ReserveTcpPorts(3);
         var members = ports.Select(port => new ConsensusMemberOptions
         {
@@ -111,6 +129,21 @@ public sealed class ConsensusClusterFlowTests
                 // Windows can briefly retain DotNext WAL handles after cluster disposal.
             }
         }
+    }
+
+    private static bool IsAddressAlreadyInUse(Exception exception)
+    {
+        if (exception is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
+        {
+            return true;
+        }
+
+        if (exception is AggregateException aggregateException)
+        {
+            return aggregateException.InnerExceptions.Any(IsAddressAlreadyInUse);
+        }
+
+        return exception.InnerException is { } inner && IsAddressAlreadyInUse(inner);
     }
 
     private static async Task<ConsensusTestNode> WaitForSingleLeaderAsync(

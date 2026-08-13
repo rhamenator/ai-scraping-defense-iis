@@ -142,7 +142,7 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             }
             catch
             {
-                cluster.Dispose();
+                await cluster.DisposeAsync();
                 throw;
             }
 
@@ -163,7 +163,7 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
         await _lifecycleLock.WaitAsync(cancellationToken);
         try
         {
-            using var cluster = Interlocked.Exchange(ref _cluster, null);
+            await using var cluster = Interlocked.Exchange(ref _cluster, null);
             if (cluster is null)
             {
                 return;
