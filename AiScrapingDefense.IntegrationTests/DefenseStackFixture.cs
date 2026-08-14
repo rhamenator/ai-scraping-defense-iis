@@ -58,7 +58,9 @@ public sealed class DefenseStackFixture : IAsyncLifetime
         Directory.CreateDirectory(auditDirectory);
         var auditDatabasePath = Path.Combine(auditDirectory, "defense-events.db");
 
-        await using var redis = await ConnectionMultiplexer.ConnectAsync(_redisContainer.GetConnectionString());
+        var redisOptions = ConfigurationOptions.Parse(_redisContainer.GetConnectionString());
+        redisOptions.AllowAdmin = true;
+        await using var redis = await ConnectionMultiplexer.ConnectAsync(redisOptions);
         await redis.GetDatabase(redisDatabaseBase).ExecuteAsync("FLUSHDB");
         await redis.GetDatabase(redisDatabaseBase + 1).ExecuteAsync("FLUSHDB");
 
