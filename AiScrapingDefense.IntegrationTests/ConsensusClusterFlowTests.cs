@@ -54,7 +54,9 @@ public sealed class ConsensusClusterFlowTests
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
 
-        await using var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisConnectionString);
+        var redisOptions = ConfigurationOptions.Parse(_fixture.RedisConnectionString);
+        redisOptions.AllowAdmin = true;
+        await using var redis = await ConnectionMultiplexer.ConnectAsync(redisOptions);
         for (var database = 8; database <= 10; database++)
         {
             await redis.GetDatabase(database).ExecuteAsync("FLUSHDB");
