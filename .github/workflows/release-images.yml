@@ -81,7 +81,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.refs.outputs.version }}
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
 
       - name: Sign Release Image
         env:
@@ -92,7 +92,7 @@ jobs:
           cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"
 
       - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
           subject-name: ${{ steps.refs.outputs.image_name }}
           subject-digest: ${{ steps.build.outputs.digest }}
