@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/logo.png" alt="AI Scraping Defense IIS logo" width="220">
+</p>
+
 # AI Scraping Defense (.NET)
 
 This repository is being repositioned toward the original goal: a pure-.NET implementation of the `ai-scraping-defense` stack rather than an IIS-to-Linux control-plane adapter.

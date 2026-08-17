@@ -21,6 +21,7 @@
 #endif
 
 [Setup]
+SetupIconFile=app-icon.ico
 AppId={{8D1305F0-F4F8-4ED3-9A03-2F37FD13B8A4}
 AppName={#MyAppName}
 AppVersion={#AppVersion}
@@ -36,7 +37,7 @@ WizardStyle=modern
 PrivilegesRequired=admin
 OutputDir={#OutputDir}
 OutputBaseFilename=ai-scraping-defense-{#AppVersion}-{#OutputArchitectureSuffix}-setup
-UninstallDisplayIcon={app}\AiScrapingDefense.EdgeGateway.exe
+UninstallDisplayIcon={app}\app-icon.ico
 LicenseFile=..\LICENSE
 
 [Languages]
@@ -51,6 +52,7 @@ Name: "{app}\data"
 Name: "{app}\logs"
 
 [Files]
+Source: "app-icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Run]
