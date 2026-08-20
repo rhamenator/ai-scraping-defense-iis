@@ -54,7 +54,7 @@ public sealed class DefenseStackFixture : IAsyncLifetime
         Action<IServiceCollection>? configureServices = null)
     {
         const int redisDatabaseBase = 0;
-        var auditDirectory = Path.Combine(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
+        var auditDirectory = Path.Join(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(auditDirectory);
         var auditDatabasePath = Path.Combine(auditDirectory, "defense-events.db");
 
