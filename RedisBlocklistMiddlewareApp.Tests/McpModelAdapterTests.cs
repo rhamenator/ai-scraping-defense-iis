@@ -12,6 +12,29 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class McpModelAdapterTests
 {
     [Fact]
+    public void EnvironmentConfiguration_EnablesSelectedMcpServer()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["MODEL_URI"] = "mcp://custom/classify",
+            ["MCP_SERVER_CUSTOM_URL"] = "wss://mcp.example.test/mcp",
+            ["MCP_SERVER_CUSTOM_AUTH_TOKEN"] = "secret-token",
+            ["MCP_SERVER_CUSTOM_TIMEOUT"] = "17"
+        };
+        var options = new DefenseEngineOptions();
+
+        McpModelEnvironmentConfiguration.Apply(
+            options,
+            key => values.GetValueOrDefault(key));
+
+        Assert.True(options.Escalation.McpModel.Enabled);
+        Assert.Equal("mcp://custom/classify", options.Escalation.McpModel.ModelUri);
+        Assert.Equal("wss://mcp.example.test/mcp", options.Escalation.McpModel.ServerUrl);
+        Assert.Equal("secret-token", options.Escalation.McpModel.AuthToken);
+        Assert.Equal(17, options.Escalation.McpModel.TimeoutSeconds);
+    }
+
+    [Fact]
     public void BuildClassifyPayload_BindsVerifiedInfrastructureFingerprint()
     {
         const string key = "0123456789abcdef0123456789abcdef";

@@ -12,6 +12,7 @@ namespace RedisBlocklistMiddlewareApp.Services;
 public sealed class McpModelAdapter : IThreatModelAdapter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private const int MaximumResponseBytes = 1024 * 1024;
 
     private readonly McpModelAdapterOptions _options;
     private readonly ILogger<McpModelAdapter> _logger;
@@ -73,6 +74,7 @@ public sealed class McpModelAdapter : IThreatModelAdapter
         CancellationToken cancellationToken)
     {
         using var socket = new ClientWebSocket();
+        socket.Options.AddSubProtocol("mcp");
         if (!string.IsNullOrWhiteSpace(_options.AuthToken))
         {
             socket.Options.SetRequestHeader(
@@ -82,40 +84,91 @@ public sealed class McpModelAdapter : IThreatModelAdapter
 
         await socket.ConnectAsync(new Uri(_options.ServerUrl), cancellationToken);
 
+        var initializeId = Guid.NewGuid().ToString("N");
+        await SendMessageAsync(socket, new
+        {
+            jsonrpc = "2.0",
+            id = initializeId,
+            method = "initialize",
+            @params = new
+            {
+                protocolVersion = "2025-06-18",
+                capabilities = new { },
+                clientInfo = new { name = "ai-scraping-defense-iis", version = "1.0" }
+            }
+        }, cancellationToken);
+        _ = await ReceiveResponseAsync(socket, cancellationToken);
+
+        await SendMessageAsync(socket, new
+        {
+            jsonrpc = "2.0",
+            method = "notifications/initialized"
+        }, cancellationToken);
+
         var requestId = Guid.NewGuid().ToString("N");
-        var jsonRpcRequest = JsonSerializer.SerializeToUtf8Bytes(new
+        await SendMessageAsync(socket, new
         {
             jsonrpc = "2.0",
             id = requestId,
-            method = toolName,
-            @params = payload,
-            client = "ai-scraping-defense-iis",
-            server = label
-        }, JsonOptions);
+            method = "tools/call",
+            @params = new
+            {
+                name = toolName,
+                arguments = payload,
+                _meta = new { server = label }
+            }
+        }, cancellationToken);
 
-        await socket.SendAsync(
-            jsonRpcRequest,
-            WebSocketMessageType.Text,
-            endOfMessage: true,
+        var root = await ReceiveResponseAsync(socket, cancellationToken);
+        var result = root.TryGetProperty("result", out var resultElement)
+            ? resultElement
+            : root;
+        var toolResponse = result.TryGetProperty("structuredContent", out var structuredContent)
+            ? structuredContent.Clone()
+            : result.Clone();
+        await socket.CloseOutputAsync(
+            WebSocketCloseStatus.NormalClosure,
+            "Tool call completed",
             cancellationToken);
+        return toolResponse;
+    }
 
+    private static async Task SendMessageAsync(
+        ClientWebSocket socket,
+        object message,
+        CancellationToken cancellationToken)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(message, JsonOptions);
+        await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+    }
+
+    private static async Task<JsonElement> ReceiveResponseAsync(
+        ClientWebSocket socket,
+        CancellationToken cancellationToken)
+    {
         using var responseStream = new MemoryStream();
         var buffer = new byte[8192];
         while (true)
         {
-            var result = await socket.ReceiveAsync(buffer, cancellationToken);
-            if (result.MessageType == WebSocketMessageType.Close)
+            var receiveResult = await socket.ReceiveAsync(buffer, cancellationToken);
+            if (receiveResult.MessageType == WebSocketMessageType.Close)
             {
                 throw new InvalidOperationException("MCP server closed the WebSocket before returning a response.");
             }
-
-            responseStream.Write(buffer, 0, result.Count);
-            if (result.EndOfMessage)
+            if (receiveResult.MessageType != WebSocketMessageType.Text)
+            {
+                throw new InvalidOperationException("MCP server returned a non-text response.");
+            }
+            if (responseStream.Length + receiveResult.Count > MaximumResponseBytes)
+            {
+                throw new InvalidOperationException("MCP server response exceeded the configured safety limit.");
+            }
+            responseStream.Write(buffer, 0, receiveResult.Count);
+            if (receiveResult.EndOfMessage)
             {
                 break;
             }
         }
-
         var rawJson = Encoding.UTF8.GetString(responseStream.ToArray());
         using var document = JsonDocument.Parse(rawJson);
         var root = document.RootElement.Clone();
@@ -124,9 +177,7 @@ public sealed class McpModelAdapter : IThreatModelAdapter
             throw new InvalidOperationException($"MCP server returned an error: {errorElement}");
         }
 
-        return root.TryGetProperty("result", out var resultElement)
-            ? resultElement.Clone()
-            : root;
+        return root;
     }
 
     private ModelAssessment ToAssessment(JsonElement response)

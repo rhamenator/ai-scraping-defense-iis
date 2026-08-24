@@ -261,44 +261,7 @@ builder.Services
                 : options.Escalation.OpenAiCompatibleModel.SystemPrompt.Trim();
         options.Escalation.OpenAiCompatibleModel.TimeoutSeconds = Math.Max(1, options.Escalation.OpenAiCompatibleModel.TimeoutSeconds);
 
-        var modelUriFromEnvironment = Environment.GetEnvironmentVariable("MODEL_URI")?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
-            modelUriFromEnvironment.StartsWith("mcp://", StringComparison.OrdinalIgnoreCase))
-        {
-            options.Escalation.McpModel.ModelUri = modelUriFromEnvironment;
-        }
-
-        options.Escalation.McpModel.ModelUri = options.Escalation.McpModel.ModelUri.Trim();
-        options.Escalation.McpModel.ServerUrl = options.Escalation.McpModel.ServerUrl.Trim();
-        options.Escalation.McpModel.AuthToken = options.Escalation.McpModel.AuthToken.Trim();
-        options.Escalation.McpModel.TimeoutSeconds = Math.Max(1, options.Escalation.McpModel.TimeoutSeconds);
-        if (!string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
-            TryGetMcpServerLabel(options.Escalation.McpModel.ModelUri, out var mcpServerLabel))
-        {
-            var mcpPrefix = $"MCP_SERVER_{mcpServerLabel.ToUpperInvariant()}_";
-            if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.ServerUrl))
-            {
-                options.Escalation.McpModel.ServerUrl =
-                    Environment.GetEnvironmentVariable(mcpPrefix + "URL")?.Trim() ?? string.Empty;
-            }
-
-            if (string.IsNullOrWhiteSpace(options.Escalation.McpModel.AuthToken))
-            {
-                options.Escalation.McpModel.AuthToken =
-                    Environment.GetEnvironmentVariable(mcpPrefix + "AUTH_TOKEN")?.Trim() ?? string.Empty;
-            }
-
-            var timeoutValue = Environment.GetEnvironmentVariable(mcpPrefix + "TIMEOUT");
-            if (int.TryParse(timeoutValue, out var mcpTimeoutSeconds))
-            {
-                options.Escalation.McpModel.TimeoutSeconds = Math.Max(1, mcpTimeoutSeconds);
-            }
-        }
-
-        options.Escalation.McpModel.Enabled =
-            options.Escalation.McpModel.Enabled ||
-            (!string.IsNullOrWhiteSpace(options.Escalation.McpModel.ModelUri) &&
-             !string.IsNullOrWhiteSpace(options.Escalation.McpModel.ServerUrl));
+        McpModelEnvironmentConfiguration.Apply(options);
 
         var defaultHeuristics = new HeuristicOptions();
         var defaultContainment = new ContainmentPolicyOptions();
@@ -1160,21 +1123,6 @@ public partial class Program
         }
 
         normalizedIp = address.ToString();
-        return true;
-    }
-
-    public static bool TryGetMcpServerLabel(string modelUri, out string label)
-    {
-        label = string.Empty;
-        if (!Uri.TryCreate(modelUri, UriKind.Absolute, out var uri) ||
-            !string.Equals(uri.Scheme, "mcp", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(uri.Host) ||
-            string.IsNullOrWhiteSpace(uri.AbsolutePath.Trim('/')))
-        {
-            return false;
-        }
-
-        label = uri.Host;
         return true;
     }
 

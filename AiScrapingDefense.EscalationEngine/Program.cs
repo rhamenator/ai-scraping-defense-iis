@@ -14,7 +14,8 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 builder.Services
     .AddOptions<DefenseEngineOptions>()
-    .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName));
+    .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
+    .PostConfigure(options => McpModelEnvironmentConfiguration.Apply(options));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IConnectionMultiplexer>(services =>
 {
