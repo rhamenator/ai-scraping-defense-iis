@@ -97,7 +97,7 @@ public sealed class McpModelAdapter : IThreatModelAdapter
                 clientInfo = new { name = "ai-scraping-defense-iis", version = "1.0" }
             }
         }, cancellationToken);
-        _ = await ReceiveResponseAsync(socket, cancellationToken);
+        _ = await ReceiveResponseForIdAsync(socket, initializeId, cancellationToken);
 
         await SendMessageAsync(socket, new
         {
@@ -119,7 +119,7 @@ public sealed class McpModelAdapter : IThreatModelAdapter
             }
         }, cancellationToken);
 
-        var root = await ReceiveResponseAsync(socket, cancellationToken);
+        var root = await ReceiveResponseForIdAsync(socket, requestId, cancellationToken);
         var result = root.TryGetProperty("result", out var resultElement)
             ? resultElement
             : root;
@@ -210,12 +210,30 @@ public sealed class McpModelAdapter : IThreatModelAdapter
         var rawJson = Encoding.UTF8.GetString(responseStream.ToArray());
         using var document = JsonDocument.Parse(rawJson);
         var root = document.RootElement.Clone();
-        if (root.TryGetProperty("error", out var errorElement))
-        {
-            throw new InvalidOperationException($"MCP server returned an error: {errorElement}");
-        }
-
         return root;
+    }
+
+    private static async Task<JsonElement> ReceiveResponseForIdAsync(
+        ClientWebSocket socket,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var root = await ReceiveResponseAsync(socket, cancellationToken);
+            if (!root.TryGetProperty("id", out var responseId) ||
+                !string.Equals(responseId.GetString(), requestId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (root.TryGetProperty("error", out var errorElement))
+            {
+                throw new InvalidOperationException($"MCP server returned an error: {errorElement}");
+            }
+
+            return root;
+        }
     }
 
     private ModelAssessment ToAssessment(JsonElement response)

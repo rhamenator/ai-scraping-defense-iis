@@ -26,7 +26,7 @@ def main() -> None:
     existing: dict[str, str] = {}
     for line in lines:
         if line and not line.lstrip().startswith("#") and "=" in line:
-            key, value = line.rstrip("\n").split("=", 1)
+            key, value = line.rstrip("\r\n").split("=", 1)
             existing[key] = value
     updates: dict[str, str] = {}
     print("Leave a prompt blank to generate a strong random value.")
@@ -87,7 +87,11 @@ def main() -> None:
             output.append(line)
     output.extend(f"{key}={value}\n" for key, value in remaining.items())
     target.write_text("".join(output), encoding="utf-8")
-    target.chmod(0o600)
+    try:
+        target.chmod(0o600)
+    except OSError:
+        # Windows and some mounted filesystems do not support POSIX modes.
+        pass
     print(f"Credentials written to {target}. Run: docker compose up --build")
 
 
