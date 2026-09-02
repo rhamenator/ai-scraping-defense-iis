@@ -30,7 +30,7 @@ jobs:
         run: dotnet build anti-scraping-defense-iis.sln --no-restore
 
       - name: Test
-        run: dotnet test anti-scraping-defense-iis.sln --no-build
+        run: dotnet test --solution anti-scraping-defense-iis.sln --no-build
 
       - name: Validate Observability Compose Stack
         run: docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml
