@@ -12,6 +12,22 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class McpModelAdapterTests
 {
     [Fact]
+    public void ExtractToolResponse_DecodesJsonFromTextContent()
+    {
+        using var document = JsonDocument.Parse("""
+            {"content":[{"type":"text","text":"{\"verdict\":\"block\",\"score\":0.95}"}]}
+            """);
+        var method = typeof(McpModelAdapter).GetMethod(
+            "ExtractToolResponse",
+            BindingFlags.Static | BindingFlags.NonPublic);
+
+        var response = (JsonElement)method!.Invoke(null, [document.RootElement])!;
+
+        Assert.Equal("block", response.GetProperty("verdict").GetString());
+        Assert.Equal(0.95, response.GetProperty("score").GetDouble());
+    }
+
+    [Fact]
     public void EnvironmentConfiguration_EnablesSelectedMcpServer()
     {
         var values = new Dictionary<string, string?>

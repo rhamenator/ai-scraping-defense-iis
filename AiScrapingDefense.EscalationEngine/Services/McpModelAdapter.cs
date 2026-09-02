@@ -123,14 +123,52 @@ public sealed class McpModelAdapter : IThreatModelAdapter
         var result = root.TryGetProperty("result", out var resultElement)
             ? resultElement
             : root;
-        var toolResponse = result.TryGetProperty("structuredContent", out var structuredContent)
-            ? structuredContent.Clone()
-            : result.Clone();
+        var toolResponse = ExtractToolResponse(result);
         await socket.CloseOutputAsync(
             WebSocketCloseStatus.NormalClosure,
             "Tool call completed",
             cancellationToken);
         return toolResponse;
+    }
+
+    private static JsonElement ExtractToolResponse(JsonElement result)
+    {
+        if (result.TryGetProperty("structuredContent", out var structuredContent))
+        {
+            return structuredContent.Clone();
+        }
+
+        if (result.TryGetProperty("content", out var content) &&
+            content.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in content.EnumerateArray())
+            {
+                if (!item.TryGetProperty("type", out var type) ||
+                    !string.Equals(type.GetString(), "text", StringComparison.Ordinal) ||
+                    !item.TryGetProperty("text", out var text))
+                {
+                    continue;
+                }
+
+                var rawText = text.GetString();
+                if (string.IsNullOrWhiteSpace(rawText))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var document = JsonDocument.Parse(rawText);
+                    return document.RootElement.Clone();
+                }
+                catch (JsonException)
+                {
+                    // A non-JSON text result remains an unstructured MCP response.
+                }
+            }
+        }
+
+        return result.Clone();
     }
 
     private static async Task SendMessageAsync(
