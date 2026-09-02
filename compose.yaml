@@ -14,8 +14,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__RedisConnection: redis:6379
-      DefenseEngine__Redis__ConnectionString: redis:6379
+      ConnectionStrings__RedisConnection: redis:6379,password=${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}
+      DefenseEngine__Redis__ConnectionString: redis:6379,password=${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}
       DefenseEngine__Redis__AllowLoopbackConnectionStringInProduction: "true"
       DefenseEngine__Topology__Mode: Split
       DefenseEngine__Topology__EscalationBaseUrl: http://escalation-engine:8080
@@ -24,6 +24,10 @@ services:
       DefenseEngine__TlsFingerprints__AttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_KEY:-}
       DefenseEngine__TlsFingerprints__PreviousAttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_PREVIOUS_KEY:-}
       DefenseEngine__TlsFingerprints__AttestationMaxAgeSeconds: "60"
+      MODEL_URI: ${MODEL_URI:-}
+      MCP_SERVER_PRIMARY_URL: ${MCP_SERVER_PRIMARY_URL:-}
+      MCP_SERVER_PRIMARY_AUTH_TOKEN: ${MCP_SERVER_PRIMARY_AUTH_TOKEN:-}
+      MCP_SERVER_PRIMARY_TIMEOUT: ${MCP_SERVER_PRIMARY_TIMEOUT:-10}
       DefenseEngine__Management__ApiKey: ${ASD_MANAGEMENT_API_KEY:?Set ASD_MANAGEMENT_API_KEY to a random value}
       DefenseEngine__Intake__ApiKey: ${ASD_INTAKE_API_KEY:?Set ASD_INTAKE_API_KEY to a random value}
       DefenseEngine__Audit__DatabasePath: /app/data/defense-events.db
@@ -50,12 +54,16 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      DefenseEngine__Redis__ConnectionString: redis:6379
+      DefenseEngine__Redis__ConnectionString: redis:6379,password=${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}
       DefenseEngine__Redis__FrequencyDatabase: "3"
       DefenseEngine__Topology__ServiceToken: ${ASD_SPLIT_SERVICE_TOKEN:?Set ASD_SPLIT_SERVICE_TOKEN to a random value of at least 32 characters}
       DefenseEngine__TlsFingerprints__AttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_KEY:-}
       DefenseEngine__TlsFingerprints__PreviousAttestationKey: ${ASD_TLS_FINGERPRINT_ATTESTATION_PREVIOUS_KEY:-}
       DefenseEngine__TlsFingerprints__AttestationMaxAgeSeconds: "60"
+      MODEL_URI: ${MODEL_URI:-}
+      MCP_SERVER_PRIMARY_URL: ${MCP_SERVER_PRIMARY_URL:-}
+      MCP_SERVER_PRIMARY_AUTH_TOKEN: ${MCP_SERVER_PRIMARY_AUTH_TOKEN:-}
+      MCP_SERVER_PRIMARY_TIMEOUT: ${MCP_SERVER_PRIMARY_TIMEOUT:-10}
 
   tarpit-api:
     build:
@@ -76,16 +84,18 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}"]
+    environment:
+      REDIS_PASSWORD: ${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
     ports:
       # Bind Redis to 16379 instead of the default 6379 because developer
       # machines often already have a local or Docker-managed Redis on 6379.
-      - "16379:6379"
+      - "127.0.0.1:16379:6379"
     volumes:
       - redis-data:/data
 
@@ -98,7 +108,7 @@ services:
     ports:
       # Bind PostgreSQL to 15432 so the stack can run alongside an existing
       # local Postgres instance that already uses host port 5432.
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init_markov.sql:/docker-entrypoint-initdb.d/01-init_markov.sql:ro

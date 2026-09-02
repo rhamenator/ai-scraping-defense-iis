@@ -164,7 +164,7 @@ The repository now includes:
 - a macOS installer workflow at [.github/workflows/macos-installer.yml](.github/workflows/macos-installer.yml)
 - a tagged-release image workflow at [.github/workflows/release-images.yml](.github/workflows/release-images.yml)
 
-Copy `compose.env.example` to `.env`, replace every value with an independent random secret, then use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL. Compose fails before startup when a required secret is absent.
+Run `python scripts/configure_credentials.py` to create `.env` through masked prompts (blank answers generate independent random values), then use `docker compose up --build` for a quick end-to-end environment with Redis and PostgreSQL. Compose fails before startup when a required secret is absent and points back to that setup command.
 Use `docker compose -f compose.yaml -f compose.observability.yaml up --build` to include Prometheus, Grafana, and the OpenTelemetry Collector.
 Use `./installer/Build-WindowsInstaller.ps1 -Version <semver>` on Windows to produce a `win-x64` installer, or pass `-Runtime win-arm64` for the ARM64 variant.
 Use `./installer/macos/build-macos-packages.sh <semver>` on macOS to produce `.pkg` installers for `osx-x64` and `osx-arm64`.
