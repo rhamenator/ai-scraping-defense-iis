@@ -10,6 +10,7 @@ public sealed class RedisBlocklistServiceTests
 {
     [Theory]
     [InlineData("173.245.48.10")]
+    [InlineData("::ffff:173.245.48.10")]
     [InlineData("2400:cb00::1234")]
     public async Task BlockAsync_RejectsConfiguredCloudflareInfrastructure(string ipAddress)
     {
@@ -34,6 +35,30 @@ public sealed class RedisBlocklistServiceTests
             CancellationToken.None);
 
         Assert.False(applied);
+        Assert.False(provider.WasCalled);
+    }
+
+    [Theory]
+    [InlineData("2001:0db8:0000:0000::1", "2001:db8::1")]
+    [InlineData("::ffff:198.51.100.7", "198.51.100.7")]
+    public void NormalizeIpAddress_UsesOneKeyForEquivalentAddresses(
+        string input,
+        string expected)
+    {
+        Assert.True(RedisBlocklistService.TryNormalizeIpAddress(input, out var normalized));
+        Assert.Equal(expected, normalized);
+    }
+
+    [Fact]
+    public async Task IsBlockedAsync_RejectsInvalidIpBeforeContactingRedis()
+    {
+        var provider = new FailIfConnectedRedisProvider();
+        var service = new RedisBlocklistService(
+            provider,
+            Options.Create(new DefenseEngineOptions()),
+            NullLogger<RedisBlocklistService>.Instance);
+
+        Assert.False(await service.IsBlockedAsync("not-an-ip", CancellationToken.None));
         Assert.False(provider.WasCalled);
     }
 
