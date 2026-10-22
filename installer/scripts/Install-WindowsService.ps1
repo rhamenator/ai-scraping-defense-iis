@@ -93,7 +93,7 @@ if ($null -eq $service) {
         Name = $ServiceName
         DisplayName = $DisplayName
         PathName = $binaryPath
-        ServiceType = 16
+        ServiceType = [uint32]16
         StartMode = 'Automatic'
         StartName = $accountConfig.Name
     }
