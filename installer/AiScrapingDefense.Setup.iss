@@ -55,17 +55,28 @@ Name: "{app}\logs"
 Source: "app-icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-[Run]
-Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\scripts\Install-WindowsService.ps1"" -InstallDir ""{app}"""; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Installing Windows service..."; \
-    Tasks: installservice
-Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\scripts\Install-WindowsService.ps1"" -InstallDir ""{app}"" -StartService"; \
-  Flags: runhidden waituntilterminated; \
-  StatusMsg: "Starting Windows service..."; \
-  Tasks: startservice
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  if (CurStep <> ssPostInstall) or
+     (not WizardIsTaskSelected('installservice') and not WizardIsTaskSelected('startservice')) then
+    Exit;
+
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\installer\scripts\Install-WindowsService.ps1') +
+    '" -InstallDir "' + ExpandConstant('{app}') + '"';
+  if WizardIsTaskSelected('startservice') then
+    Parameters := Parameters + ' -StartService';
+
+  ResultCode := -1;
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+              Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or
+     (ResultCode <> 0) then
+    RaiseException('Windows service setup failed with exit code ' + IntToStr(ResultCode));
+end;
 
 [UninstallRun]
 Filename: "powershell.exe"; \
