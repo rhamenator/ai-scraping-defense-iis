@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-22
+
+### Changed
+
+- Updated NuGet dependencies and pinned GitHub Actions after CI and installer
+  workflow verification.
+
 ## [1.0.3] - 2026-10-21
 
 ### Fixed
