@@ -89,14 +89,14 @@ $binaryPath = '"{0}" --contentRoot "{1}"' -f $exePath, $resolvedInstallDir
 $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
 if ($null -eq $service) {
-    Invoke-Sc -Arguments @(
-        'create',
-        $ServiceName,
-        'binPath=', $binaryPath,
-        'start=', 'auto',
-        'obj=', $accountConfig.Name,
-        'DisplayName=', $DisplayName
-    ) | Out-Null
+    $result = Invoke-CimMethod -ClassName Win32_Service -MethodName Create -Arguments @{
+        Name = $ServiceName
+        DisplayName = $DisplayName
+        PathName = $binaryPath
+        ServiceType = 16
+        StartMode = 'Automatic'
+        StartName = $accountConfig.Name
+    }
 }
 else {
     if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
@@ -104,17 +104,20 @@ else {
         $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(30))
     }
 
-    Invoke-Sc -Arguments @(
-        'config',
-        $ServiceName,
-        'binPath=', $binaryPath,
-        'start=', 'auto',
-        'obj=', $accountConfig.Name,
-        'DisplayName=', $DisplayName
-    ) | Out-Null
+    $existingService = Get-CimInstance -ClassName Win32_Service -Filter "Name='$ServiceName'"
+    $result = $existingService | Invoke-CimMethod -MethodName Change -Arguments @{
+        DisplayName = $DisplayName
+        PathName = $binaryPath
+        StartMode = 'Automatic'
+        StartName = $accountConfig.Name
+    }
 }
 
-Invoke-Sc -Arguments @('description', $ServiceName, $Description) | Out-Null
+if ($result.ReturnValue -ne 0) {
+    throw "Failed to configure service '$ServiceName' (Win32_Service return value $($result.ReturnValue))."
+}
+
+Set-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name Description -Value $Description
 Invoke-Sc -Arguments @('failure', $ServiceName, 'reset=', '86400', 'actions=', 'restart/60000/restart/60000/restart/60000') | Out-Null
 Invoke-Sc -Arguments @('failureflag', $ServiceName, '1') | Out-Null
 
