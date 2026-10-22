@@ -9,11 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-21
+
 ### Fixed
 
 - Dispose Raft clusters asynchronously during failed startup and host shutdown,
   and retry the three-node integration fixture only when ephemeral port binding
   loses its unavoidable discovery race.
+- Normalize equivalent IP addresses before Redis blocklist reads and writes.
+- Pin the patched transitive PKCS dependency in the edge gateway.
 
 ## [1.0.2] - 2026-08-12
 

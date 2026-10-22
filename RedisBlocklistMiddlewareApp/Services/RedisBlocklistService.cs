@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -25,9 +26,13 @@ public sealed class RedisBlocklistService : IBlocklistService
 
     public async Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken)
     {
+        if (!TryNormalizeIpAddress(ipAddress, out var normalizedIp))
+        {
+            return false;
+        }
         var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
         var database = redis.GetDatabase(_options.BlocklistDatabase);
-        return await database.KeyExistsAsync(GetBlocklistKey(ipAddress));
+        return await database.KeyExistsAsync(GetBlocklistKey(normalizedIp));
     }
 
     public async Task<bool> BlockAsync(
@@ -47,7 +52,9 @@ public sealed class RedisBlocklistService : IBlocklistService
     internal DateTimeOffset GetBlockExpirationUtc() =>
         DateTimeOffset.UtcNow.AddMinutes(Math.Max(1, _options.BlockDurationMinutes));
 
-    internal bool CanBlock(string ipAddress) => !IsTrustedInfrastructureAddress(ipAddress);
+    internal bool CanBlock(string ipAddress) =>
+        TryNormalizeIpAddress(ipAddress, out var normalizedIp) &&
+        !IsTrustedInfrastructureAddress(normalizedIp);
 
     internal async Task<bool> BlockUntilAsync(
         string ipAddress,
@@ -56,7 +63,7 @@ public sealed class RedisBlocklistService : IBlocklistService
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
-        if (!CanBlock(ipAddress))
+        if (!TryNormalizeIpAddress(ipAddress, out var normalizedIp) || !CanBlock(normalizedIp))
         {
             _logger.LogWarning(
                 "Refusing to block configured trusted proxy or CDN address {IpAddress}.",
@@ -84,21 +91,36 @@ public sealed class RedisBlocklistService : IBlocklistService
         });
 
         return await database.StringSetAsync(
-            GetBlocklistKey(ipAddress),
+            GetBlocklistKey(normalizedIp),
             payload,
             remaining);
     }
 
     public async Task UnblockAsync(string ipAddress, CancellationToken cancellationToken)
     {
+        if (!TryNormalizeIpAddress(ipAddress, out var normalizedIp))
+        {
+            return;
+        }
         var redis = await _redisConnectionProvider.GetAsync(cancellationToken);
         var database = redis.GetDatabase(_options.BlocklistDatabase);
-        await database.KeyDeleteAsync(GetBlocklistKey(ipAddress));
+        await database.KeyDeleteAsync(GetBlocklistKey(normalizedIp));
     }
 
     private string GetBlocklistKey(string ipAddress)
     {
         return $"{_options.BlocklistKeyPrefix}{ipAddress}";
+    }
+
+    internal static bool TryNormalizeIpAddress(string value, out string normalizedIp)
+    {
+        normalizedIp = string.Empty;
+        if (!IPAddress.TryParse(value, out var address))
+        {
+            return false;
+        }
+        normalizedIp = (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString();
+        return true;
     }
 
     private bool IsTrustedInfrastructureAddress(string ipAddress)
