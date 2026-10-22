@@ -142,7 +142,7 @@ jobs:
             signed_pkg="${pkg%.pkg}-signed.pkg"
             productsign --keychain "$MACOS_SIGNING_KEYCHAIN" --sign "$MACOS_INSTALLER_SIGN_IDENTITY" "$pkg" "$signed_pkg"
             mv "$signed_pkg" "$pkg"
-            shasum -a 256 "$pkg" | awk '{ print tolower($1) " *" $2 }' > "$pkg.sha256"
+            shasum -a 256 "$pkg" | awk -v name="$(basename "$pkg")" '{ print tolower($1) " *" name }' > "$pkg.sha256"
           done
 
       - name: Upload macOS Installer Artifacts

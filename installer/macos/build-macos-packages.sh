@@ -123,7 +123,7 @@ EOF
     --install-location "/" \
     "${pkg_path}"
 
-  shasum -a 256 "${pkg_path}" | awk '{ print tolower($1) " *" $2 }' > "${pkg_path}.sha256"
+  shasum -a 256 "${pkg_path}" | awk -v name="$(basename "${pkg_path}")" '{ print tolower($1) " *" name }' > "${pkg_path}.sha256"
 }
 
 case "${RUNTIME}" in
