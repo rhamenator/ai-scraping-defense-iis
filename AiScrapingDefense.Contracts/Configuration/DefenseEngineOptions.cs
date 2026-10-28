@@ -12,6 +12,8 @@ public sealed class DefenseEngineOptions
 
     public CloudflareOptions Cloudflare { get; set; } = new();
 
+    public IncidentAlertOptions IncidentAlerts { get; set; } = new();
+
     public TlsFingerprintOptions TlsFingerprints { get; set; } = new();
 
     public ManagementOptions Management { get; set; } = new();
@@ -222,6 +224,23 @@ public sealed class CloudflareOptions
     public double MinimumBlockedRate { get; set; } = 0.50d;
 
     public int MinimumDistinctBlockedOrigins { get; set; } = 20;
+
+    public int AttackWindowMinutes { get; set; } = 5;
+}
+
+public sealed class IncidentAlertOptions
+{
+    public bool Enabled { get; set; } = true;
+
+    public int PollIntervalSeconds { get; set; } = 15;
+
+    public int CooldownMinutes { get; set; } = 30;
+
+    public int OriginHealthTimeoutSeconds { get; set; } = 3;
+
+    public string PrimaryOriginHealthUrl { get; set; } = string.Empty;
+
+    public string BackupOriginHealthUrl { get; set; } = string.Empty;
 }
 
 public sealed class TlsFingerprintOptions

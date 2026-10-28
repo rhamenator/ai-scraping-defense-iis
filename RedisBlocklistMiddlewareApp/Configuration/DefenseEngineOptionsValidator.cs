@@ -10,6 +10,29 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
         var errors = new List<string>();
         var networking = options.Networking;
 
+        if (options.Cloudflare.MinimumRecentDecisions is < 1 or > 500 ||
+            options.Cloudflare.MinimumDistinctBlockedOrigins is < 1 or > 500 ||
+            options.Cloudflare.MinimumBlockedRate is < 0 or > 1 ||
+            options.Cloudflare.AttackWindowMinutes <= 0)
+        {
+            errors.Add("DefenseEngine:Cloudflare attack thresholds and AttackWindowMinutes must be positive, with a blocked rate between 0 and 1 and decision counts no greater than 500.");
+        }
+
+        var incidentAlerts = options.IncidentAlerts;
+        if (incidentAlerts.PollIntervalSeconds <= 0 || incidentAlerts.CooldownMinutes <= 0 ||
+            incidentAlerts.OriginHealthTimeoutSeconds <= 0)
+        {
+            errors.Add("DefenseEngine:IncidentAlerts polling, cooldown, and origin health timeout values must be positive.");
+        }
+        var hasPrimaryOrigin = !string.IsNullOrWhiteSpace(incidentAlerts.PrimaryOriginHealthUrl);
+        var hasBackupOrigin = !string.IsNullOrWhiteSpace(incidentAlerts.BackupOriginHealthUrl);
+        if (hasPrimaryOrigin != hasBackupOrigin ||
+            hasPrimaryOrigin && (!IsAbsoluteHttpUrl(incidentAlerts.PrimaryOriginHealthUrl) ||
+                                 !IsAbsoluteHttpUrl(incidentAlerts.BackupOriginHealthUrl)))
+        {
+            errors.Add("DefenseEngine:IncidentAlerts primary and backup origin health URLs must both be absolute HTTP(S) URLs when configured.");
+        }
+
         if (!string.IsNullOrEmpty(options.TlsFingerprints.AttestationKey) &&
             options.TlsFingerprints.AttestationKey.Length < 32)
         {

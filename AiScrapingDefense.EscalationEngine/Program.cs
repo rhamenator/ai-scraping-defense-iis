@@ -149,3 +149,5 @@ static SuspiciousRequest VerifyTlsFingerprint(
 }
 
 public sealed class EscalationEngineAssemblyMarker;
+
+internal partial class Program;

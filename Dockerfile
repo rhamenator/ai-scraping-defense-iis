@@ -1,9 +1,8 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 WORKDIR /src
 
 COPY . .
-RUN mv global.json /tmp/global.json \
-    && dotnet restore anti-scraping-defense-iis.sln \
+RUN dotnet restore anti-scraping-defense-iis.sln \
     && dotnet publish RedisBlocklistMiddlewareApp/RedisBlocklistMiddlewareApp.csproj \
         -c Release \
         -o /app/edge \
@@ -17,7 +16,7 @@ RUN mv global.json /tmp/global.json \
         -o /app/tarpit \
         /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime-base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS runtime-base
 WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://+:8080

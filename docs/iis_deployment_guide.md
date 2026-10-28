@@ -55,7 +55,7 @@ Optional but commonly used:
 - `DefenseEngine:Networking:ClientIpResolutionMode=TrustedProxy`
 - `DefenseEngine:Networking:TrustedProxies` (when using proxy/CDN headers)
 
-Reserved split-runtime settings (post-v1 design; not implemented):
+Optional split-runtime settings:
 
 - `DefenseEngine:Topology:Mode=Split`
 - `DefenseEngine:Services:EscalationEngine:BaseUrl`
@@ -63,7 +63,9 @@ Reserved split-runtime settings (post-v1 design; not implemented):
 - `DefenseEngine:Services:TarpitApi:BaseUrl`
 - `DefenseEngine:Services:TarpitApi:ApiKey`
 
-The current release supports only `DefenseEngine:Topology:Mode=Single`. Setting `Split` fails startup validation rather than being silently ignored. The endpoint and API-key settings below document the future contract and are not active configuration yet.
+The release supports both `Single` and `Split`. In `Split`, configure the escalation and tarpit service URLs and service API keys, then verify both services are reachable from the edge host.
+
+For distributed-attack operator alerts, configure one or more `DefenseEngine:Intake:Alerting` channels and `DefenseEngine:IncidentAlerts`. Set both `PrimaryOriginHealthUrl` and `BackupOriginHealthUrl` to enable a health-based manual failover choice. The monitor polls every 15 seconds by default and uses Redis to suppress duplicate alerts for 30 minutes. Its attack thresholds come from `DefenseEngine:Cloudflare` (`MinimumRecentDecisions`, `MinimumBlockedRate`, `MinimumDistinctBlockedOrigins`, and `AttackWindowMinutes`). Alerts and dashboard recommendations never change Cloudflare mode or origin routing automatically.
 
 ## 4) File-System Permissions
 
@@ -95,7 +97,7 @@ After site start/recycle:
 
 ## 7) Split Runtime Validation (Optional)
 
-When split-runtime support is implemented in a future release:
+For a split-runtime deployment:
 
 1. Verify `EscalationEngine` and `TarpitApi` health endpoints are reachable from `EdgeGateway`.
 2. Verify service-to-service API keys are required and validated.

@@ -119,7 +119,9 @@ Key areas:
 - `DefenseEngine:Heuristics`
 - `DefenseEngine:Networking`
 - `DefenseEngine:Cloudflare`
-  - When enabled, the dashboard recommends considering Cloudflare Under Attack Mode only after the configured attack-evidence thresholds are met. It does not make Cloudflare API changes automatically.
+  - When enabled, the dashboard recommends considering Cloudflare Under Attack Mode only after the configured attack-evidence thresholds are met within `AttackWindowMinutes`. It does not make Cloudflare API changes automatically.
+- `DefenseEngine:IncidentAlerts`
+  - Polls recent decisions for a distributed attack and sends a cooldown-limited operator alert through configured generic webhook, Slack, and SMTP channels. Optional primary and backup health URLs add a manual failover choice when only the primary is unhealthy. Neither Cloudflare mode nor origin routing changes automatically.
 - `DefenseEngine:Management`
   - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
 - `DefenseEngine:Intake`

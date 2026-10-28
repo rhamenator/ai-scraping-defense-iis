@@ -95,7 +95,7 @@ public sealed partial class TlsFingerprintCaptureMiddleware
             if (parts.Length == 2 &&
                 IPAddress.TryParse(parts[0], out var networkAddress) &&
                 int.TryParse(parts[1], out var prefixLength) &&
-                new Microsoft.AspNetCore.HttpOverrides.IPNetwork(networkAddress, prefixLength)
+                new IPNetwork(networkAddress, prefixLength)
                     .Contains(normalizedPeer))
             {
                 return true;

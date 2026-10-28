@@ -135,9 +135,7 @@ public sealed class NetworkingConfigurationTests
         Assert.True(new DefenseEngineOptionsValidator().Validate(null, configured).Succeeded);
         var forwarded = new ForwardedHeadersOptions();
         CreateSetup(configured).Configure(forwarded);
-#pragma warning disable ASPDEPR005 // The application targets .NET 8, where KnownIPNetworks is unavailable.
-        Assert.Equal(2, forwarded.KnownNetworks.Count);
-#pragma warning restore ASPDEPR005
+        Assert.Equal(2, forwarded.KnownIPNetworks.Count);
     }
 
     [Fact]
