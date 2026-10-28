@@ -4,6 +4,8 @@ public static class IntakeDeliveryTypes
 {
     public const string Alert = "alert";
 
+    public const string IncidentAlert = "incident_alert";
+
     public const string CommunityReport = "community_report";
 }
 

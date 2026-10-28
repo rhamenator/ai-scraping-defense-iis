@@ -437,11 +437,14 @@ builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommenda
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
+builder.Services.AddSingleton<IOriginHealthChecker, OriginHealthChecker>();
+builder.Services.AddSingleton<IOperatorIncidentAlertDispatcher, OperatorIncidentAlertDispatcher>();
 builder.Services.AddSingleton<ICommunityReporter, CommunityReporter>();
 builder.Services.AddSingleton<ISmtpAlertSender, SmtpAlertSender>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 builder.Services.AddHostedService<WebhookIntakeProcessingService>();
+builder.Services.AddHostedService<OperatorIncidentMonitorService>();
 builder.Services.AddHostedService<CommunityBlocklistSyncService>();
 builder.Services.AddHostedService<PeerSyncService>();
 
