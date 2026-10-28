@@ -12,7 +12,7 @@ Supported Windows installer runtimes:
 ## Prerequisites
 
 - Windows x64 or Windows ARM64, depending on the installer runtime you build
-- .NET SDK `10.0.104` for building the publish output
+- .NET SDK `10.0.402` for building the publish output
 - Inno Setup 6 for compiling the installer executable
 - Administrative rights on the target host for service installation
 - Reachable Redis, optional PostgreSQL or SQL Server for audit storage, and optional PostgreSQL if Markov tarpit mode is enabled

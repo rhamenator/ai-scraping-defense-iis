@@ -17,7 +17,7 @@ For this application shape, `.pkg` is a better fit than `.dmg` because the insta
 
 ## Prerequisites
 
-- macOS with the .NET SDK `10.0.104`
+- macOS with the .NET SDK `10.0.402`
 - Xcode Command Line Tools so `pkgbuild` is available
 - Administrative rights on the target host for package installation and `launchd` registration
 - Reachable Redis, and optional PostgreSQL if Markov tarpit mode is enabled

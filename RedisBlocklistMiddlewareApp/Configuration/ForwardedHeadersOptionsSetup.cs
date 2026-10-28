@@ -17,7 +17,7 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
     {
         options.ForwardedHeaders = ForwardedHeaders.None;
         options.ForwardLimit = 1;
-        options.KnownNetworks.Clear();
+        options.KnownIPNetworks.Clear();
         options.KnownProxies.Clear();
 
         if (!string.Equals(
@@ -45,8 +45,7 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
                 IPAddress.TryParse(parts[0], out var networkAddress) &&
                 int.TryParse(parts[1], out var prefixLength))
             {
-                options.KnownNetworks.Add(
-                    new Microsoft.AspNetCore.HttpOverrides.IPNetwork(networkAddress, prefixLength));
+                options.KnownIPNetworks.Add(new System.Net.IPNetwork(networkAddress, prefixLength));
             }
         }
     }

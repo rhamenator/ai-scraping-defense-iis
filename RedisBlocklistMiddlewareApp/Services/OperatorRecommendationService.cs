@@ -30,7 +30,7 @@ public sealed class OperatorRecommendationService : IOperatorRecommendationServi
             AddBlockThresholdRecommendations(recentDecisions, recommendations);
             AddFrequencyThresholdRecommendation(recentDecisions, recommendations);
             AddHotPathRecommendation(recentDecisions, recommendations);
-            AddCloudflareRecommendation(recentDecisions, recommendations);
+            AddCloudflareRecommendation(recommendations);
         }
 
         return new OperatorRecommendationSnapshot(
@@ -176,25 +176,19 @@ public sealed class OperatorRecommendationService : IOperatorRecommendationServi
     }
 
     private void AddCloudflareRecommendation(
-        IReadOnlyList<DefenseDecision> recentDecisions,
         ICollection<OperatorRecommendation> recommendations)
     {
         var cloudflare = _options.Cloudflare;
-        if (!cloudflare.Enabled || !cloudflare.RecommendUnderAttackMode ||
-            recentDecisions.Count < cloudflare.MinimumRecentDecisions)
+        if (!cloudflare.Enabled || !cloudflare.RecommendUnderAttackMode)
         {
             return;
         }
 
-        var blocked = recentDecisions.Where(IsBlocked).ToArray();
-        var blockedRate = blocked.Length / (double)recentDecisions.Count;
-        var distinctBlockedOrigins = blocked
-            .Select(decision => decision.IpAddress)
-            .Where(ipAddress => !string.IsNullOrWhiteSpace(ipAddress))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        if (blockedRate < cloudflare.MinimumBlockedRate ||
-            distinctBlockedOrigins < cloudflare.MinimumDistinctBlockedOrigins)
+        var signal = DistributedAttackSignalEvaluator.Evaluate(
+            _store.GetRecent(500),
+            cloudflare,
+            _timeProvider.GetUtcNow());
+        if (signal is null)
         {
             return;
         }
@@ -204,13 +198,14 @@ public sealed class OperatorRecommendationService : IOperatorRecommendationServi
             "cloudflare",
             "high",
             "Consider enabling Cloudflare Under Attack Mode",
-            $"{blocked.Length} of the last {recentDecisions.Count} defended requests were blocked across {distinctBlockedOrigins} originating IP addresses.",
+            $"{signal.BlockedCount} of {signal.DecisionCount} recent defended requests were blocked across {signal.DistinctBlockedOrigins} originating IP addresses.",
             "The combination of a high malicious-decision ratio and many distinct origins indicates a distributed attack rather than an ordinary traffic spike.",
             "Cloudflare Under Attack Mode not confirmed",
             "Review the evidence and enable Under Attack Mode for the affected Cloudflare zone if the attack is ongoing.",
             [
-                $"Blocked-rate sample: {blockedRate:P0}",
-                $"Distinct blocked originating IPs: {distinctBlockedOrigins}",
+                $"Blocked-rate sample: {signal.BlockedRate:P0}",
+                $"Distinct blocked originating IPs: {signal.DistinctBlockedOrigins}",
+                $"Window start (UTC): {signal.WindowStartUtc:O}",
                 "Cloudflare edge proxy addresses must never be added to the blocklist."
             ]));
     }

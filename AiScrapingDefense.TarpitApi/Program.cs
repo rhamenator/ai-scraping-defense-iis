@@ -41,3 +41,5 @@ app.MapGet("/tarpit/{**path}", async (
 app.Run();
 
 public sealed class TarpitApiAssemblyMarker;
+
+internal partial class Program;
