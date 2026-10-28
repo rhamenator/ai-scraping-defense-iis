@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using StackExchange.Redis;
@@ -54,9 +55,29 @@ public sealed class OperatorIncidentMonitorService : BackgroundService
             {
                 return;
             }
-            catch (Exception ex)
+            catch (OperationCanceledException ex)
             {
-                _logger.LogError(ex, "Distributed attack incident check failed.");
+                LogIncidentCheckFailure(ex);
+            }
+            catch (RedisException ex)
+            {
+                LogIncidentCheckFailure(ex);
+            }
+            catch (HttpRequestException ex)
+            {
+                LogIncidentCheckFailure(ex);
+            }
+            catch (TimeoutException ex)
+            {
+                LogIncidentCheckFailure(ex);
+            }
+            catch (DbException ex)
+            {
+                LogIncidentCheckFailure(ex);
+            }
+            catch (IOException ex)
+            {
+                LogIncidentCheckFailure(ex);
             }
         }
     }
@@ -140,9 +161,17 @@ public sealed class OperatorIncidentMonitorService : BackgroundService
     private bool HasConfiguredChannel()
     {
         var alerting = _options.Intake.Alerting;
-        return alerting.GenericWebhook.Enabled && !string.IsNullOrWhiteSpace(alerting.GenericWebhook.Url) ||
-               alerting.Slack.Enabled && !string.IsNullOrWhiteSpace(alerting.Slack.WebhookUrl) ||
-               alerting.Smtp.Enabled && !string.IsNullOrWhiteSpace(alerting.Smtp.Host) &&
-               !string.IsNullOrWhiteSpace(alerting.Smtp.From) && alerting.Smtp.To.Length > 0;
+        var webhookConfigured = alerting.GenericWebhook.Enabled &&
+            !string.IsNullOrWhiteSpace(alerting.GenericWebhook.Url);
+        var slackConfigured = alerting.Slack.Enabled &&
+            !string.IsNullOrWhiteSpace(alerting.Slack.WebhookUrl);
+        var smtpConfigured = alerting.Smtp.Enabled &&
+            !string.IsNullOrWhiteSpace(alerting.Smtp.Host) &&
+            !string.IsNullOrWhiteSpace(alerting.Smtp.From) &&
+            alerting.Smtp.To.Length > 0;
+        return webhookConfigured || slackConfigured || smtpConfigured;
     }
+
+    private void LogIncidentCheckFailure(Exception exception) =>
+        _logger.LogError(exception, "Distributed attack incident check failed.");
 }
