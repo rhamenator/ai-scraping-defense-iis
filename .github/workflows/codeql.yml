@@ -23,26 +23,19 @@ jobs:
           - language: actions
             build-mode: none
           - language: csharp
-            build-mode: manual
+            # No-build analysis scans checked-in C# without compiler-generated obj files.
+            build-mode: none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Setup .NET SDK
-        if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          dotnet-version: 10.0.402
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ce729e4d353d580e6cacd6a8cf2921b72e5e310a
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-extended,security-and-quality
-      - name: Build C# for CodeQL
-        if: matrix.language == 'csharp'
-        shell: pwsh
-        run: |
-          dotnet restore anti-scraping-defense-iis.sln
-          dotnet build anti-scraping-defense-iis.sln --no-restore --configuration Release
+          config: |
+            paths-ignore:
+              - '**/obj/**'
       - name: Analyze
         uses: github/codeql-action/analyze@ce729e4d353d580e6cacd6a8cf2921b72e5e310a
         with:
