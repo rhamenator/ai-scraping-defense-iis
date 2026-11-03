@@ -9,12 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-02
+
 ### Added
 
 - Added distributed-attack operator alerts with Redis cooldown, configured
   delivery channels, and health-gated manual failover guidance.
 - Updated the .NET 10 split-runtime and IIS deployment paths, including
   incident-alert configuration and deployment documentation.
+
+### Fixed
+
+- Excluded generated C# build output from CodeQL and selected the .NET 10
+  test runner for xUnit 4.
+
+### Changed
+
+- Updated NuGet dependencies and the Docker login action after CI and
+  installer validation.
 
 ## [1.0.4] - 2026-10-22
 
