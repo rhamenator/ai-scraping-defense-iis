@@ -133,6 +133,12 @@ public sealed class McpModelAdapter : IThreatModelAdapter
 
     private static JsonElement ExtractToolResponse(JsonElement result)
     {
+        if (result.TryGetProperty("isError", out var isError) &&
+            isError.ValueKind == JsonValueKind.True)
+        {
+            throw new InvalidOperationException("MCP classifier returned a tool error.");
+        }
+
         if (result.TryGetProperty("structuredContent", out var structuredContent))
         {
             return structuredContent.Clone();
@@ -301,16 +307,11 @@ public sealed class McpModelAdapter : IThreatModelAdapter
             ip = context.IpAddress,
             method = context.Method,
             path = context.Path,
-            query_string = context.QueryString,
             user_agent = context.UserAgent,
-            signals = context.Signals,
-            frequency = context.Frequency,
-            base_signal_score = context.BaseSignalScore,
             tls_ja3 = fingerprint?.Ja3,
             tls_ja4 = fingerprint?.Ja4,
             tls_fingerprint_source = fingerprint?.Source,
             tls_fingerprint_attestation = attestation,
-            frequency_score = context.FrequencyScore,
             headers = new Dictionary<string, string>()
         };
     }

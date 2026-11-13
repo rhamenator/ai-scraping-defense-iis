@@ -12,6 +12,21 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class McpModelAdapterTests
 {
     [Fact]
+    public void ExtractToolResponse_RejectsToolErrors()
+    {
+        using var document = JsonDocument.Parse("""
+            {"isError":true,"content":[{"type":"text","text":"INVALID_REQUEST"}]}
+            """);
+        var method = typeof(McpModelAdapter).GetMethod(
+            "ExtractToolResponse",
+            BindingFlags.Static | BindingFlags.NonPublic);
+
+        var exception = Assert.Throws<TargetInvocationException>(
+            () => method!.Invoke(null, [document.RootElement]));
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
     public void ExtractToolResponse_DecodesJsonFromTextContent()
     {
         using var document = JsonDocument.Parse("""
@@ -81,6 +96,11 @@ public sealed class McpModelAdapterTests
 
         var payload = JsonSerializer.SerializeToElement(method!.Invoke(adapter, [context]));
         var token = payload.GetProperty("tls_fingerprint_attestation").GetString();
+
+        Assert.Equal(
+            ["ip", "method", "path", "user_agent", "tls_ja3", "tls_ja4",
+                "tls_fingerprint_source", "tls_fingerprint_attestation", "headers"],
+            payload.EnumerateObject().Select(property => property.Name));
 
         Assert.True(TlsFingerprintAttestation.Verify(
             fingerprint with { Attestation = token },
