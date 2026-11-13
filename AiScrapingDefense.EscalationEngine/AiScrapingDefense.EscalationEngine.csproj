@@ -16,8 +16,8 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'osx-arm64'">
-    <PackageReference Include="Microsoft.ML" Version="5.0.1" />
-    <PackageReference Include="Microsoft.ML.FastTree" Version="5.0.1" />
+    <PackageReference Include="Microsoft.ML" Version="6.0.0" />
+    <PackageReference Include="Microsoft.ML.FastTree" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
