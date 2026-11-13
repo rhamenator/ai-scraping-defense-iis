@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-13
+
+### Fixed
+
+- Send only supported fields to Request Guard MCP classification and treat MCP
+  tool errors as unavailable assessments.
+
+### Changed
+
+- Updated routine NuGet dependencies and GitHub Actions pins after CI and
+  installer validation.
+
 ## [1.0.5] - 2026-11-02
 
 ### Added
