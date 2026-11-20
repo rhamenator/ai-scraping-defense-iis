@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-20
+
 ### Changed (behavior changes, review before upgrading)
 
 - Default `KnownBadUserAgents` no longer contains `curl`, `wget`, `python-requests` or `Scrapy`. These generic clients now live in the new `GenericClientUserAgents` list: a match adds 30 to the score (signal `generic_http_client:<name>`) and no longer blocks on the first request. Scrapers that send a generic client string plus a sensitive path or a high request rate still reach the block threshold of 60. Set `Heuristics:BlockGenericClients` to `true` to restore the strict behavior. Named AI crawlers and offensive tools (sqlmap, nikto, masscan, nmap, zgrab) still block on the first request. Operators who overrode `KnownBadUserAgents` keep their list as written.
