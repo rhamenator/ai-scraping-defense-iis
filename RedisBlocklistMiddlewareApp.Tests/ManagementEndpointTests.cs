@@ -447,6 +447,18 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void OperatorDashboardPageService_KeepsDecisionTableUncutAndSignalChipsWrapped()
+    {
+        var html = new OperatorDashboardPageService().Render();
+
+        // Panels stack so the seven-column table is not cut off beside the control panel.
+        Assert.DoesNotContain("grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.95fr)", html);
+        // Signal chips wrap inside their column; the action chip never wraps.
+        Assert.Contains(".table-wrap td:nth-child(5) .chip", html);
+        Assert.Contains(".table-wrap td:first-child .chip", html);
+    }
+
+    [Fact]
     public void MapIntakeEndpoints_RegistersAnalyze_WhenIntakeApiKeyIsConfigured()
     {
         var app = CreateApp();

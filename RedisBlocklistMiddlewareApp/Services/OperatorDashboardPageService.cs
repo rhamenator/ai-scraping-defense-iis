@@ -139,7 +139,9 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     .panel-grid {
       display: grid;
       gap: 18px;
-      grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.95fr);
+      /* The decisions table has seven columns and is cut off beside the control panel,
+         so the panels stack and the table gets the full width of the shell. */
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .panel {
@@ -244,6 +246,21 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     .table-wrap td:nth-child(3) {
       min-width: 9rem;
       overflow-wrap: anywhere;
+    }
+
+    /* Signal chips wrap inside their column instead of being cut off at the panel edge. */
+    .table-wrap td:nth-child(5) {
+      min-width: 14rem;
+    }
+
+    .table-wrap td:nth-child(5) .chip {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .table-wrap td:first-child .chip {
+      white-space: nowrap;
     }
 
     th {

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Operator dashboard: the Recent decisions table now uses the full width of the console (the panels stack), so the signal and explainability columns are no longer cut off at the panel edge, and signal chips wrap inside their column (#210).
+
 ## [1.1.0] - 2026-11-20
 
 ### Changed (behavior changes, review before upgrading)
