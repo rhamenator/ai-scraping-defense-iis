@@ -16,7 +16,7 @@ public sealed class BlockDurationDefaultTests
     [Fact]
     public void ShippedAppSettings_BlockDuration_MatchesTheCodeDefault()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        var path = Path.Join(AppContext.BaseDirectory, "appsettings.json");
         var configuration = new ConfigurationBuilder().AddJsonFile(path, optional: false).Build();
 
         var configured = configuration.GetValue<int>("DefenseEngine:Redis:BlockDurationMinutes");
