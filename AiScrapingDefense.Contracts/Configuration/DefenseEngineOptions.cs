@@ -109,7 +109,7 @@ public sealed class RedisOptions
 
     public int FrequencyDatabase { get; set; } = 3;
 
-    public int BlockDurationMinutes { get; set; } = 240;
+    public int BlockDurationMinutes { get; set; } = 1440;
 
     public int FrequencyWindowSeconds { get; set; } = 60;
 }

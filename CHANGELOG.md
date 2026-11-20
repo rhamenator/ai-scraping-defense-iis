@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default block duration is now 24 hours (`DefenseEngine:Redis:BlockDurationMinutes` = 1440, was 240), matching the Python edition's `BLOCKLIST_TTL_SECONDS` default and the Rust edition. Blocks still expire on their own, so a mistaken or spoofed-address block cannot last forever. Set the value explicitly to keep the previous 4 hours (#216).
+
 ## [1.1.2] - 2026-11-20
 
 ### Fixed
