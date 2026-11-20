@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - RFC 9309 robots.txt handling: the policy is loaded at startup (a missing file stops startup), served at `/robots.txt`, and enforced at the edge. Anchored rules (`$`) outrank the same text without the anchor.
-- A per-address request-rate counter (`Redis:RequestRateKeyPrefix`) and a `high_request_rate` signal at `Heuristics:RequestRateSignalThreshold` requests per `Redis:FrequencyWindowSeconds` (default 120; 0 disables). It is weak evidence: it queues the request for scoring and does not tarpit by itself.
+- A per-address request-rate counter (`Redis:RequestRateKeyPrefix`) and a `high_request_rate` signal at `Heuristics:RequestRateSignalThreshold` requests per `Redis:FrequencyWindowSeconds` (default 120; 0 disables). It is weak evidence: on its own it records one `observed` decision per window and never queues, tarpits or blocks (volume alone must not contain a busy browser or a shared NAT). Combined with other signals it is queued with them for scoring.
 - `X-Robots-Tag: noindex, nofollow` on every tarpit response and a robots meta tag in tarpit pages.
 
 ### Fixed

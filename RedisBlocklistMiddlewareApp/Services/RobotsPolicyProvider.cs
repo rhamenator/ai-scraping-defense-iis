@@ -18,9 +18,8 @@ public sealed class RobotsPolicyProvider : IRobotsPolicyProvider
             return;
         }
 
-        var path = Path.IsPathRooted(robots.PolicyPath)
-            ? robots.PolicyPath
-            : Path.Combine(AppContext.BaseDirectory, robots.PolicyPath);
+        // A rooted PolicyPath is used as written; a relative one resolves against the application directory.
+        var path = Path.GetFullPath(robots.PolicyPath, AppContext.BaseDirectory);
         string text;
         try
         {

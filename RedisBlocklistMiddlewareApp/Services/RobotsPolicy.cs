@@ -175,13 +175,8 @@ public sealed partial class RobotsPolicy
     {
         var best = -1;
         var allowed = true;
-        foreach (var rule in groups.SelectMany(group => group.Rules))
+        foreach (var rule in groups.SelectMany(group => group.Rules).Where(rule => rule.Length >= best && Matches(path, rule)))
         {
-            if (rule.Length < best || !Matches(path, rule))
-            {
-                continue;
-            }
-
             allowed = rule.Length > best ? rule.Allow : allowed || rule.Allow;
             best = rule.Length;
         }

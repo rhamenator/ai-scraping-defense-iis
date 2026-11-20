@@ -309,16 +309,17 @@ public sealed class RedisBlocklistMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_QueuesAHighRateClientWithNormalHeaders_WithoutTarpitting()
+    public async Task InvokeAsync_DoesNotQueueAVolumeOnlyClient_SoVolumeAloneNeverContainsIt()
     {
         var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
         var nextState = new NextDelegateState();
         var middleware = CreateMiddleware(
             nextState,
             new FakeBlocklistService(),
             new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
             queue,
-            new FakeDefenseEventStore(),
+            eventStore,
             new FakeClientIpResolver("198.51.100.60"),
             options => options.Heuristics.RequestRateSignalThreshold = 120,
             new FakeRateTracker(300));
@@ -327,9 +328,76 @@ public sealed class RedisBlocklistMiddlewareTests
         await middleware.InvokeAsync(context);
 
         Assert.True(nextState.WasCalled);
-        var request = Assert.Single(queue.Requests);
-        Assert.Equal(["high_request_rate:300"], request.Signals);
+        Assert.Empty(queue.Requests);
+        Assert.Empty(eventStore.Decisions);
         Assert.False(context.Response.Headers.ContainsKey("X-Robots-Tag"));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_RecordsOneObservation_WhenTheRateFirstReachesTheThreshold()
+    {
+        var queue = new FakeSuspiciousRequestQueue();
+        var eventStore = new FakeDefenseEventStore();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            eventStore,
+            new FakeClientIpResolver("198.51.100.65"),
+            options => options.Heuristics.RequestRateSignalThreshold = 120,
+            new FakeRateTracker(120));
+
+        await middleware.InvokeAsync(CreateContext("/"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Empty(queue.Requests);
+        var decision = Assert.Single(eventStore.Decisions);
+        Assert.Equal("observed", decision.Action);
+        Assert.Equal(["high_request_rate:120"], decision.Signals);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_QueuesAHighRateClientThatAlsoHasOtherSignals()
+    {
+        var queue = new FakeSuspiciousRequestQueue();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, ["generic_http_client:curl"])),
+            queue,
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.66"),
+            options => options.Heuristics.RequestRateSignalThreshold = 120,
+            new FakeRateTracker(300));
+
+        await middleware.InvokeAsync(CreateContext("/pricing"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(
+            ["generic_http_client:curl", "high_request_rate:300"],
+            Assert.Single(queue.Requests).Signals);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AlwaysLetsCrawlersReadRobotsTxt()
+    {
+        var blocklist = new FakeBlocklistService { IsBlockedResult = true };
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, ["missing_accept_language"])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.67"));
+
+        await middleware.InvokeAsync(CreateContext("/robots.txt"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(0, blocklist.IsBlockedCallCount);
     }
 
     [Fact]

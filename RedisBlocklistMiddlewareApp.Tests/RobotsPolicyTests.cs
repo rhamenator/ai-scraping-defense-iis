@@ -124,7 +124,7 @@ public sealed class RobotsPolicyTests
     public void Provider_FailsStartup_WhenTheConfiguredFileIsMissing()
     {
         var options = new DefenseEngineOptions();
-        options.Robots.PolicyPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "robots.txt");
+        options.Robots.PolicyPath = $"{Path.GetTempPath()}{Guid.NewGuid():N}{Path.DirectorySeparatorChar}robots.txt";
 
         Assert.Throws<InvalidOperationException>(() => new RobotsPolicyProvider(Options.Create(options)));
     }

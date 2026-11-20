@@ -130,7 +130,22 @@ public sealed class RedisBlocklistMiddleware
         }
 
         var signals = evaluation.Signals;
-        if (rateThreshold > 0 && requestRate >= rateThreshold)
+        var highRate = rateThreshold > 0 && requestRate >= rateThreshold;
+        if (highRate && signals.Count == 0)
+        {
+            // Volume alone must never contain a client: the escalation engine counts every analyzed
+            // event toward its own frequency block, so a busy browser or a shared NAT would be blocked
+            // for traffic alone. Record one observation per window instead of queueing every request.
+            if (requestRate == rateThreshold)
+            {
+                RecordRateObservation(ipAddress, context.Request.Path.ToString(), requestRate);
+            }
+
+            await _next(context);
+            return;
+        }
+
+        if (highRate)
         {
             signals = [.. signals, $"high_request_rate:{requestRate}"];
         }
@@ -187,6 +202,34 @@ public sealed class RedisBlocklistMiddleware
         await _next(context);
     }
 
+    private void RecordRateObservation(string ipAddress, string path, long requestRate)
+    {
+        var now = DateTimeOffset.UtcNow;
+        string[] signals = [$"high_request_rate:{requestRate}"];
+        _eventStore.Add(new DefenseDecision(
+            ipAddress,
+            "observed",
+            30,
+            requestRate,
+            path,
+            signals,
+            "High request rate observed; not contained on volume alone.",
+            now,
+            now,
+            new DefenseScoreBreakdown(
+                30,
+                0,
+                30,
+                false,
+                [
+                    new DefenseScoreContribution(
+                        "request_rate",
+                        30,
+                        signals,
+                        "Request volume reached the rate signal threshold.")
+                ])));
+    }
+
     private static bool IsTarpitSignal(string signal) =>
         !signal.StartsWith("generic_http_client:", StringComparison.Ordinal) &&
         !signal.StartsWith("high_request_rate:", StringComparison.Ordinal);
@@ -203,7 +246,9 @@ public sealed class RedisBlocklistMiddleware
     private bool ShouldBypassInspection(PathString path)
     {
         var value = path.Value ?? string.Empty;
-        return IsPathOrChild(value, _options.Tarpit.PathPrefix) ||
+        // Crawlers must always be able to read the policy that tells them what is off limits.
+        return value.Equals("/robots.txt", StringComparison.OrdinalIgnoreCase) ||
+               IsPathOrChild(value, _options.Tarpit.PathPrefix) ||
                IsPathOrChild(value, "/health") ||
                IsPathOrChild(value, "/live") ||
                (_options.Observability.EnablePrometheusEndpoint &&
