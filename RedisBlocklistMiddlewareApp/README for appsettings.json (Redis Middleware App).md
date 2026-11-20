@@ -46,7 +46,7 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 * **FrequencyKeyPrefix**: Prefix used for Redis keys that track suspicious request frequency.
 * **BlocklistDatabase**: Redis database index used for the blocklist.
 * **FrequencyDatabase**: Redis database index used for suspicious request frequency counters.
-* **BlockDurationMinutes**: How long an automated block remains active.
+* **BlockDurationMinutes**: How long a block remains active before Redis expires it (default `1440`, 24 hours, matching the Python and Rust editions). Expiry keeps a mistaken or spoofed-address block from lasting forever.
 * **FrequencyWindowSeconds**: TTL applied to the rolling suspicious-request frequency counter.
 
 #### **DefenseEngine:Robots**
