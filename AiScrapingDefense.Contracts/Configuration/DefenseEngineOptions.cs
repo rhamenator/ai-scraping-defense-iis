@@ -8,6 +8,8 @@ public sealed class DefenseEngineOptions
 
     public HeuristicOptions Heuristics { get; set; } = new();
 
+    public RobotsOptions Robots { get; set; } = new();
+
     public NetworkingOptions Networking { get; set; } = new();
 
     public CloudflareOptions Cloudflare { get; set; } = new();
@@ -101,6 +103,8 @@ public sealed class RedisOptions
 
     public string FrequencyKeyPrefix { get; set; } = "frequency:ip:";
 
+    public string RequestRateKeyPrefix { get; set; } = "rate:ip:";
+
     public int BlocklistDatabase { get; set; } = 2;
 
     public int FrequencyDatabase { get; set; } = 3;
@@ -110,8 +114,32 @@ public sealed class RedisOptions
     public int FrequencyWindowSeconds { get; set; } = 60;
 }
 
+public sealed class RobotsOptions
+{
+    /// <summary>
+    /// A client that requests a path the loaded robots.txt disallows is blocked.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// robots.txt file loaded at startup, absolute or relative to the application directory.
+    /// A missing or unreadable file stops startup so the policy is never silently absent.
+    /// Replace the shipped example with the robots.txt of the protected origin.
+    /// </summary>
+    public string PolicyPath { get; set; } = "Defaults/robots.txt";
+
+    /// <summary>
+    /// Serve the loaded policy at /robots.txt so well-behaved crawlers are told what is off limits.
+    /// </summary>
+    public bool ServePolicy { get; set; } = true;
+}
+
 public sealed class HeuristicOptions
 {
+    /// <summary>
+    /// User agents blocked on the first request: named AI crawlers and offensive
+    /// scanners. General-purpose HTTP clients belong in <see cref="GenericClientUserAgents"/>.
+    /// </summary>
     public string[] KnownBadUserAgents { get; set; } =
     [
         "GPTBot",
@@ -123,16 +151,41 @@ public sealed class HeuristicOptions
         "SemrushBot",
         "MJ12bot",
         "DotBot",
-        "Scrapy",
-        "python-requests",
-        "curl",
-        "wget",
         "masscan",
         "zgrab",
         "nmap",
         "sqlmap",
         "nikto"
     ];
+
+    /// <summary>
+    /// General-purpose HTTP clients and scraping libraries. A match adds to the score
+    /// (it is not a block on its own) and becomes a block when combined with other
+    /// signals such as a sensitive path or a high request rate.
+    /// </summary>
+    public string[] GenericClientUserAgents { get; set; } =
+    [
+        "curl",
+        "wget",
+        "python-requests",
+        "python-httpx",
+        "aiohttp",
+        "Go-http-client",
+        "libwww-perl",
+        "okhttp",
+        "Scrapy"
+    ];
+
+    /// <summary>
+    /// Operators can opt in to the stricter behavior: block generic clients on the first request.
+    /// </summary>
+    public bool BlockGenericClients { get; set; }
+
+    /// <summary>
+    /// Requests per client address within <c>Redis:FrequencyWindowSeconds</c> after which
+    /// a <c>high_request_rate</c> signal is raised. Zero disables rate tracking.
+    /// </summary>
+    public int RequestRateSignalThreshold { get; set; } = 120;
 
     public string[] SuspiciousPathSubstrings { get; set; } =
     [

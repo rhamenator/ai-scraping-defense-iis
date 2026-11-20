@@ -32,9 +32,19 @@ public sealed class EdgeSignalScoreContributor : IThreatScoreContributor
 
         foreach (var signal in signals)
         {
-            if (signal.StartsWith("known_bad_user_agent:", StringComparison.Ordinal))
+            if (signal.StartsWith("known_bad_user_agent:", StringComparison.Ordinal) ||
+                signal.StartsWith("robots_violation:", StringComparison.Ordinal))
             {
                 score += 100;
+            }
+            else if (signal.StartsWith("generic_http_client:", StringComparison.Ordinal))
+            {
+                // Adds to the score; with a sensitive path or a high request rate it reaches the block threshold.
+                score += 30;
+            }
+            else if (signal.StartsWith("high_request_rate:", StringComparison.Ordinal))
+            {
+                score += 30;
             }
             else if (signal.StartsWith("suspicious_path:", StringComparison.Ordinal))
             {

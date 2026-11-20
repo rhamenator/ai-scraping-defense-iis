@@ -67,6 +67,7 @@ public sealed class TarpitPageService : ITarpitPageService
         builder.AppendLine("<head>");
         builder.AppendLine("  <meta charset=\"utf-8\">");
         builder.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+        builder.AppendLine("  <meta name=\"robots\" content=\"noindex, nofollow\">");
         builder.AppendLine($"  <title>{Pick(Topics, random)}</title>");
         builder.AppendLine("  <style>");
         builder.AppendLine("    body { font-family: Georgia, serif; margin: 2rem auto; max-width: 60rem; line-height: 1.7; color: #1f2937; background: linear-gradient(180deg, #f5f5f4, #e7e5e4); }");

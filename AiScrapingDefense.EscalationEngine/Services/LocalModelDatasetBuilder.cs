@@ -258,6 +258,16 @@ public sealed class LocalModelDatasetBuilder
             {
                 signals.Add($"known_bad_user_agent:{knownBadUserAgent}");
             }
+            else
+            {
+                // Mirror the edge: generic HTTP clients are weak evidence, not a known-bad match.
+                var genericClient = _heuristics.GenericClientUserAgents.FirstOrDefault(
+                    candidate => userAgent.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+                if (genericClient is not null)
+                {
+                    signals.Add($"generic_http_client:{genericClient}");
+                }
+            }
         }
         else if (_heuristics.CheckEmptyUserAgent)
         {

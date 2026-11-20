@@ -308,6 +308,126 @@ public sealed class RedisBlocklistMiddlewareTests
         Assert.Single(queue.Requests);
     }
 
+    [Fact]
+    public async Task InvokeAsync_QueuesAHighRateClientWithNormalHeaders_WithoutTarpitting()
+    {
+        var queue = new FakeSuspiciousRequestQueue();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.60"),
+            options => options.Heuristics.RequestRateSignalThreshold = 120,
+            new FakeRateTracker(300));
+        var context = CreateContext("/");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextState.WasCalled);
+        var request = Assert.Single(queue.Requests);
+        Assert.Equal(["high_request_rate:300"], request.Signals);
+        Assert.False(context.Response.Headers.ContainsKey("X-Robots-Tag"));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_DoesNotQueueAClientBelowTheRateThreshold()
+    {
+        var queue = new FakeSuspiciousRequestQueue();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            queue,
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.61"),
+            options => options.Heuristics.RequestRateSignalThreshold = 120,
+            new FakeRateTracker(119));
+
+        await middleware.InvokeAsync(CreateContext("/"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Empty(queue.Requests);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_DoesNotTrackRate_WhenTheThresholdIsZero()
+    {
+        var tracker = new FakeRateTracker(1000);
+        var middleware = CreateMiddleware(
+            new NextDelegateState(),
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.62"),
+            options => options.Heuristics.RequestRateSignalThreshold = 0,
+            tracker);
+
+        await middleware.InvokeAsync(CreateContext("/"));
+
+        Assert.Equal(0, tracker.CallCount);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ScoresAGenericClientWithoutTarpittingIt()
+    {
+        var queue = new FakeSuspiciousRequestQueue();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, ["generic_http_client:curl"])),
+            queue,
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.63"));
+
+        await middleware.InvokeAsync(CreateContext("/health-check-page"));
+
+        Assert.True(nextState.WasCalled);
+        Assert.Equal(["generic_http_client:curl"], Assert.Single(queue.Requests).Signals);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_MarksTarpitResponsesNoindex()
+    {
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, ["missing_accept_language"])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver("198.51.100.64"));
+        var context = CreateContext("/catalog");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextState.WasCalled);
+        Assert.Equal("noindex, nofollow", context.Response.Headers["X-Robots-Tag"].ToString());
+    }
+
+    private sealed class FakeRateTracker : IRequestRateTracker
+    {
+        private readonly long _value;
+
+        public FakeRateTracker(long value)
+        {
+            _value = value;
+        }
+
+        public int CallCount { get; private set; }
+
+        public Task<long> IncrementAsync(string ipAddress, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(_value);
+        }
+    }
+
     private static RedisBlocklistMiddleware CreateMiddleware(
         NextDelegateState nextState,
         IBlocklistService blocklistService,
@@ -315,7 +435,8 @@ public sealed class RedisBlocklistMiddlewareTests
         ISuspiciousRequestQueue queue,
         IDefenseEventStore eventStore,
         IClientIpResolver clientIpResolver,
-        Action<DefenseEngineOptions>? configure = null)
+        Action<DefenseEngineOptions>? configure = null,
+        IRequestRateTracker? rateTracker = null)
     {
         var options = new DefenseEngineOptions();
         configure?.Invoke(options);
@@ -335,7 +456,8 @@ public sealed class RedisBlocklistMiddlewareTests
             clientIpResolver,
             new FakeTarpitPageService(),
             TestTelemetryFactory.Create(),
-            Options.Create(options));
+            Options.Create(options),
+            rateTracker);
     }
 
     private static DefaultHttpContext CreateContext(string path)

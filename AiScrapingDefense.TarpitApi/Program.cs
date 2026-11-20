@@ -22,6 +22,8 @@ app.MapGet("/tarpit/{**path}", async (
     IOptions<DefenseEngineOptions> options,
     CancellationToken cancellationToken) =>
 {
+    // Filler content must never be indexed under the protected site's domain.
+    context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
     var delay = Math.Max(0, options.Value.Tarpit.ResponseDelayMilliseconds);
     if (delay > 0)
     {

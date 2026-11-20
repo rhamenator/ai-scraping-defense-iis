@@ -28,6 +28,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Defaults\robots.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AiScrapingDefense.Contracts\AiScrapingDefense.Contracts.csproj" />
     <ProjectReference Include="..\AiScrapingDefense.EscalationEngine\AiScrapingDefense.EscalationEngine.csproj" />
     <ProjectReference Include="..\AiScrapingDefense.TarpitApi\AiScrapingDefense.TarpitApi.csproj" />
