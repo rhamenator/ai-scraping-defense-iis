@@ -18,6 +18,14 @@ public sealed class TarpitPageServiceTests
     }
 
     [Fact]
+    public void GeneratePage_AsksCrawlersNotToIndexOrFollow()
+    {
+        var page = CreateService().GeneratePage("docs/guide", "198.51.100.50");
+
+        Assert.Contains("<meta name=\"robots\" content=\"noindex, nofollow\">", page);
+    }
+
+    [Fact]
     public void GeneratePage_HtmlEncodesDisplayedPath()
     {
         var service = CreateService();

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (behavior changes, review before upgrading)
+
+- Default `KnownBadUserAgents` no longer contains `curl`, `wget`, `python-requests` or `Scrapy`. These generic clients now live in the new `GenericClientUserAgents` list: a match adds 30 to the score (signal `generic_http_client:<name>`) and no longer blocks on the first request. Scrapers that send a generic client string plus a sensitive path or a high request rate still reach the block threshold of 60. Set `Heuristics:BlockGenericClients` to `true` to restore the strict behavior. Named AI crawlers and offensive tools (sqlmap, nikto, masscan, nmap, zgrab) still block on the first request. Operators who overrode `KnownBadUserAgents` keep their list as written.
+- A client that requests a path disallowed by the loaded robots.txt is now blocked (`robots_violation`), whatever its User-Agent claims. The shipped example policy (`Defaults/robots.txt`) disallows `/admin`, `/wp-admin`, `/.env` and similar paths, so a visitor who browses to `/admin` is blocked. Replace it with your origin's robots.txt via `DefenseEngine:Robots:PolicyPath`, or set `DefenseEngine:Robots:Enabled` to `false`.
+
+### Added
+
+- RFC 9309 robots.txt handling: the policy is loaded at startup (a missing file stops startup), served at `/robots.txt`, and enforced at the edge. Anchored rules (`$`) outrank the same text without the anchor.
+- A per-address request-rate counter (`Redis:RequestRateKeyPrefix`) and a `high_request_rate` signal at `Heuristics:RequestRateSignalThreshold` requests per `Redis:FrequencyWindowSeconds` (default 120; 0 disables). It is weak evidence: on its own it records one `observed` decision per window and never queues, tarpits or blocks (volume alone must not contain a busy browser or a shared NAT). Combined with other signals it is queued with them for scoring.
+- `X-Robots-Tag: noindex, nofollow` on every tarpit response and a robots meta tag in tarpit pages.
+
+### Fixed
+
+- Operator dashboard: the IP and path columns no longer wrap one character per line, and the right-hand status cards no longer overlap at about 1200 px.
+
 ## [1.0.6] - 2026-11-13
 
 ### Fixed

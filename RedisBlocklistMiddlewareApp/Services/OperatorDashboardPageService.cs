@@ -139,7 +139,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     .panel-grid {
       display: grid;
       gap: 18px;
-      grid-template-columns: 1.25fr 0.95fr;
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.95fr);
     }
 
     .panel {
@@ -187,8 +187,14 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 
     .status-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      /* Cards stack instead of overlapping when the column is narrow (about 1100 to 1300 px). */
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
       gap: 12px;
+    }
+
+    .status-grid > .status-card {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .status-card,
@@ -225,6 +231,19 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       border-bottom: 1px solid var(--line);
       font-size: 0.94rem;
       vertical-align: top;
+    }
+
+    /* IP and path keep a readable width instead of wrapping one character per line. */
+    .table-wrap th:nth-child(2),
+    .table-wrap td:nth-child(2) {
+      white-space: nowrap;
+      min-width: 9.5rem;
+    }
+
+    .table-wrap th:nth-child(3),
+    .table-wrap td:nth-child(3) {
+      min-width: 9rem;
+      overflow-wrap: anywhere;
     }
 
     th {
@@ -362,6 +381,12 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     tr[data-event-index] { cursor: pointer; }
     tr[data-event-index]:hover { background: rgba(141, 42, 30, 0.045); }
     tr[data-event-index].selected { background: rgba(141, 42, 30, 0.09); }
+
+    @media (max-width: 1280px) {
+      .panel-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
     @media (max-width: 960px) {
       .hero-grid,

@@ -8,15 +8,33 @@ namespace RedisBlocklistMiddlewareApp.Services;
 public sealed class RequestSignalEvaluator : IRequestSignalEvaluator
 {
     private readonly HeuristicOptions _options;
+    private readonly IRobotsPolicyProvider? _robots;
 
-    public RequestSignalEvaluator(IOptions<DefenseEngineOptions> options)
+    public RequestSignalEvaluator(
+        IOptions<DefenseEngineOptions> options,
+        IRobotsPolicyProvider? robots = null)
     {
         _options = options.Value.Heuristics;
+        _robots = robots;
     }
 
     public RequestSignalEvaluation Evaluate(HttpContext context)
     {
         var userAgent = context.Request.Headers.UserAgent.ToString();
+
+        // A request for a path the site's robots.txt disallows is the primary hard trigger.
+        // The User-Agent only selects which rule group applies; it never grants an exemption.
+        var robotsRule = _robots?.Policy.DescribeMatchingRule(
+            context.Request.Path.Value + context.Request.QueryString.Value,
+            userAgent);
+        if (robotsRule is not null)
+        {
+            return new RequestSignalEvaluation(
+                true,
+                "robots_violation",
+                [$"robots_violation:{robotsRule}"]);
+        }
+
         if (!string.IsNullOrWhiteSpace(userAgent))
         {
             var knownBadUserAgent = _options.KnownBadUserAgents.FirstOrDefault(
@@ -31,6 +49,24 @@ public sealed class RequestSignalEvaluator : IRequestSignalEvaluator
         }
 
         var signals = new List<string>();
+
+        var genericClient = string.IsNullOrWhiteSpace(userAgent)
+            ? null
+            : _options.GenericClientUserAgents.FirstOrDefault(
+                candidate => userAgent.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+        if (genericClient is not null)
+        {
+            if (_options.BlockGenericClients)
+            {
+                return new RequestSignalEvaluation(
+                    true,
+                    "generic_http_client",
+                    [$"generic_http_client:{genericClient}"]);
+            }
+
+            // Weak evidence on its own: health checks, monitors and scripts use these clients.
+            signals.Add($"generic_http_client:{genericClient}");
+        }
 
         if (_options.CheckEmptyUserAgent && string.IsNullOrWhiteSpace(userAgent))
         {

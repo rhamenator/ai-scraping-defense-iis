@@ -524,4 +524,26 @@ public sealed class ThreatAssessmentServiceTests
             throw new InvalidOperationException("Contributor failure.");
         }
     }
+
+    [Theory]
+    [InlineData(new[] { "generic_http_client:curl" }, 30, false)]
+    [InlineData(new[] { "generic_http_client:curl", "suspicious_path:/admin" }, 60, true)]
+    [InlineData(new[] { "generic_http_client:curl", "high_request_rate:300" }, 60, true)]
+    [InlineData(new[] { "high_request_rate:300" }, 30, false)]
+    [InlineData(new[] { "robots_violation:Disallow: /admin/" }, 100, true)]
+    public async Task EdgeSignalScoreContributor_ScoresGenericClientsAsSupportingEvidence(
+        string[] signals,
+        int expectedScore,
+        bool reachesBlockThreshold)
+    {
+        var request = new SuspiciousRequest(
+            "198.51.100.70", "GET", "/", string.Empty, "curl/8.5.0", signals, DateTimeOffset.UtcNow, null);
+        var context = new ThreatScoreContributorContext(request, 1, signals, [], 0);
+
+        var result = await new EdgeSignalScoreContributor().ContributeAsync(context, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedScore, result.ScoreAdjustment);
+        Assert.Equal(reachesBlockThreshold, result.ScoreAdjustment >= new ContainmentPolicyOptions().BlockScoreThreshold);
+    }
 }

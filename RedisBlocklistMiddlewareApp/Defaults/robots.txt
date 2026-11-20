@@ -1,0 +1,17 @@
+# Example policy shipped with AI Scraping Defense. Replace it with the robots.txt of the
+# protected origin (set DefenseEngine:Robots:PolicyPath). A client that requests a path
+# disallowed here is blocked, whatever its User-Agent says, so list only paths that no
+# legitimate visitor needs and that you do not want crawlers to touch.
+User-agent: *
+Disallow: /anti-scrape-tarpit/
+Disallow: /admin$
+Disallow: /admin/
+Disallow: /internal$
+Disallow: /internal/
+Disallow: /.env
+Disallow: /wp-admin$
+Disallow: /wp-admin/
+Disallow: /wp-login.php
+Disallow: /xmlrpc.php
+Disallow: /phpmyadmin
+Disallow: /actuator

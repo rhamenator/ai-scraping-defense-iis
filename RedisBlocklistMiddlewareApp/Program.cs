@@ -393,6 +393,8 @@ else
     builder.Services.AddSingleton<IBlocklistService>(sp => sp.GetRequiredService<RedisBlocklistService>());
 }
 builder.Services.AddSingleton<IRequestFrequencyTracker, RedisRequestFrequencyTracker>();
+builder.Services.AddSingleton<IRequestRateTracker, RedisRequestRateTracker>();
+builder.Services.AddSingleton<IRobotsPolicyProvider, RobotsPolicyProvider>();
 builder.Services.AddAuditStorage();
 builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>();
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
@@ -535,6 +537,13 @@ app.MapGet("/health", async (
 
 app.MapGet("/live", () => Results.Ok(new { status = "alive" }));
 
+// Tell well-behaved crawlers what is off limits. The loaded policy is the same one that
+// blocks clients which ignore it.
+app.MapGet("/robots.txt", (IRobotsPolicyProvider robots) =>
+    robots.ServedText is { } text
+        ? Results.Text(text, "text/plain; charset=utf-8")
+        : Results.NotFound());
+
 if (runtimeOptions.Consensus.Enabled)
 {
     app.MapPost("/internal/consensus/commands", async (
@@ -599,6 +608,8 @@ app.MapGet(tarpitRoutePattern, async (
         await Task.Delay(tarpitOptions.ResponseDelayMilliseconds, cancellationToken);
     }
 
+    // Filler content must never be indexed under the protected site's domain.
+    context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
     var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
     var normalizedPath = path ?? string.Empty;
     var artifact = await tarpitArtifactService.TryGetArtifactAsync(normalizedPath, cancellationToken);

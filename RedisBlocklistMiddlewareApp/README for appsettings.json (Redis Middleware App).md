@@ -49,9 +49,18 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 * **BlockDurationMinutes**: How long an automated block remains active.
 * **FrequencyWindowSeconds**: TTL applied to the rolling suspicious-request frequency counter.
 
+#### **DefenseEngine:Robots**
+
+* **Enabled**: Block clients that request a path the loaded robots.txt disallows (default `true`). The User-Agent never grants an exemption.
+* **PolicyPath**: robots.txt loaded at startup, absolute or relative to the application directory (default `Defaults/robots.txt`, an example). Replace it with your origin's robots.txt. A missing file stops startup.
+* **ServePolicy**: Serve the loaded policy at `/robots.txt` (default `true`).
+
 #### **DefenseEngine:Heuristics**
 
-* **KnownBadUserAgents**: User-Agent substrings that trigger an immediate block.
+* **KnownBadUserAgents**: User-Agent substrings that trigger an immediate block (named AI crawlers and offensive scanners).
+* **GenericClientUserAgents**: General-purpose HTTP clients (`curl`, `wget`, `python-requests`, ...). A match adds to the score; it blocks only together with other signals such as a sensitive path or a high request rate.
+* **BlockGenericClients**: Opt in to blocking generic clients on the first request (default `false`).
+* **RequestRateSignalThreshold**: Requests per window per address after which a `high_request_rate` signal is raised (default 120, `0` disables).
 * **SuspiciousPathSubstrings**: URL path fragments that contribute to suspicious-request scoring.
 * **CheckEmptyUserAgent**: Flags requests with an empty or missing User-Agent.
 * **CheckMissingAcceptLanguage**: Flags requests that omit `Accept-Language`.

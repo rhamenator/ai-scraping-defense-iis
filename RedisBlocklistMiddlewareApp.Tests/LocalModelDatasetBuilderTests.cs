@@ -39,7 +39,7 @@ public sealed class LocalModelDatasetBuilderTests
 
         var malicious = Assert.Single(result.Documents, document => document.Path == "/graphql");
         Assert.True(malicious.Label);
-        Assert.Contains("known_bad_user_agent:python-requests", malicious.Signals);
+        Assert.Contains("generic_http_client:python-requests", malicious.Signals);
 
         var benign = Assert.Single(result.Documents, document => document.Path == "/pricing");
         Assert.False(benign.Label);
