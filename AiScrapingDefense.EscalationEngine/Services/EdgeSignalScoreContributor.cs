@@ -28,46 +28,34 @@ public sealed class EdgeSignalScoreContributor : IThreatScoreContributor
 
     private static int ScoreSignals(IReadOnlyList<string> signals)
     {
-        var score = 0;
+        // curl, wget and python-requests always omit Accept-Language and send Accept: */*, so those
+        // header signals only restate that the client is a generic tool. Counting them on top of
+        // the generic client signal (30 + 15 + 15) would block every such client on its own.
+        var genericClient = signals.Any(signal => signal.StartsWith("generic_http_client:", StringComparison.Ordinal));
+        return signals.Sum(signal => PointsFor(signal, genericClient));
+    }
 
-        foreach (var signal in signals)
+    private static int PointsFor(string signal, bool genericClient)
+    {
+        if (signal.StartsWith("known_bad_user_agent:", StringComparison.Ordinal) ||
+            signal.StartsWith("robots_violation:", StringComparison.Ordinal))
         {
-            if (signal.StartsWith("known_bad_user_agent:", StringComparison.Ordinal) ||
-                signal.StartsWith("robots_violation:", StringComparison.Ordinal))
-            {
-                score += 100;
-            }
-            else if (signal.StartsWith("generic_http_client:", StringComparison.Ordinal))
-            {
-                // Adds to the score; with a sensitive path or a high request rate it reaches the block threshold.
-                score += 30;
-            }
-            else if (signal.StartsWith("high_request_rate:", StringComparison.Ordinal))
-            {
-                score += 30;
-            }
-            else if (signal.StartsWith("suspicious_path:", StringComparison.Ordinal))
-            {
-                score += 30;
-            }
-            else if (string.Equals(signal, "empty_user_agent", StringComparison.Ordinal))
-            {
-                score += 25;
-            }
-            else if (string.Equals(signal, "missing_accept_language", StringComparison.Ordinal))
-            {
-                score += 15;
-            }
-            else if (string.Equals(signal, "generic_accept_any", StringComparison.Ordinal))
-            {
-                score += 15;
-            }
-            else if (string.Equals(signal, "long_query_string", StringComparison.Ordinal))
-            {
-                score += 10;
-            }
+            return 100;
         }
 
-        return score;
+        if (signal.StartsWith("generic_http_client:", StringComparison.Ordinal) ||
+            signal.StartsWith("high_request_rate:", StringComparison.Ordinal) ||
+            signal.StartsWith("suspicious_path:", StringComparison.Ordinal))
+        {
+            return 30;
+        }
+
+        return signal switch
+        {
+            "empty_user_agent" => 25,
+            "missing_accept_language" or "generic_accept_any" => genericClient ? 0 : 15,
+            "long_query_string" => 10,
+            _ => 0
+        };
     }
 }

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A generic HTTP client (curl, wget, python-requests) no longer reaches the block threshold on its own. Its usual missing `Accept-Language` and `Accept: */*` header signals are no longer scored on top of the generic client signal (30 + 15 + 15 = 60 blocked every such client after one request); a bare generic client now scores 30 plus frequency, and still reaches 60 with a sensitive path or a high request rate (#213).
+
 ## [1.1.1] - 2026-11-20
 
 ### Fixed
