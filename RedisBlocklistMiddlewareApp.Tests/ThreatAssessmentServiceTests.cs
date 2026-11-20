@@ -529,6 +529,9 @@ public sealed class ThreatAssessmentServiceTests
     [InlineData(new[] { "generic_http_client:curl" }, 30, false)]
     [InlineData(new[] { "generic_http_client:curl", "suspicious_path:/admin" }, 60, true)]
     [InlineData(new[] { "generic_http_client:curl", "high_request_rate:300" }, 60, true)]
+    [InlineData(new[] { "generic_http_client:curl", "missing_accept_language", "generic_accept_any" }, 30, false)]
+    [InlineData(new[] { "generic_http_client:curl", "missing_accept_language", "generic_accept_any", "suspicious_path:/admin" }, 60, true)]
+    [InlineData(new[] { "missing_accept_language", "generic_accept_any" }, 30, false)]
     [InlineData(new[] { "high_request_rate:300" }, 30, false)]
     [InlineData(new[] { "robots_violation:Disallow: /admin/" }, 100, true)]
     public async Task EdgeSignalScoreContributor_ScoresGenericClientsAsSupportingEvidence(
