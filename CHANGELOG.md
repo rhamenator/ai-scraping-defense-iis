@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The node now exports its committed Raft log to `<Consensus:StoragePath>/export/raft-log-v1/` (a neutral `entries.jsonl` plus `meta.json` with counts and a SHA-256) when it starts and again after a graceful stop (#196). This is the first step of the upgrade to DotNext 6, which cannot read this release's log files: the next release imports the export. Nothing about how the node runs changes, and a failed export is logged without stopping the node. See `docs/consensus_log_storage.md`.
+
 ### Changed
 
 - **Breaking default:** the management API and dashboard now require HTTPS (#186). New setting `DefenseEngine:Management:RequireSecureTransport`, on by default. In Production the app refuses to start when management is enabled and no HTTPS is provided (an `https://` listener, a TLS-terminating proxy in `TrustedProxy` mode with `Networking:TrustedProxies` set, or IIS, which owns the bindings), and every `/defense` request that did not arrive over HTTPS (after `X-Forwarded-Proto` from a trusted proxy is applied) gets 403. The Development environment is exempt, and HTTPS configured through `ASPNETCORE_URLS`, `Kestrel:Endpoints`, or `ASPNETCORE_HTTPS_PORTS` all count. **Upgrading an HTTP-only install:** set `DefenseEngine__Management__RequireSecureTransport=false` to keep the old behaviour; Production logs a warning at each start while it is off. The shipped `compose.yaml` (single-host HTTP quick start, via `ASD_REQUIRE_SECURE_MANAGEMENT`) and the Kubernetes manifest (TLS ends at the Ingress and the trusted-proxy range is cluster specific) opt out explicitly, with comments on how to turn it on. `scripts/check_secure_transport_locally.sh` verifies the behaviour end to end locally.

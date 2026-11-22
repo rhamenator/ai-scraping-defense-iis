@@ -71,6 +71,8 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             }
 
             Directory.CreateDirectory(_options.StoragePath);
+            // Written before the cluster opens the log, so the upgrade to DotNext 6 always has an export to import.
+            await TryExportLogAsync(cancellationToken);
             var membershipPath = Path.Combine(_options.StoragePath, "membership");
             var logPath = Path.Combine(_options.StoragePath, "log");
             Directory.CreateDirectory(membershipPath);
@@ -158,18 +160,36 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
         }
     }
 
+    /// <summary>The export is for the upgrade; a failure to write it is logged and never stops the node.</summary>
+    private async Task TryExportLogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RaftLogExport.ExportAsync(_options.StoragePath, _logger, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogError(
+                exception,
+                "Could not export the Raft log for the DotNext 6 upgrade. The node is unaffected, but the upgrade needs a valid export: fix the cause and restart, or stop the node normally, before upgrading.");
+        }
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _lifecycleLock.WaitAsync(cancellationToken);
         try
         {
-            await using var cluster = Interlocked.Exchange(ref _cluster, null);
+            var cluster = Interlocked.Exchange(ref _cluster, null);
             if (cluster is null)
             {
                 return;
             }
 
             await cluster.StopAsync(cancellationToken);
+            await cluster.DisposeAsync();
+            // The log is closed now, so this export matches everything the node committed before it stopped.
+            await TryExportLogAsync(cancellationToken);
         }
         finally
         {
