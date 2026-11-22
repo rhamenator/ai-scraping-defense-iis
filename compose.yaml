@@ -73,10 +73,17 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       DefenseEngine__Tarpit__ResponseDelayMilliseconds: "0"
+      DefenseEngine__Redis__ConnectionString: redis:6379,password=${ASD_REDIS_PASSWORD:?Run python scripts/configure_credentials.py}
+      DefenseEngine__Redis__BlocklistDatabase: "2"
+      DefenseEngine__Redis__BlockDurationMinutes: "1440"
+      DefenseEngine__Tarpit__MaxHops: "${TAR_PIT_MAX_HOPS:-250}"
+      DefenseEngine__Tarpit__HopWindowSeconds: "${TAR_PIT_HOP_WINDOW_SECONDS:-86400}"
       DefenseEngine__Tarpit__PostgresMarkov__Enabled: "true"
       DefenseEngine__Tarpit__PostgresMarkov__ConnectionString: "Host=postgres;Database=markov;Username=postgres;Password=${ASD_POSTGRES_PASSWORD:?Set ASD_POSTGRES_PASSWORD}"
     ports:

@@ -306,6 +306,8 @@ spec:
               value: Production
             - name: ASPNETCORE_URLS
               value: http://+:8080
+            - name: DefenseEngine__Redis__ConnectionString
+              value: redis:6379
           readinessProbe:
             httpGet:
               path: /health

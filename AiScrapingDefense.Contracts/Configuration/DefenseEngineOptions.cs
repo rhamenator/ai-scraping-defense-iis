@@ -569,6 +569,10 @@ public sealed class TarpitOptions
 
     public int ResponseDelayMilliseconds { get; set; } = 200;
 
+    public int MaxHops { get; set; } = 250;
+
+    public int HopWindowSeconds { get; set; } = 86400;
+
     public int ArchiveRotationMinutes { get; set; } = 60;
 
     public int MaximumArchivesToKeep { get; set; } = 5;
