@@ -46,9 +46,12 @@ services:
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "13133:13133"
+      # The edge gateway reaches the collector over the Compose network, so nothing here needs to be reachable from other
+      # machines. These are for developer tools on this host only. The receiver has no authentication; for remote
+      # producers use deploy/observability/otel-collector-remote.example.yaml (authenticated TLS) instead of opening these.
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:13133:13133"
     volumes:
       - ./deploy/observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
 

@@ -1,15 +1,32 @@
+# OpenTelemetry Collector for the bundled observability stack (development and evaluation).
+#
+# Receivers listen on all interfaces *inside* the container so the edge gateway can reach them over the Compose network;
+# compose.observability.yaml publishes them to this host's loopback only. There is no authentication here: do not expose
+# these ports to other machines. For remote producers use otel-collector-remote.example.yaml (authenticated TLS).
 receivers:
   otlp:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 4
+        max_concurrent_streams: 32
       http:
         endpoint: 0.0.0.0:4318
+        max_request_body_size: 4194304
 
 processors:
+  # Must be first: refuses data instead of growing without bound when the collector is under memory pressure.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
   batch:
+    send_batch_size: 512
+    send_batch_max_size: 1024
+    timeout: 5s
 
 exporters:
+  # Prints one summary line per batch (counts, not contents). Replace it with a real trace backend outside development.
   debug:
     verbosity: basic
 
@@ -28,6 +45,7 @@ service:
       receivers:
         - otlp
       processors:
+        - memory_limiter
         - batch
       exporters:
         - debug

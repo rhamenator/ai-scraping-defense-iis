@@ -1,0 +1,65 @@
+# Example collector config for producers on OTHER machines: authenticated TLS with a bearer token, plus the same size and
+# memory limits as the default config. Not used by default; mount it in place of otel-collector-config.yaml and publish
+# 4317/4318 only on the interface your producers reach (behind your own firewall).
+#
+#   OTEL_INGEST_TOKEN   a long random value; producers send it as "Authorization: Bearer <token>"
+#   /etc/otel/tls/      server.crt and server.key mounted read-only into the container
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 4
+        max_concurrent_streams: 32
+        tls:
+          cert_file: /etc/otel/tls/server.crt
+          key_file: /etc/otel/tls/server.key
+          min_version: "1.2"
+        auth:
+          authenticator: bearertokenauth
+      http:
+        endpoint: 0.0.0.0:4318
+        max_request_body_size: 4194304
+        tls:
+          cert_file: /etc/otel/tls/server.crt
+          key_file: /etc/otel/tls/server.key
+          min_version: "1.2"
+        auth:
+          authenticator: bearertokenauth
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    send_batch_size: 512
+    send_batch_max_size: 1024
+    timeout: 5s
+
+exporters:
+  debug:
+    verbosity: basic
+
+extensions:
+  bearertokenauth:
+    token: ${env:OTEL_INGEST_TOKEN}
+  health_check:
+    endpoint: 127.0.0.1:13133
+
+service:
+  extensions:
+    - bearertokenauth
+    - health_check
+  telemetry:
+    metrics:
+      address: 127.0.0.1:8888
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - debug
