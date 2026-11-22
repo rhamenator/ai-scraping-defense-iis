@@ -92,7 +92,7 @@ public sealed class HttpPeerSignalFeedClient : IPeerSignalFeedClient
             .ToArray();
     }
 
-    private static IReadOnlyList<PeerDefenseSignal> ReadSignalEnvelope(JsonElement signalsElement)
+    internal static IReadOnlyList<PeerDefenseSignal> ReadSignalEnvelope(JsonElement signalsElement)
     {
         var signals = new List<PeerDefenseSignal>();
 

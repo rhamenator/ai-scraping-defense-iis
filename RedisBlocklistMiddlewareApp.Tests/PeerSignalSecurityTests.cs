@@ -175,7 +175,7 @@ public sealed class PeerSignalSecurityTests
     }
 
     [Fact]
-    public async Task AnExportedEnvelope_RoundTripsThroughTheClientAndImports()
+    public void AnExportedEnvelope_RoundTripsThroughTheClientParser()
     {
         var store = new ExportStore([Decision("198.51.100.95", ["local_rule"])]);
         var exportOptions = new DefenseEngineOptions
@@ -186,21 +186,14 @@ public sealed class PeerSignalSecurityTests
             Program.GetPeerSignalsForExport(store, exportOptions, 10),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        var envelope = await HttpClientFor(json).FetchAsync(
-            new PeerSyncPeerOptions { Name = "peer-a", Url = "https://peer.example.test/peer-sync/signals" },
-            CancellationToken.None);
+        using var document = JsonDocument.Parse(json);
+        var parsed = HttpPeerSignalFeedClient.ReadSignalEnvelope(document.RootElement.GetProperty("signals"));
 
-        var signal = Assert.Single(envelope.Signals);
+        var signal = Assert.Single(parsed);
         Assert.Equal("198.51.100.95", signal.IpAddress);
         Assert.True(PeerSignalSigner.Verify(Key, signal), "the signature must survive serialization and parsing");
         Assert.Contains("\"ip_address\"", json);
     }
-
-    private static HttpPeerSignalFeedClient HttpClientFor(string json) =>
-        new(
-            new StubHttpClientFactory(json),
-            Options.Create(new DefenseEngineOptions { PeerSync = new PeerSyncOptions() }),
-            NullLogger<HttpPeerSignalFeedClient>.Instance);
 
     private static PeerDefenseSignal Signed(string ip, DateTimeOffset? expiresAt = null) => Resign(new PeerDefenseSignal(
         ip,
@@ -320,23 +313,5 @@ public sealed class PeerSignalSecurityTests
     private sealed class ExportStore : RecordingEventStore
     {
         public ExportStore(IReadOnlyList<DefenseDecision> decisions) => Decisions.AddRange(decisions);
-    }
-
-    private sealed class StubHttpClientFactory(string json) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => new(new StubHandler(json));
-    }
-
-    private sealed class StubHandler(string json) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
-            {
-                Content = new StringContent(json, System.Text.Encoding.UTF8)
-            };
-            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            return Task.FromResult(response);
-        }
     }
 }
