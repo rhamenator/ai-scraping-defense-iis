@@ -98,8 +98,8 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
     public async Task DedicatedTarpitOrigin_ReturnsForbiddenOnHitAfterLimit()
     {
         var ip = IPAddress.Parse("198.51.100.244");
-        using var factory = new WebApplicationFactory<TarpitApiAssemblyMarker>()
-            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+        using var baseFactory = new WebApplicationFactory<TarpitApiAssemblyMarker>();
+        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["DefenseEngine:Redis:ConnectionString"] = fixture.RedisConnectionString,
@@ -143,8 +143,8 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
     [Fact]
     public void DedicatedTarpitOrigin_RejectsTrustedProxyModeWithoutTrustedAddresses()
     {
-        using var factory = new WebApplicationFactory<TarpitApiAssemblyMarker>()
-            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+        using var baseFactory = new WebApplicationFactory<TarpitApiAssemblyMarker>();
+        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["DefenseEngine:Networking:ClientIpResolutionMode"] = ClientIpResolutionModes.TrustedProxy
@@ -156,8 +156,8 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
     public async Task DedicatedTarpitOrigin_DoesNotCountUnresolvedTrustedProxy()
     {
         var proxy = IPAddress.Parse("198.51.100.246");
-        using var factory = new WebApplicationFactory<TarpitApiAssemblyMarker>()
-            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+        using var baseFactory = new WebApplicationFactory<TarpitApiAssemblyMarker>();
+        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["DefenseEngine:Redis:ConnectionString"] = fixture.RedisConnectionString,

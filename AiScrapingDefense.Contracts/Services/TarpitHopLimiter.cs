@@ -39,6 +39,7 @@ public sealed class TarpitHopLimiter : IAsyncDisposable
     private async Task<IDatabase> DatabaseAsync() =>
         (await _connection.Value).GetDatabase(_options.Redis.BlocklistDatabase);
 
+    /// <summary>Counts this tarpit request when the client already has a flag.</summary>
     /// <returns>The count for an already flagged IP, or null when disabled, unflagged, or unavailable.</returns>
     public async Task<long?> CountFlaggedHopAsync(string ip)
     {
@@ -115,7 +116,7 @@ public sealed class TarpitHopLimiter : IAsyncDisposable
         if (_connection.IsValueCreated)
         {
             try { (await _connection.Value).Dispose(); }
-            catch (RedisException) { }
+            catch (RedisException) { _logger.LogWarning("Redis tarpit connection disposal failed"); }
         }
     }
 }
