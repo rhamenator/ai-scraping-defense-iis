@@ -5,6 +5,7 @@ using System.Text.Json;
 using DotNext.Net;
 using DotNext.Net.Cluster.Consensus.Raft;
 using DotNext.Net.Cluster.Consensus.Raft.Membership;
+using DotNext.Net.Cluster.Consensus.Raft.StateMachine;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 
@@ -72,9 +73,8 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
 
             Directory.CreateDirectory(_options.StoragePath);
             var membershipPath = Path.Combine(_options.StoragePath, "membership");
-            var logPath = Path.Combine(_options.StoragePath, "log");
             Directory.CreateDirectory(membershipPath);
-            Directory.CreateDirectory(logPath);
+            var logPath = await RaftLogLayout.PrepareAsync(_options.StoragePath, _logger, cancellationToken);
 
             var configuredMembers = _options.Members
                 .Select(member => ParseEndPoint(member.RaftEndpoint))
@@ -127,12 +127,13 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             };
 
             var stateMachine = new RaftBlocklistStateMachine(
-                logPath,
                 _blocklist,
                 _loggerFactory.CreateLogger<RaftBlocklistStateMachine>());
+            var writeAheadLog = new WriteAheadLog(new WriteAheadLog.Options { Location = logPath }, stateMachine);
+            await writeAheadLog.InitializeAsync(cancellationToken);
             var cluster = new RaftCluster(configuration)
             {
-                AuditTrail = stateMachine
+                AuditTrail = writeAheadLog
             };
 
             try

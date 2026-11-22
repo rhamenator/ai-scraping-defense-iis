@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Consensus (when enabled) now stores its Raft log with DotNext's `WriteAheadLog` in `<StoragePath>/wal` instead of the `DiskBasedStateMachine` directory `<StoragePath>/log`, with a one-time automatic migration on first start (committed entries, terms and exact bytes are copied; the old directory is kept as `log.legacy-<timestamp>`; a failed migration changes nothing and the node does not start). This prepares the later move to DotNext 6. Upgrade all nodes of a cluster together; see `docs/consensus_log_storage.md` for the details, including that uncommitted trailing entries are not migrated and that committed entries are no longer replayed into Redis on each restart.
+
 ### Fixed
 
 - Installer signing certificates and passwords are no longer imported or used outside tag builds, so pull-request and branch-push jobs cannot reach them (partial fix for #193). A protected GitHub Environment with required reviewers, and a separate build/sign split, still need to be set up in repository settings.
