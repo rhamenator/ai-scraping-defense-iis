@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
@@ -356,6 +357,8 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
 
     public void Add(IntakeDeliveryRecord record)
     {
+        // Whatever produced the record, a URL that may carry a credential is never persisted (#199).
+        record = record.Redacted();
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText =
@@ -429,7 +432,7 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
                 reader.GetString(4),
                 reader.GetString(5),
                 reader.GetString(6),
-                DateTimeOffset.Parse(reader.GetString(7))));
+                DateTimeOffset.Parse(reader.GetString(7))).Redacted());
         }
 
         return results;
@@ -467,6 +470,40 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
         using var command = connection.CreateCommand();
         command.CommandText = _dialect.IntakeDeliverySchemaSql;
         command.ExecuteNonQuery();
+        ScrubStoredUrls(connection);
+    }
+
+    /// <summary>Rewrites rows written by earlier releases, which hold the full webhook URL (#199). Idempotent.</summary>
+    private void ScrubStoredUrls(DbConnection connection)
+    {
+        var rows = new List<(object Id, string Target, string Detail)>();
+        using (var select = connection.CreateCommand())
+        {
+            select.CommandText =
+                "SELECT id, target, detail FROM intake_delivery_events WHERE target LIKE '%://%' OR detail LIKE '%://%';";
+            using var reader = select.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetValue(0), reader.GetString(1), reader.GetString(2)));
+            }
+        }
+
+        foreach (var (id, target, detail) in rows)
+        {
+            var safeTarget = UrlRedaction.SafeTarget(target);
+            var safeDetail = UrlRedaction.RedactUrls(detail);
+            if (safeTarget == target && safeDetail == detail)
+            {
+                continue;
+            }
+
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE intake_delivery_events SET target = @target, detail = @detail WHERE id = @id;";
+            AddParameter(update, "@target", safeTarget);
+            AddParameter(update, "@detail", safeDetail);
+            AddParameter(update, "@id", id);
+            update.ExecuteNonQuery();
+        }
     }
 
     private DbConnection OpenConnection()

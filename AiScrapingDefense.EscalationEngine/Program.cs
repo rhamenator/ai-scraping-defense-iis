@@ -17,6 +17,9 @@ builder.Services
     .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
     .PostConfigure(options => McpModelEnvironmentConfiguration.Apply(options));
 builder.Services.AddHttpClient();
+// The factory's own logging prints every request's method and URL path at Information; webhook and reputation URLs can carry
+// their credential in the path (#199).
+builder.Services.ConfigureHttpClientDefaults(httpClient => httpClient.RemoveAllLoggers());
 builder.Services.AddSingleton<IConnectionMultiplexer>(services =>
 {
     var options = services.GetRequiredService<IOptions<DefenseEngineOptions>>().Value.Redis;

@@ -30,6 +30,9 @@ var auditConnectionString = builder.Configuration.GetConnectionString("AuditData
 var contentRootPath = builder.Environment.ContentRootPath;
 
 builder.Services.AddHttpClient();
+// The factory's own logging prints every request's method and URL path at Information; webhook and reputation URLs can carry
+// their credential in the path (#199).
+builder.Services.ConfigureHttpClientDefaults(httpClient => httpClient.RemoveAllLoggers());
 builder.Services.AddDataProtection();
 builder.Services.AddSingleton<IValidateOptions<DefenseEngineOptions>, DefenseEngineOptionsValidator>();
 builder.Services.AddSingleton<ProductionConfigurationValidator>();
