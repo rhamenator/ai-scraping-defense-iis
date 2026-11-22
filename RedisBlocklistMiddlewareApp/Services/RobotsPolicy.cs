@@ -88,9 +88,9 @@ public sealed partial class RobotsPolicy
         var path = Normalize(pathAndQuery!, isPattern: false);
         var groups = SelectGroups((userAgent ?? string.Empty).ToLowerInvariant());
         Rule? best = null;
-        foreach (var rule in groups.SelectMany(group => group.Rules))
+        foreach (var rule in groups.SelectMany(group => group.Rules).Where(rule => Matches(path, rule)))
         {
-            if (Matches(path, rule) && (best is null || rule.Length >= best.Length))
+            if (best is null || rule.Length >= best.Length)
             {
                 best = rule;
             }
