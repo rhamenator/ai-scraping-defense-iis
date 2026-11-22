@@ -108,6 +108,7 @@ Trigger a suspicious request, then confirm metrics such as:
 - `ai_scraping_defense_block_decisions_total`
 - `ai_scraping_defense_queue_depth`
 - `ai_scraping_defense_intake_delivery_total`
+- `ai_scraping_defense_audit_storage_bytes` and `ai_scraping_defense_audit_storage_limit_bytes` (the audit database size and `Audit:MaxDatabaseBytes`; the `AiScrapingDefenseAuditStorageNearLimit` alert fires above 80 percent, and at 90 percent the stores stop saving score breakdowns)
 
 Check that the collector is healthy:
 

@@ -50,6 +50,12 @@ public sealed class DefenseTelemetry : IAssessmentTelemetry
     private static readonly Gauge QueueCapacity = Metrics.CreateGauge(
         "ai_scraping_defense_queue_capacity",
         "Configured maximum number of suspicious requests that can wait in the analysis queue.");
+    private static readonly Gauge AuditStorageBytes = Metrics.CreateGauge(
+        "ai_scraping_defense_audit_storage_bytes",
+        "Current size of the audit database in bytes.");
+    private static readonly Gauge AuditStorageLimitBytes = Metrics.CreateGauge(
+        "ai_scraping_defense_audit_storage_limit_bytes",
+        "Configured Audit:MaxDatabaseBytes (0 when no limit is set).");
     private static readonly Counter CommunityImports = Metrics.CreateCounter(
         "ai_scraping_defense_community_imports_total",
         "Community-blocklist import outcomes.",
@@ -136,6 +142,12 @@ public sealed class DefenseTelemetry : IAssessmentTelemetry
         IntakeDeliveryAttempts
             .WithLabels(SanitizeLabel(deliveryType), SanitizeLabel(channel), SanitizeLabel(status))
             .Inc();
+    }
+
+    public void UpdateAuditStorage(long bytes, long limitBytes)
+    {
+        AuditStorageBytes.Set(Math.Max(0, bytes));
+        AuditStorageLimitBytes.Set(Math.Max(0, limitBytes));
     }
 
     public void UpdateQueueDepth(int depth, int capacity)

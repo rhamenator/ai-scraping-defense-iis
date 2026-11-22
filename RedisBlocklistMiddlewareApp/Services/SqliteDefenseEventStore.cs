@@ -13,6 +13,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
     private readonly int _maxStoredEvents;
     private readonly int _retentionDays;
     private int _insertsSincePrune;
+    private readonly AuditStorageState? _storageState;
     private readonly object _gate = new();
 
     // Pruning runs this often (in inserts) rather than on every one.
@@ -20,8 +21,10 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
 
     public SqliteDefenseEventStore(
         IOptions<DefenseEngineOptions> options,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        AuditStorageState? storageState = null)
     {
+        _storageState = storageState;
         var databasePath = options.Value.Audit.DatabasePath;
         var resolvedDatabasePath = Path.IsPathRooted(databasePath)
             ? databasePath
@@ -90,7 +93,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.Parameters.AddWithValue("$signalsJson", JsonSerializer.Serialize(decision.Signals));
             command.Parameters.AddWithValue(
                 "$breakdownJson",
-                decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
+                decision.Breakdown is null || _storageState?.ShedDetail == true ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
             command.Parameters.AddWithValue("$summary", decision.Summary);
             command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.ToString("O"));
             command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.ToString("O"));

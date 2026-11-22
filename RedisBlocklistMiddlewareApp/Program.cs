@@ -452,6 +452,8 @@ builder.Services.AddSingleton<IOriginHealthChecker, OriginHealthChecker>();
 builder.Services.AddSingleton<IOperatorIncidentAlertDispatcher, OperatorIncidentAlertDispatcher>();
 builder.Services.AddSingleton<ICommunityReporter, CommunityReporter>();
 builder.Services.AddSingleton<ISmtpAlertSender, SmtpAlertSender>();
+builder.Services.AddSingleton<AuditStorageState>();
+builder.Services.AddHostedService<AuditStorageMonitorService>();
 builder.Services.AddHostedService<StartupValidationService>();
 builder.Services.AddHostedService<DefenseAnalysisService>();
 builder.Services.AddHostedService<WebhookIntakeProcessingService>();

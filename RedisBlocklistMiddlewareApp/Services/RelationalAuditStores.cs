@@ -14,16 +14,16 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class PostgresDefenseEventStore : RelationalDefenseEventStore
 {
-    public PostgresDefenseEventStore(IOptions<DefenseEngineOptions> options)
-        : base(options, RelationalAuditDialect.Postgres)
+    public PostgresDefenseEventStore(IOptions<DefenseEngineOptions> options, AuditStorageState? storageState = null)
+        : base(options, RelationalAuditDialect.Postgres, storageState)
     {
     }
 }
 
 public sealed class SqlServerDefenseEventStore : RelationalDefenseEventStore
 {
-    public SqlServerDefenseEventStore(IOptions<DefenseEngineOptions> options)
-        : base(options, RelationalAuditDialect.SqlServer)
+    public SqlServerDefenseEventStore(IOptions<DefenseEngineOptions> options, AuditStorageState? storageState = null)
+        : base(options, RelationalAuditDialect.SqlServer, storageState)
     {
     }
 }
@@ -64,10 +64,12 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
 {
     private readonly string _connectionString;
     private readonly RelationalAuditDialect _dialect;
+    private readonly AuditStorageState? _storageState;
     private readonly int _maxRecentEvents;
 
-    protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect)
+    protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect, AuditStorageState? storageState = null)
     {
+        _storageState = storageState;
         _connectionString = options.Value.Audit.ConnectionString;
         _dialect = dialect;
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
@@ -116,7 +118,7 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         AddParameter(
             command,
             "@breakdownJson",
-            decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
+            decision.Breakdown is null || _storageState?.ShedDetail == true ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
         AddParameter(command, "@summary", decision.Summary);
         AddParameter(command, "@observedAtUtc", decision.ObservedAtUtc.ToString("O"));
         AddParameter(command, "@decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
