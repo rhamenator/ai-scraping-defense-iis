@@ -169,11 +169,11 @@ public sealed class IntakeDeliveryStoreTests
 
         public IOptions<DefenseEngineOptions> Options { get; }
 
-        public string DatabasePath => Path.Combine(_rootPath, "events.db");
+        public string DatabasePath => Path.Join(_rootPath, "events.db");
 
         public static SqliteStoreHarness Create(int maxRecentEvents = 500)
         {
-            var rootPath = Path.Combine(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
+            var rootPath = Path.Join(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(rootPath);
             return new SqliteStoreHarness(rootPath, maxRecentEvents);
         }

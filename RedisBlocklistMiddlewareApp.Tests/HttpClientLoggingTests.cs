@@ -20,7 +20,8 @@ public sealed class HttpClientLoggingTests
         using var provider = services.BuildServiceProvider();
 
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient();
-        using var response = await client.PostAsync("https://hooks.example.test/services/T000/CANARY-WEBHOOK-TOKEN-9f3a?key=CANARY-WEBHOOK-TOKEN-9f3a", new StringContent("{}"), TestContext.Current.CancellationToken);
+        using var content = new StringContent("{}");
+        using var response = await client.PostAsync("https://hooks.example.test/services/T000/CANARY-WEBHOOK-TOKEN-9f3a?key=CANARY-WEBHOOK-TOKEN-9f3a", content, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(logs, line => line.Contains("CANARY-WEBHOOK-TOKEN-9f3a", StringComparison.Ordinal));
         Assert.DoesNotContain(logs, line => line.Contains("/services/", StringComparison.Ordinal));
@@ -29,7 +30,7 @@ public sealed class HttpClientLoggingTests
     private sealed class StubHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)); // the caller disposes the response it receives
     }
 
     private sealed class CapturingProvider(List<string> sink) : ILoggerProvider

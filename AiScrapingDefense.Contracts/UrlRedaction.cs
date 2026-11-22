@@ -15,7 +15,7 @@ public static partial class UrlRedaction
     private const int FingerprintLength = 10;
 
     // Match as much as could belong to the URL; over-matching is safe because the whole match is replaced.
-    [GeneratedRegex(@"https?://[^\s'""<>]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"https?://[^\s""<>]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlPattern();
 
     /// <summary>The origin plus a stable fingerprint, for example <c>https://hooks.example.com (id=3f9a1c07be)</c>.</summary>
@@ -92,9 +92,9 @@ public static partial class UrlRedaction
         while (candidate.Length > 0)
         {
             var last = candidate[^1];
-            if (".,;:!?".Contains(last))
+            if (".,;:!?'".Contains(last))
             {
-                // sentence punctuation
+                // sentence punctuation, or the closing quote of 'url'; an apostrophe inside the URL stays in the match
             }
             else if (last is ')' or ']' or '}' && IsUnbalancedCloser(candidate, last))
             {

@@ -30,16 +30,27 @@ public sealed class UrlRedactionTests
     [InlineData("http://[2001:db8::1]:8443/hook/CANARY-WEBHOOK-TOKEN-9f3a")]
     [InlineData("https://example.test/hook?x=(foo)&token=CANARY-WEBHOOK-TOKEN-9f3a")]
     [InlineData("https://example.test/a[1]/CANARY-WEBHOOK-TOKEN-9f3a")]
+    [InlineData("https://hooks.example.test/'CANARY-WEBHOOK-TOKEN-9f3a")]
+    [InlineData("https://hooks.example.test/it's/CANARY-WEBHOOK-TOKEN-9f3a?x='y'&k=CANARY-WEBHOOK-TOKEN-9f3a")]
     public void EveryCredentialBearingShapeIsRemoved(string url)
     {
-        foreach (var wrapper in new[] { "{0}", "failed for url '{0}'", "(see {0})", "[{0}]", "{0}." })
+        var wrappers = new[] { "{0}", "failed for url '{0}'", "(see {0})", "[{0}]", "{0}." };
+        foreach (var result in wrappers.Select(wrapper => UrlRedaction.RedactUrls(string.Format(wrapper, url))))
         {
-            var result = UrlRedaction.RedactUrls(string.Format(wrapper, url));
             Assert.DoesNotContain(Canary, result);
             Assert.Contains("(id=", result);
         }
 
         Assert.DoesNotContain(Canary, UrlRedaction.SafeEndpoint(url));
+    }
+
+    [Fact]
+    public void AClosingQuoteAroundAUrlIsKeptOutsideTheMatch()
+    {
+        var result = UrlRedaction.RedactUrls($"failed for url 'https://hooks.example.test/{Canary}' today");
+
+        Assert.DoesNotContain(Canary, result);
+        Assert.EndsWith("' today", result);
     }
 
     [Fact]
