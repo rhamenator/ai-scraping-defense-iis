@@ -88,14 +88,8 @@ internal static class StorageLayoutMigrator
     {
         var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
         var made = new List<string>();
-        foreach (var relative in step.BackupPaths)
+        foreach (var source in step.BackupPaths.Select(relative => Path.Join(root, relative)).Where(Directory.Exists))
         {
-            var source = Path.Join(root, relative);
-            if (!Directory.Exists(source))
-            {
-                continue;
-            }
-
             var target = $"{source}.backup-{step.From}-{stamp}";
             CopyDirectory(source, target);
             made.Add(Path.GetFileName(target));

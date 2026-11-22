@@ -57,9 +57,8 @@ internal static class RaftLogExport
                 for (var start = 1L; start <= committed; start += ReadBatchSize)
                 {
                     var end = Math.Min(committed, start + ReadBatchSize - 1);
-                    var batch = await legacy.ReadAsync(new EntryCollector(), start, end, cancellationToken);
                     var index = start;
-                    foreach (var (term, payload) in batch)
+                    foreach (var (term, payload) in await legacy.ReadAsync(new EntryCollector(), start, end, cancellationToken))
                     {
                         await writer.WriteLineAsync(JsonSerializer.Serialize(new ExportedEntry(index, term, Convert.ToBase64String(payload)), Json));
                         index++;

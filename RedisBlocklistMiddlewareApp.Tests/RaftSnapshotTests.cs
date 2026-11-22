@@ -226,8 +226,11 @@ public sealed class RaftSnapshotTests : IDisposable
 
         public Task<bool> IsBlockedAsync(string ipAddress, CancellationToken cancellationToken) => Task.FromResult(Blocked.ContainsKey(ipAddress));
 
-        public Task<bool> BlockAsync(string ipAddress, string reason, IReadOnlyCollection<string> signals, CancellationToken cancellationToken) =>
-            Task.FromResult(Blocked.TryAdd(ipAddress, Far) || true);
+        public Task<bool> BlockAsync(string ipAddress, string reason, IReadOnlyCollection<string> signals, CancellationToken cancellationToken)
+        {
+            Blocked.TryAdd(ipAddress, Far);
+            return Task.FromResult(true);
+        }
 
         public Task<bool> BlockUntilAsync(string ipAddress, string reason, IReadOnlyCollection<string> signals, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
         {
