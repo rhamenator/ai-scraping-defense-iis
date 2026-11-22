@@ -61,6 +61,23 @@ public sealed class RedisBlocklistMiddleware
         var ipAddress = _clientIpResolver.Resolve(context);
         if (string.IsNullOrWhiteSpace(ipAddress))
         {
+            // Behind trusted proxies, "no client" or "a trusted proxy address" means the forwarded chain did not
+            // resolve to a real client (for example more proxy hops than are configured). Letting that through would
+            // skip every check, so protected routes fail closed; the routes bypassed above stay reachable.
+            if (string.Equals(
+                    _options.Networking.ClientIpResolutionMode,
+                    ClientIpResolutionModes.TrustedProxy,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogError(
+                    "Could not determine the client address behind the configured trusted proxies; refusing the request. " +
+                    "Check DefenseEngine:Networking:TrustedProxies, TrustedCdnProxies and TrustedProxyHopLimit against the real proxy chain.");
+                _telemetry.RecordDecision("blocked", "client_identity_unresolved");
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Access denied.");
+                return;
+            }
+
             await _next(context);
             return;
         }
