@@ -11,12 +11,18 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 
 public sealed class SqliteWebhookEventInboxTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "asd-inbox-" + Guid.NewGuid().ToString("N"));
+    private readonly List<CancellationTokenSource> _sources = [];
+    private readonly string _root = Path.Join(Path.GetTempPath(), "asd-inbox-" + Guid.NewGuid().ToString("N"));
 
     public SqliteWebhookEventInboxTests() => Directory.CreateDirectory(_root);
 
     public void Dispose()
     {
+        foreach (var source in _sources)
+        {
+            source.Dispose();
+        }
+
         if (Directory.Exists(_root))
         {
             Directory.Delete(_root, recursive: true);
@@ -107,7 +113,7 @@ public sealed class SqliteWebhookEventInboxTests : IDisposable
         Assert.Equal("pending", ReadStatus(legacy));
     }
 
-    private string DatabasePath() => Path.Combine(_root, "inbox.db");
+    private string DatabasePath() => Path.Join(_root, "inbox.db");
 
     private SqliteWebhookEventInbox CreateInbox(int maxAttempts, int baseMs)
     {
@@ -144,7 +150,12 @@ public sealed class SqliteWebhookEventInboxTests : IDisposable
         return (string)command.ExecuteScalar()!;
     }
 
-    private static CancellationToken Cancel(int seconds) => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
+    private CancellationToken Cancel(int seconds)
+    {
+        var source = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
+        _sources.Add(source);
+        return source.Token;
+    }
 
     private static IntakeWebhookEvent NewEvent() => new(
         "test",
