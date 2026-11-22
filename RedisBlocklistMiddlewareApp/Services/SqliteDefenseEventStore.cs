@@ -10,7 +10,13 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
 {
     private readonly string _connectionString;
     private readonly int _maxRecentEvents;
+    private readonly int _maxStoredEvents;
+    private readonly int _retentionDays;
+    private int _insertsSincePrune;
     private readonly object _gate = new();
+
+    // Pruning runs this often (in inserts) rather than on every one.
+    internal const int PruneEveryInserts = 500;
 
     public SqliteDefenseEventStore(
         IOptions<DefenseEngineOptions> options,
@@ -33,8 +39,11 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             Pooling = false
         }.ToString();
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
+        _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _retentionDays = options.Value.Audit.RetentionDays;
 
         EnsureSchema();
+        Prune();
     }
 
     public void Add(DefenseDecision decision)
@@ -105,7 +114,70 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             summaryCommand.Parameters.AddWithValue("$action", decision.Action);
             summaryCommand.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
             summaryCommand.ExecuteNonQuery();
+
+            if (++_insertsSincePrune >= PruneEveryInserts)
+            {
+                PruneLocked(connection);
+            }
         }
+    }
+
+    /// <summary>Applies the row cap and age retention now (also done at start-up and every few hundred inserts).</summary>
+    internal void Prune()
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            PruneLocked(connection);
+        }
+    }
+
+    internal long CountStoredEvents()
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM defense_events;";
+            return Convert.ToInt64(command.ExecuteScalar());
+        }
+    }
+
+    private void PruneLocked(SqliteConnection connection)
+    {
+        _insertsSincePrune = 0;
+        using var transaction = connection.BeginTransaction();
+        if (_maxStoredEvents > 0)
+        {
+            using var cap = connection.CreateCommand();
+            cap.Transaction = transaction;
+            // Ids only grow, so everything at or below (newest id - cap) is beyond the cap.
+            // Decisions an operator gave feedback on are kept: the feedback refers to them (a foreign key), and they are few.
+            cap.CommandText =
+                """
+                DELETE FROM defense_events
+                WHERE id <= (SELECT MAX(id) FROM defense_events) - $cap
+                  AND id NOT IN (SELECT decision_id FROM defense_feedback);
+                """;
+            cap.Parameters.AddWithValue("$cap", _maxStoredEvents);
+            cap.ExecuteNonQuery();
+        }
+
+        if (_retentionDays > 0)
+        {
+            using var age = connection.CreateCommand();
+            age.Transaction = transaction;
+            age.CommandText =
+                """
+                DELETE FROM defense_events
+                WHERE observed_at_utc < $cutoff
+                  AND id NOT IN (SELECT decision_id FROM defense_feedback);
+                """;
+            age.Parameters.AddWithValue("$cutoff", DateTimeOffset.UtcNow.AddDays(-_retentionDays).UtcDateTime.ToString("O"));
+            age.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
     }
 
     public IReadOnlyList<DefenseDecision> GetRecent(int count)
@@ -387,6 +459,16 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.ExecuteNonQuery();
 
             EnsureBreakdownColumn(connection);
+
+            // The dashboard totals are cumulative: they are rebuilt from the stored rows only when there is no summary yet
+            // (a database created before the summary existed). Once rows can be pruned, rebuilding on every open would
+            // shrink the totals to whatever rows remain.
+            using var existsCommand = connection.CreateCommand();
+            existsCommand.CommandText = "SELECT COUNT(*) FROM defense_event_summary;";
+            if (Convert.ToInt64(existsCommand.ExecuteScalar()) > 0)
+            {
+                return;
+            }
 
             using var seedCommand = connection.CreateCommand();
             seedCommand.CommandText =

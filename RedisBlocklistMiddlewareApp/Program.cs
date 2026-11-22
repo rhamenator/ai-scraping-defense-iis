@@ -1021,6 +1021,7 @@ public partial class Program
         app.MapPost("/analyze", async (
             IntakeWebhookEvent webhookEvent,
             IWebhookEventInbox inbox,
+            IOptions<DefenseEngineOptions> intakeOptions,
             [FromServices] DefenseTelemetry telemetry,
             CancellationToken cancellationToken) =>
         {
@@ -1030,6 +1031,11 @@ public partial class Program
                 {
                     error = "The webhook details field is required."
                 });
+            }
+
+            if (IntakeEventLimits.Check(webhookEvent, intakeOptions.Value.Intake.MaxEventBytes) is { } tooLarge)
+            {
+                return Results.Json(new { error = $"The webhook event is too large: {tooLarge}" }, statusCode: StatusCodes.Status413PayloadTooLarge);
             }
 
             if (!TryNormalizeIpAddress(webhookEvent.Details.IpAddress, out var normalizedIp))
