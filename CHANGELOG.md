@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Webhook intake retries are bounded (#195): a failing item is retried with exponential backoff (`Queue:WebhookRetryBaseMilliseconds` 5000, doubling up to `Queue:WebhookRetryMaxMilliseconds` 300000) and moved to a terminal `dead` state after `Queue:WebhookMaxAttempts` (5) attempts; a payload that cannot be parsed is dead-lettered immediately instead of stopping the reader; the wake-up signal is a single coalesced bounded signal instead of an unbounded queue. Existing inbox databases gain the new `attempts` and `not_before_utc` columns on startup. Not changed: a process crash mid-item does not count as an attempt, and dead items stay in the table for inspection (no purge yet).
 - Bounded tarpit ZIP generation and fetch concurrency (#191): arbitrary paths now map to at most four prebuilt archives per rotation, with per-client and global fetch limits, bounded file sizes, cancellation during generation, and an HTML fallback while archives are unavailable. Archive reads no longer wait for generation under a request lock.
 
+### Changed
+
+- Express matching robots.txt audit rules as a filtered sequence, addressing CodeQL quality alert #120 without changing rule selection.
+
 ## [1.1.4] - 2026-11-21
 
 ### Added
