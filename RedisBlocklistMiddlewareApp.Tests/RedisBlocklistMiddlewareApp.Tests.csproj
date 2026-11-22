@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <NoWarn>$(NoWarn);DOTNEXT001</NoWarn>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -24,6 +25,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Storage written by older releases; see tools/fixtures/*/README.md -->
+    <Content Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="Fixtures" />
   </ItemGroup>
 
 </Project>

@@ -1,60 +1,87 @@
+using System.Buffers;
 using System.Text.Json;
-using DotNext.Buffers;
 using DotNext.IO;
-using DotNext.Net.Cluster.Consensus.Raft;
+using DotNext.Net.Cluster.Consensus.Raft.StateMachine;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
-internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
+/// <summary>
+/// Applies committed consensus commands to the blocklist, keeps the current set of blocks in memory, and periodically writes
+/// it as a snapshot so the Raft log can be compacted (#196). A lagging follower that is sent a snapshot instead of the
+/// compacted entries installs it here: the in-memory set is replaced and the materialized Redis blocklist is brought into line.
+/// </summary>
+internal sealed class RaftBlocklistStateMachine : SimpleStateMachine
 {
     private const int MaximumCommandBytes = 64 * 1024;
+    private const int SnapshotFormatVersion = 1;
 
     // Recent command identifiers only (#196); see BoundedCommandIdSet.
     internal const int MaximumTrackedCommands = 65_536;
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly RedisBlocklistService _blocklist;
+
+    private readonly IBlocklistService _blocklist;
     private readonly ILogger<RaftBlocklistStateMachine> _logger;
     private readonly BoundedCommandIdSet _appliedCommands = new(MaximumTrackedCommands);
+    private readonly object _gate = new();
+    private readonly Dictionary<string, BlockRecord> _blocks = new(StringComparer.Ordinal);
+    private readonly int _snapshotEveryCommands;
+    private int _commandsSinceSnapshot;
 
     public RaftBlocklistStateMachine(
-        string path,
-        RedisBlocklistService blocklist,
-        ILogger<RaftBlocklistStateMachine> logger)
-        : base(
-            path,
-            recordsPerPartition: 2048,
-            new PersistentState.Options
-            {
-                WriteMode = PersistentState.WriteMode.WriteThrough,
-                IntegrityCheck = true,
-                MaxLogEntrySize = MaximumCommandBytes
-            })
+        string snapshotPath,
+        IBlocklistService blocklist,
+        ILogger<RaftBlocklistStateMachine> logger,
+        int snapshotEveryCommands = 1000)
+        : base(new DirectoryInfo(snapshotPath))
     {
         _blocklist = blocklist;
         _logger = logger;
+        _snapshotEveryCommands = Math.Max(1, snapshotEveryCommands);
     }
 
-    protected override async ValueTask<long?> ApplyAsync(PersistentState.LogEntry entry)
+    /// <summary>The number of blocks currently held in memory (and written to a snapshot).</summary>
+    internal int BlockCount
     {
-        if (entry.Length == 0)
+        get
         {
-            return null;
+            lock (_gate)
+            {
+                return _blocks.Count;
+            }
         }
-        if (entry.Length < 0 || entry.Length > MaximumCommandBytes)
+    }
+
+    internal IReadOnlyDictionary<string, BlockRecord> CurrentBlocks()
+    {
+        lock (_gate)
         {
-            throw new InvalidDataException($"Consensus log entry {entry.Index} has an invalid length of {entry.Length} bytes.");
+            return new Dictionary<string, BlockRecord>(_blocks, StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>Applies one committed entry. Returns true when the current state should be written as a snapshot.</summary>
+    protected override async ValueTask<bool> ApplyAsync(LogEntry entry, CancellationToken token)
+    {
+        if (entry.IsSnapshot)
+        {
+            await InstallSnapshotAsync(entry, token);
+            return false;
         }
 
-        ReadOnlyMemory<byte> payload;
-        byte[]? rentedPayload = null;
-        if (!entry.TryGetMemory(out payload))
+        // Internal no-op entries carry no blocklist command.
+        if (entry.Length is null or 0)
         {
-            rentedPayload = GC.AllocateUninitializedArray<byte>((int)entry.Length);
-            await entry.GetReader().ReadAsync(rentedPayload, CancellationToken.None);
-            payload = rentedPayload;
+            return false;
         }
 
-        var command = JsonSerializer.Deserialize<ConsensusCommand>(payload.Span, SerializerOptions)
+        var length = entry.Length.Value;
+        if (length < 0 || length > MaximumCommandBytes)
+        {
+            throw new InvalidDataException($"Consensus log entry {entry.Index} has an invalid length of {length} bytes.");
+        }
+
+        var command = ReadCommand(entry, length)
             ?? throw new InvalidDataException($"Consensus log entry {entry.Index} did not contain a command.");
         Validate(command, entry.Index);
 
@@ -64,64 +91,177 @@ internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
                 "Skipped duplicate consensus command {CommandId} at log index {LogIndex}.",
                 command.CommandId,
                 entry.Index);
-            return null;
+            return false;
         }
 
         try
         {
-            if (string.Equals(command.Operation, ConsensusCommand.BlockOperation, StringComparison.Ordinal))
-            {
-                var applied = await _blocklist.BlockUntilAsync(
-                    command.IpAddress,
-                    command.Reason,
-                    command.Signals,
-                    command.ExpiresAtUtc!.Value,
-                    CancellationToken.None);
-                if (!applied)
-                {
-                    throw new InvalidOperationException(
-                        $"Committed block command {command.CommandId} was rejected by the materialized blocklist.");
-                }
-            }
-            else
-            {
-                await _blocklist.UnblockAsync(command.IpAddress, CancellationToken.None);
-            }
-
+            await MaterializeAsync(command);
+            Remember(command);
             _logger.LogInformation(
                 "Applied consensus {Operation} command {CommandId} for {IpAddress} at log index {LogIndex}.",
                 command.Operation,
                 command.CommandId,
                 command.IpAddress,
                 entry.Index);
-            return null;
         }
         catch
         {
             _appliedCommands.Remove(command.CommandId);
             throw;
         }
+
+        return ++_commandsSinceSnapshot >= _snapshotEveryCommands && ResetSnapshotCounter();
     }
 
-    protected override ValueTask<long> InstallSnapshotAsync<TSnapshot>(TSnapshot snapshot)
+    private bool ResetSnapshotCounter()
     {
-        if (snapshot.Length is 0)
+        _commandsSinceSnapshot = 0;
+        return true;
+    }
+
+    private async Task MaterializeAsync(ConsensusCommand command)
+    {
+        if (string.Equals(command.Operation, ConsensusCommand.BlockOperation, StringComparison.Ordinal))
         {
-            return ValueTask.FromResult(0L);
+            var applied = await _blocklist.BlockUntilAsync(
+                command.IpAddress,
+                command.Reason,
+                command.Signals,
+                command.ExpiresAtUtc!.Value,
+                CancellationToken.None);
+            if (!applied)
+            {
+                throw new InvalidOperationException(
+                    $"Committed block command {command.CommandId} was rejected by the materialized blocklist.");
+            }
+        }
+        else
+        {
+            await _blocklist.UnblockAsync(command.IpAddress, CancellationToken.None);
+        }
+    }
+
+    private void Remember(ConsensusCommand command)
+    {
+        var key = RedisBlocklistService.TryNormalizeIpAddress(command.IpAddress, out var normalized) ? normalized : command.IpAddress;
+        lock (_gate)
+        {
+            if (string.Equals(command.Operation, ConsensusCommand.BlockOperation, StringComparison.Ordinal))
+            {
+                _blocks[key] = new BlockRecord(key, command.Reason, command.Signals, command.RequestedAtUtc, command.ExpiresAtUtc!.Value);
+            }
+            else
+            {
+                _blocks.Remove(key);
+            }
+        }
+    }
+
+    // ---- snapshots ------------------------------------------------------------------------------------------------
+
+    /// <summary>Writes the current set of unexpired blocks.</summary>
+    protected override async ValueTask PersistAsync(IAsyncBinaryWriter writer, CancellationToken token)
+    {
+        var payload = SerializeSnapshot(CurrentBlocks().Values, DateTimeOffset.UtcNow);
+        await writer.WriteLittleEndianAsync(payload.Length, token);
+        await writer.WriteAsync(payload, lengthFormat: null, token);
+    }
+
+    /// <summary>Reads a snapshot file written by <see cref="PersistAsync"/> back into memory.</summary>
+    protected override async ValueTask RestoreAsync(FileInfo snapshotFile, CancellationToken token)
+    {
+        var bytes = await File.ReadAllBytesAsync(snapshotFile.FullName, token);
+        var blocks = DeserializeSnapshot(bytes);
+        lock (_gate)
+        {
+            _blocks.Clear();
+            foreach (var block in blocks)
+            {
+                _blocks[block.IpAddress] = block;
+            }
         }
 
-        return ValueTask.FromException<long>(new InvalidOperationException(
-            "This state machine retains the complete command log and does not accept non-empty snapshots."));
+        _logger.LogInformation("Restored {BlockCount} blocks from consensus snapshot {Snapshot}.", blocks.Count, snapshotFile.Name);
     }
 
-    protected override ValueTask<IAsyncBinaryReader> BeginReadSnapshotAsync(
-        SnapshotAccessToken session,
-        MemoryAllocator<byte> allocator,
-        CancellationToken token) =>
-        ValueTask.FromResult(IAsyncBinaryReader.Empty);
-
-    protected override void EndReadSnapshot(SnapshotAccessToken session)
+    /// <summary>A snapshot sent by the leader to a follower that is behind the compacted log.</summary>
+    private async ValueTask InstallSnapshotAsync(LogEntry entry, CancellationToken token)
     {
+        var buffer = new ArrayBufferWriter<byte>();
+        foreach (var chunk in entry.GetPayload())
+        {
+            buffer.Write(chunk.Span);
+        }
+
+        var blocks = DeserializeSnapshot(buffer.WrittenSpan.ToArray());
+        Dictionary<string, BlockRecord> previous;
+        lock (_gate)
+        {
+            previous = new Dictionary<string, BlockRecord>(_blocks, StringComparer.Ordinal);
+            _blocks.Clear();
+            foreach (var block in blocks)
+            {
+                _blocks[block.IpAddress] = block;
+            }
+        }
+
+        // Bring the materialized blocklist into line: lift blocks that are no longer in the set, apply every block that is.
+        var current = blocks.ToDictionary(block => block.IpAddress, StringComparer.Ordinal);
+        foreach (var gone in previous.Keys.Where(ip => !current.ContainsKey(ip)))
+        {
+            await _blocklist.UnblockAsync(gone, token);
+        }
+
+        foreach (var block in blocks)
+        {
+            await _blocklist.BlockUntilAsync(block.IpAddress, block.Reason, block.Signals, block.ExpiresAtUtc, token);
+        }
+
+        _logger.LogWarning(
+            "Installed a consensus snapshot at log index {LogIndex}: {BlockCount} blocks ({LiftedCount} lifted).",
+            entry.Index,
+            blocks.Count,
+            previous.Keys.Count(ip => !current.ContainsKey(ip)));
+    }
+
+    internal static byte[] SerializeSnapshot(IEnumerable<BlockRecord> blocks, DateTimeOffset now)
+    {
+        var live = blocks.Where(block => block.ExpiresAtUtc > now).OrderBy(block => block.IpAddress, StringComparer.Ordinal).ToArray();
+        return JsonSerializer.SerializeToUtf8Bytes(new SnapshotDocument(SnapshotFormatVersion, live), SerializerOptions);
+    }
+
+    internal static IReadOnlyList<BlockRecord> DeserializeSnapshot(byte[] bytes)
+    {
+        // The file starts with the 4-byte length of the JSON that PersistAsync wrote.
+        var payload = bytes.Length >= 4 && BitConverter.ToInt32(bytes, 0) == bytes.Length - 4 ? bytes.AsSpan(4) : bytes.AsSpan();
+        var document = JsonSerializer.Deserialize<SnapshotDocument>(payload, SerializerOptions)
+            ?? throw new InvalidDataException("The consensus snapshot is empty.");
+        if (document.Version != SnapshotFormatVersion)
+        {
+            throw new InvalidDataException($"The consensus snapshot has format version {document.Version}; this release reads version {SnapshotFormatVersion}.");
+        }
+
+        return document.Blocks;
+    }
+
+    // ---- commands -------------------------------------------------------------------------------------------------
+
+    private static ConsensusCommand? ReadCommand(LogEntry entry, long length)
+    {
+        if (entry.TryGetPayload(out var sequence))
+        {
+            var reader = new Utf8JsonReader(sequence);
+            return JsonSerializer.Deserialize<ConsensusCommand>(ref reader, SerializerOptions);
+        }
+
+        var buffer = new ArrayBufferWriter<byte>((int)length);
+        foreach (var chunk in entry.GetPayload())
+        {
+            buffer.Write(chunk.Span);
+        }
+
+        return JsonSerializer.Deserialize<ConsensusCommand>(buffer.WrittenSpan, SerializerOptions);
     }
 
     private static void Validate(ConsensusCommand command, long index)
@@ -145,4 +285,13 @@ internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
             throw new InvalidDataException($"Consensus block entry {index} has no expiration.");
         }
     }
+
+    internal sealed record BlockRecord(
+        string IpAddress,
+        string Reason,
+        string[] Signals,
+        DateTimeOffset RequestedAtUtc,
+        DateTimeOffset ExpiresAtUtc);
+
+    private sealed record SnapshotDocument(int Version, IReadOnlyList<BlockRecord> Blocks);
 }

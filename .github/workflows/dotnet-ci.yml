@@ -41,6 +41,10 @@ jobs:
       - name: Test
         run: dotnet test anti-scraping-defense-iis.sln --no-build
 
+      # Separate solution: the exporter references DotNext 5.x, which cannot share a build with the DotNext 6 application.
+      - name: Raft log exporter (DotNext 5) build and tests
+        run: dotnet test tools/RaftLogExporter.slnx
+
       - name: Observability stack refuses to start without a Grafana admin password
         run: |
           if docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /dev/null 2>&1; then

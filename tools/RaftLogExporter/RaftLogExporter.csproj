@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Deliberately NOT part of anti-scraping-defense-iis.sln: it must read DotNext 5.x log files, so it references DotNext 5.26.2,
+       which cannot live in the same build as the DotNext 6 application. Built via tools/RaftLogExporter.slnx. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);DOTNEXT001;DOTNEXT002</NoWarn>
+    <InternalsVisibleTo>RaftLogExporter.Tests</InternalsVisibleTo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNext.Net.Cluster" Version="5.26.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RaftLogExporter.Tests" />
+  </ItemGroup>
+
+</Project>
