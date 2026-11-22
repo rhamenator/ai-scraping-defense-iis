@@ -383,6 +383,13 @@ public sealed class EscalationOptions
     public ThreatModelRoutingOptions Routing { get; set; } = new();
 
     public ContainmentPolicyOptions Containment { get; set; } = new();
+
+    /// <summary>
+    /// Whether a model's negative score adjustment (a "human" or "benign crawler" verdict) may lower the score. Off by
+    /// default: model output is advisory, so it is recorded but cannot suppress containment that deterministic evidence
+    /// supports. Turn it on only as an explicit operator policy (#201).
+    /// </summary>
+    public bool AllowNegativeModelScoreAdjustments { get; set; }
 }
 
 public sealed class ThreatModelRoutingOptions
@@ -507,6 +514,13 @@ public sealed class OpenAiCompatibleModelAdapterOptions
     public int BenignCrawlerScoreAdjustment { get; set; } = -5;
 
     public int HumanScoreAdjustment { get; set; } = -15;
+
+    /// <summary>
+    /// Ask the endpoint for schema-constrained output (<c>response_format: json_schema</c> with the classification limited
+    /// to the allowed values) instead of free-form JSON. Off by default because not every OpenAI-compatible server supports
+    /// it; the reply is parsed strictly either way.
+    /// </summary>
+    public bool UseJsonSchemaResponseFormat { get; set; }
 }
 
 public sealed class LocalTrainedModelOptions

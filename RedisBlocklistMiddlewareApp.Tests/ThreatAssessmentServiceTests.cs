@@ -40,6 +40,8 @@ public sealed class ThreatAssessmentServiceTests
                 options.Escalation.Containment.ThrottleScoreThreshold = 120;
                 options.Escalation.Containment.BlockScoreThreshold = 130;
                 options.Escalation.Containment.FrequencyBlockThreshold = 20;
+                // This test is about aggregation, so it opts in to a model's negative score (advisory by default, #201).
+                options.Escalation.AllowNegativeModelScoreAdjustments = true;
             });
 
         var result = await service.AssessAsync(new SuspiciousRequest(
@@ -408,7 +410,8 @@ public sealed class ThreatAssessmentServiceTests
                 telemetry,
                 NullLogger<ContainmentPolicyEngine>.Instance),
             telemetry,
-            NullLogger<ThreatAssessmentService>.Instance);
+            NullLogger<ThreatAssessmentService>.Instance,
+            Options.Create(options));
     }
 
     private sealed class TestRequestFrequencyTracker : IRequestFrequencyTracker
