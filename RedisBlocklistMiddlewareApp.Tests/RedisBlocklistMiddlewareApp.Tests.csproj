@@ -27,4 +27,9 @@
     <ProjectReference Include="..\RedisBlocklistMiddlewareApp\RedisBlocklistMiddlewareApp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Storage written by older releases; see tools/fixtures/*/README.md -->
+    <Content Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="Fixtures" />
+  </ItemGroup>
+
 </Project>

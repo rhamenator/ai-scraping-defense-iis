@@ -106,7 +106,8 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             var stateMachine = new RaftBlocklistStateMachine(
                 snapshotPath,
                 _blocklist,
-                _loggerFactory.CreateLogger<RaftBlocklistStateMachine>());
+                _loggerFactory.CreateLogger<RaftBlocklistStateMachine>(),
+                _options.SnapshotEveryCommands);
             // The most recent snapshot must be restored before the log is opened, so replay starts after it.
             await stateMachine.RestoreAsync(cancellationToken);
             var writeAheadLog = new WriteAheadLog(new WriteAheadLog.Options { Location = logPath }, stateMachine);

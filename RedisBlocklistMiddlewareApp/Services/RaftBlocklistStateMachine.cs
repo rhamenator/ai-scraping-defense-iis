@@ -20,7 +20,7 @@ internal sealed class RaftBlocklistStateMachine : SimpleStateMachine
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly RedisBlocklistService _blocklist;
+    private readonly IBlocklistService _blocklist;
     private readonly ILogger<RaftBlocklistStateMachine> _logger;
     private readonly BoundedCommandIdSet _appliedCommands = new(MaximumTrackedCommands);
     private readonly object _gate = new();
@@ -30,7 +30,7 @@ internal sealed class RaftBlocklistStateMachine : SimpleStateMachine
 
     public RaftBlocklistStateMachine(
         string snapshotPath,
-        RedisBlocklistService blocklist,
+        IBlocklistService blocklist,
         ILogger<RaftBlocklistStateMachine> logger,
         int snapshotEveryCommands = 1000)
         : base(new DirectoryInfo(snapshotPath))
@@ -144,7 +144,7 @@ internal sealed class RaftBlocklistStateMachine : SimpleStateMachine
 
     private void Remember(ConsensusCommand command)
     {
-        var key = Services.RedisBlocklistService.TryNormalizeIpAddress(command.IpAddress, out var normalized) ? normalized : command.IpAddress;
+        var key = RedisBlocklistService.TryNormalizeIpAddress(command.IpAddress, out var normalized) ? normalized : command.IpAddress;
         lock (_gate)
         {
             if (string.Equals(command.Operation, ConsensusCommand.BlockOperation, StringComparison.Ordinal))
