@@ -171,7 +171,7 @@ If `DefenseEngine:Observability:OtlpEndpoint` is configured, traces are exported
 
 The bundled observability overlay provisions:
 
-- Prometheus at `http://localhost:9090`
+- Prometheus at `http://127.0.0.1:9090` (loopback only)
 - Grafana at `http://localhost:3000`
 - an OpenTelemetry Collector with OTLP on `4317` and `4318`
 

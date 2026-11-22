@@ -23,6 +23,7 @@ docker compose -f compose.yaml -f compose.observability.yaml up --build
 Bound to this host's loopback only (not reachable from other machines):
 
 - Grafana: `http://localhost:3000`
+- Prometheus: `http://127.0.0.1:9090` (no authentication, and no lifecycle API: it runs without `--web.enable-lifecycle`)
 - OTLP gRPC: `127.0.0.1:4317`
 - OTLP HTTP: `127.0.0.1:4318`
 - Collector health: `http://127.0.0.1:13133`
@@ -30,13 +31,15 @@ Bound to this host's loopback only (not reachable from other machines):
 Published on every network interface by the Compose files, so reachable from other machines unless you restrict them:
 
 - edge gateway: `http://localhost:18080` (published by `compose.yaml`; it is the public-facing service)
-- Prometheus: `http://localhost:9090` (**no authentication**: restrict it with your firewall or bind it to loopback yourself)
 
 Grafana signs in with `GRAFANA_ADMIN_USER` (default `admin`) and the `GRAFANA_ADMIN_PASSWORD` you set in `.env`; the stack
 will not start without one.
 
-The collector's OTLP receivers have **no authentication**, so Compose publishes them to loopback only and the edge gateway
-reaches them over the Compose network. Do not change those bindings to expose them to other machines.
+The collector's OTLP receivers and Prometheus have **no authentication**, so Compose publishes them to loopback only (the edge
+gateway reaches the collector over the Compose network). Do not change those bindings to expose them to other machines.
+Prometheus runs without its lifecycle API (`--web.enable-lifecycle`), which would let anyone who can reach it stop or reload it
+with one request; apply a change to `prometheus.yml` or the alert rules with
+`docker compose -f compose.yaml -f compose.observability.yaml restart prometheus`.
 
 ## What the Dashboard Covers
 

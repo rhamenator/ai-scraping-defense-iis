@@ -10,11 +10,15 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
+    # No --web.enable-lifecycle: with it, anyone who can reach port 9090 can POST /-/quit to stop Prometheus or /-/reload
+    # to reload its configuration, and there is no authentication. Apply a configuration change by restarting the service.
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --web.enable-lifecycle
+    restart: unless-stopped
     ports:
-      - "9090:9090"
+      # This host only. Prometheus has no authentication; put authenticated TLS and network controls in front of any
+      # remote listener instead of publishing this port to other machines.
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/observability/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro

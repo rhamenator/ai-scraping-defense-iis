@@ -67,6 +67,10 @@ jobs:
             docker run --rm -v "$PWD/deploy/observability:/cfg:ro" -e OTEL_INGEST_TOKEN=config-validation-only \
               otel/opentelemetry-collector-contrib:0.111.0 validate --config="/cfg/$config"
           done
+          # Prometheus has no authentication: loopback only, and no lifecycle API (it allows an unauthenticated /-/quit).
+          jq -e '[.services.prometheus.ports[] | select(.host_ip != "127.0.0.1")] | length == 0' /tmp/compose-observability.json
+          jq -e '.services.prometheus.ports | length >= 1' /tmp/compose-observability.json
+          jq -e '[.services.prometheus.command[] | select(test("web.enable-lifecycle|web.enable-admin-api"))] | length == 0' /tmp/compose-observability.json
           # The memory limiter must come first in the pipeline and the receivers must bound request size.
           grep -q 'max_request_body_size' deploy/observability/otel-collector-config.yaml
           grep -q 'max_recv_msg_size_mib' deploy/observability/otel-collector-config.yaml
