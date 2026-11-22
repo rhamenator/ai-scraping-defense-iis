@@ -493,7 +493,7 @@ if (Program.ShouldUseForwardedHeaders(runtimeOptions))
     app.UseForwardedHeaders();
 }
 
-Program.UseManagementSecureTransportGuard(app, runtimeOptions);
+Program.UseManagementSecureTransportGuard(app, runtimeOptions, app.Environment);
 
 app.UseMiddleware<RedisBlocklistMiddleware>();
 
@@ -972,11 +972,16 @@ public partial class Program
 
     /// <summary>
     /// With <c>Management:RequireSecureTransport</c>, refuses any <c>/defense</c> request that did not arrive over HTTPS.
-    /// Add it after forwarded headers so <c>Request.IsHttps</c> reflects the proxy's <c>X-Forwarded-Proto</c> (#186).
+    /// Add it after forwarded headers so <c>Request.IsHttps</c> reflects the proxy's <c>X-Forwarded-Proto</c>. Not applied in
+    /// the Development environment (#186).
     /// </summary>
-    public static void UseManagementSecureTransportGuard(IApplicationBuilder app, DefenseEngineOptions runtimeOptions)
+    public static void UseManagementSecureTransportGuard(
+        IApplicationBuilder app,
+        DefenseEngineOptions runtimeOptions,
+        IHostEnvironment environment)
     {
-        if (!runtimeOptions.Management.RequireSecureTransport)
+        // Development is exempt, as it is for the Secure session cookie: running locally over http://localhost must work.
+        if (!runtimeOptions.Management.RequireSecureTransport || environment.IsDevelopment())
         {
             return;
         }

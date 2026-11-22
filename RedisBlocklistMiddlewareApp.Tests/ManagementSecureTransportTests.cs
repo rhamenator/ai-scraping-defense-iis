@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RedisBlocklistMiddlewareApp.Configuration;
 
@@ -133,12 +134,12 @@ public sealed class ManagementSecureTransportTests
     // ---- runtime guard ------------------------------------------------------------------------------------
 
     private static async Task<(int Status, string Body, bool Reached)> Send(
-        DefenseEngineOptions options, string path, string scheme)
+        DefenseEngineOptions options, string path, string scheme, string environment = "Production")
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var reached = false;
         var builder = new ApplicationBuilder(services);
-        Program.UseManagementSecureTransportGuard(builder, options);
+        Program.UseManagementSecureTransportGuard(builder, options, new TestHostEnvironment(environment));
         builder.Run(_ =>
         {
             reached = true;
@@ -188,6 +189,45 @@ public sealed class ManagementSecureTransportTests
         var (_, _, reached) = await Send(Options(require: true), path, "http");
 
         Assert.True(reached);
+    }
+
+    [Fact]
+    public async Task Guard_DoesNotApplyInDevelopmentSoLocalHttpWorks()
+    {
+        var (status, _, reached) = await Send(Options(require: true), "/defense/metrics", "http", "Development");
+
+        Assert.Equal(StatusCodes.Status200OK, status);
+        Assert.True(reached);
+    }
+
+    [Theory]
+    [InlineData("urls", "https://+:8443", true)]
+    [InlineData("urls", "http://+:8080", false)]
+    [InlineData("HTTPS_PORTS", "8443", true)]
+    [InlineData("DOTNET_HTTPS_PORTS", "8443", true)]
+    [InlineData("Kestrel:Endpoints:Web:Url", "https://*:8443", true)]
+    [InlineData("Kestrel:Endpoints:Web:Url", "http://*:8080", false)]
+    public async Task StartupValidation_RecognisesEveryWayHttpsCanBeConfigured(string key, string value, bool accepted)
+    {
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
+            .Build();
+        var service = new StartupValidationService(
+            new TestHostEnvironment("Production"),
+            Microsoft.Extensions.Options.Options.Create(Options(require: true)),
+            new ProductionConfigurationValidator(),
+            configuration,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<StartupValidationService>.Instance);
+
+        if (accepted)
+        {
+            await service.StartAsync(TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<Microsoft.Extensions.Options.OptionsValidationException>(
+                () => service.StartAsync(TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]

@@ -77,6 +77,8 @@ public sealed class DefenseStackFixture : IAsyncLifetime
             ["DefenseEngine:Escalation:Containment:BlockScoreThreshold"] = "80",
             ["DefenseEngine:Escalation:Containment:FrequencyBlockThreshold"] = "2",
             ["DefenseEngine:Management:ApiKey"] = ManagementApiKey,
+            // The test host serves plain HTTP, so it opts out of the HTTPS requirement explicitly (#186).
+            ["DefenseEngine:Management:RequireSecureTransport"] = "false",
             ["DefenseEngine:Intake:ApiKey"] = IntakeApiKey,
             ["DefenseEngine:Audit:DatabasePath"] = auditDatabasePath,
             ["DefenseEngine:Tarpit:ResponseDelayMilliseconds"] = "0",
@@ -127,6 +129,7 @@ public sealed class DefenseStackFixture : IAsyncLifetime
                         options.Escalation.Containment.BlockScoreThreshold = 80;
                         options.Escalation.Containment.FrequencyBlockThreshold = 2;
                         options.Management.ApiKey = ManagementApiKey;
+                        options.Management.RequireSecureTransport = false;
                         options.Intake.ApiKey = IntakeApiKey;
                         options.Audit.DatabasePath = auditDatabasePath;
                         options.Tarpit.ResponseDelayMilliseconds = 0;

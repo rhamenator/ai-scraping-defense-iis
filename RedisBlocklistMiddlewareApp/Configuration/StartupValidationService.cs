@@ -32,7 +32,7 @@ public sealed class StartupValidationService : IHostedService
         var errors = _validator.Validate(
             _environment,
             _options,
-            _configuration["urls"],
+            EffectiveListenerUrls(),
             hostedByIis: IsHostedByIis());
         if (errors.Count > 0)
         {
@@ -48,6 +48,23 @@ public sealed class StartupValidationService : IHostedService
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Every place a Kestrel listener can be configured: <c>urls</c> (ASPNETCORE_URLS), explicit
+    /// <c>Kestrel:Endpoints:*:Url</c> entries, and <c>HTTPS_PORTS</c> (ASPNETCORE_HTTPS_PORTS, which implies an HTTPS listener).
+    /// </summary>
+    private string EffectiveListenerUrls()
+    {
+        var urls = new List<string> { _configuration["urls"] ?? string.Empty };
+        urls.AddRange(_configuration.GetSection("Kestrel:Endpoints").GetChildren().Select(endpoint => endpoint["Url"] ?? string.Empty));
+        if (!string.IsNullOrWhiteSpace(_configuration["HTTPS_PORTS"]) ||
+            !string.IsNullOrWhiteSpace(_configuration["DOTNET_HTTPS_PORTS"]))
+        {
+            urls.Add("https://configured-by-https-ports");
+        }
+
+        return string.Join(';', urls.Where(url => url.Length > 0));
     }
 
     /// <summary>
