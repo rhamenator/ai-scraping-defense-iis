@@ -24,9 +24,9 @@ internal static class RaftLogLayout
     /// <summary>Returns the WAL directory, migrating a legacy log first when one exists.</summary>
     public static async Task<string> PrepareAsync(string storagePath, ILogger logger, CancellationToken cancellationToken)
     {
-        var markerPath = Path.Combine(storagePath, MarkerFileName);
-        var walPath = Path.Combine(storagePath, WalDirectoryName);
-        var legacyPath = Path.Combine(storagePath, LegacyDirectoryName);
+        var markerPath = Path.Join(storagePath, MarkerFileName);
+        var walPath = Path.Join(storagePath, WalDirectoryName);
+        var legacyPath = Path.Join(storagePath, LegacyDirectoryName);
 
         if (File.Exists(markerPath))
         {
@@ -73,32 +73,53 @@ internal static class RaftLogLayout
         var committedIndex = legacy.LastCommittedEntryIndex;
         var term = legacy.Term;
 
-        using var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, new DiscardingStateMachine());
-        await wal.InitializeAsync(cancellationToken);
-
-        // Only committed entries are migrated: DotNext 5.26's WriteAheadLog does not keep entries beyond the
-        // commit point across a restart, so an uncommitted tail could not be preserved anyway.
-        for (var start = 1L; start <= committedIndex; start += ReadBatchSize)
+        await using (var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, new DiscardingStateMachine()))
         {
-            var end = Math.Min(committedIndex, start + ReadBatchSize - 1);
-            var batch = await legacy.ReadAsync(new EntryCollector(), start, end, cancellationToken);
-            var index = start;
-            foreach (var (entryTerm, payload) in batch)
+            await wal.InitializeAsync(cancellationToken);
+
+            // Only committed entries are migrated: DotNext 5.26's WriteAheadLog does not keep entries beyond the
+            // commit point across a restart, so an uncommitted tail could not be preserved anyway.
+            for (var start = 1L; start <= committedIndex; start += ReadBatchSize)
             {
-                await wal.AppendAsync(new BinaryLogEntry { Content = payload, Term = entryTerm }, index, cancellationToken);
-                index++;
+                var end = Math.Min(committedIndex, start + ReadBatchSize - 1);
+                var batch = await legacy.ReadAsync(new EntryCollector(), start, end, cancellationToken);
+                var index = start;
+                foreach (var (entryTerm, payload) in batch)
+                {
+                    await wal.AppendAsync(new BinaryLogEntry { Content = payload, Term = entryTerm }, index, cancellationToken);
+                    index++;
+                }
+            }
+
+            if (committedIndex > 0)
+            {
+                await wal.CommitAsync(committedIndex, cancellationToken);
+                await wal.WaitForApplyAsync(committedIndex, cancellationToken);
+            }
+
+            // Keep the persisted Raft term so a migrated node never starts from term 0.
+            await ((IPersistentState)wal).UpdateTermAsync(term, resetLastVote: false);
+            await wal.FlushAsync(cancellationToken);
+        }
+
+        // Do not trust the write: reopen the migrated log from disk and check what actually persisted. Nothing is
+        // marked or archived until this passes, so a log that did not persist fails loudly instead of being lost.
+        await using (var check = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, new DiscardingStateMachine()))
+        {
+            await check.InitializeAsync(cancellationToken);
+            if (check.LastEntryIndex != committedIndex || check.LastCommittedEntryIndex != committedIndex)
+            {
+                throw new InvalidOperationException(
+                    $"The migrated Raft log did not persist (expected {committedIndex} committed entries, found {check.LastEntryIndex} entries and commit index {check.LastCommittedEntryIndex}); the migration was stopped and the old log was left untouched.");
+            }
+
+            if (committedIndex > 0 && ((IPersistentState)check).Term < term)
+            {
+                throw new InvalidOperationException(
+                    $"The migrated Raft log lost its term (expected at least {term}); the migration was stopped and the old log was left untouched.");
             }
         }
 
-        if (committedIndex > 0)
-        {
-            await wal.CommitAsync(committedIndex, cancellationToken);
-            await wal.WaitForApplyAsync(committedIndex, cancellationToken);
-        }
-
-        // Keep the persisted Raft term so a migrated node never starts from term 0.
-        await ((IPersistentState)wal).UpdateTermAsync(term, resetLastVote: false);
-        await wal.FlushAsync(cancellationToken);
         return (committedIndex, lastIndex - committedIndex);
     }
 

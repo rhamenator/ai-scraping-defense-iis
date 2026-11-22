@@ -51,7 +51,7 @@ public sealed class RaftLogLayoutTests : IDisposable
         Assert.Equal(3, committed);
 
         // The migrated entries keep their order, terms and exact bytes, including the empty one.
-        using var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, new RecordingStateMachine());
+        await using var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, new RecordingStateMachine());
         await wal.InitializeAsync();
         var entries = await wal.ReadAsync(new RaftLogLayout.EntryCollector(), 1, 3, CancellationToken.None);
         Assert.Equal(
@@ -158,7 +158,7 @@ public sealed class RaftLogLayoutTests : IDisposable
     private static async Task<(long Last, long Committed, List<string> Applied)> OpenWalAsync(string walPath)
     {
         var machine = new RecordingStateMachine();
-        using var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, machine);
+        await using var wal = new WriteAheadLog(new WriteAheadLog.Options { Location = walPath }, machine);
         await wal.InitializeAsync();
         if (wal.LastCommittedEntryIndex > 0)
         {
