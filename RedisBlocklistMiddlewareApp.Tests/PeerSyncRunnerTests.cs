@@ -141,6 +141,7 @@ public sealed class PeerSyncRunnerTests
             {
                 Enabled = true,
                 MaximumSignalsPerPeer = 2,
+                RequireSignedSignals = false,
                 Peers =
                 [
                     new PeerSyncPeerOptions
@@ -184,6 +185,9 @@ public sealed class PeerSyncRunnerTests
             {
                 Enabled = true,
                 MaximumSignalsPerPeer = 20,
+                // These tests exercise trust modes and limits with plain signals; signing is covered in
+                // PeerSignalSecurityTests.
+                RequireSignedSignals = false,
                 Peers =
                 [
                     new PeerSyncPeerOptions

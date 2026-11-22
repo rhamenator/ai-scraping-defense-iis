@@ -92,7 +92,7 @@ public sealed class HttpPeerSignalFeedClient : IPeerSignalFeedClient
             .ToArray();
     }
 
-    private static IReadOnlyList<PeerDefenseSignal> ReadSignalEnvelope(JsonElement signalsElement)
+    internal static IReadOnlyList<PeerDefenseSignal> ReadSignalEnvelope(JsonElement signalsElement)
     {
         var signals = new List<PeerDefenseSignal>();
 
@@ -133,9 +133,27 @@ public sealed class HttpPeerSignalFeedClient : IPeerSignalFeedClient
                 summary,
                 signalList,
                 observedAtUtc,
-                decidedAtUtc));
+                decidedAtUtc,
+                SignalId: ReadString(element, "signal_id"),
+                Origin: ReadString(element, "origin"),
+                ExpiresAtUtc: element.TryGetProperty("expires_at_utc", out var expiresElement) &&
+                              expiresElement.ValueKind == JsonValueKind.String &&
+                              DateTimeOffset.TryParse(expiresElement.GetString(), out var expiresAt)
+                    ? expiresAt
+                    : null,
+                Hops: element.TryGetProperty("hops", out var hopsElement) &&
+                      hopsElement.ValueKind == JsonValueKind.Number &&
+                      hopsElement.TryGetInt32(out var hops)
+                    ? hops
+                    : 0,
+                Signature: ReadString(element, "signature")));
         }
 
         return signals;
     }
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 }

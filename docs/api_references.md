@@ -87,7 +87,17 @@ Enabled only when `DefenseEngine:PeerSync:ExportApiKey` is configured. Requires 
 
 - `DefenseEngine:PeerSync:ExportApiKeyHeaderName` (default `X-Peer-Key`)
 
-Returns recently blocked decisions in peer-shareable envelope format.
+Returns recently blocked decisions in peer-shareable envelope format. Only decisions this node made itself are exported: anything imported from a peer (`peer_sync:*`) or a community list (`community_blocklist:*`) is never re-exported, so a signal cannot loop through a mesh of nodes.
+
+Each signal is JSON with snake_case fields: `ip_address`, `summary`, `signals`, `observed_at_utc`, `decided_at_utc`, plus provenance fields `signal_id` (stable per decision), `origin` (this node's `PeerSync:NodeId`), `expires_at_utc` (when the block lapses), `hops` (0 for a locally originated signal) and `signature` (lowercase hex HMAC-SHA256 over every one of those fields, keyed with `PeerSync:SigningKey`). A node with no `NodeId` or `SigningKey` exports unsigned signals.
+
+Importing (`PeerSync:Peers`):
+
+- `PeerSync:RequireSignedSignals` (default `true`): a signal is imported only if it carries a valid signature made with the peer's `VerificationKey` (the exporter's `SigningKey`), its `origin` equals the peer's configured `Name`, and it has an id and an expiry.
+- `PeerSync:MaximumHops` (default `0`): signals that travelled more hops than this are rejected. Signals that originated from this node's own `NodeId` are rejected as loops.
+- Expired signals are rejected; an accepted block keeps the signal's own expiry, capped at this node's block lifetime. A signal id already imported is ignored.
+- Peers default to `ObserveOnly`; a signal only blocks automatically when the peer is explicitly set to `BlockList`.
+- Setting `RequireSignedSignals` to `false` accepts unsigned signals as before (a signature that is present is still checked when a key is configured). Legacy feeds that are plain IP arrays are unsigned and need this setting.
 
 ## Notes for Integrators
 

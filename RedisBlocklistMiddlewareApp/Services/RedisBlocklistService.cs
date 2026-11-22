@@ -56,7 +56,7 @@ public sealed class RedisBlocklistService : IBlocklistService
         TryNormalizeIpAddress(ipAddress, out var normalizedIp) &&
         !IsTrustedInfrastructureAddress(normalizedIp);
 
-    internal async Task<bool> BlockUntilAsync(
+    public async Task<bool> BlockUntilAsync(
         string ipAddress,
         string reason,
         IReadOnlyCollection<string> signals,
