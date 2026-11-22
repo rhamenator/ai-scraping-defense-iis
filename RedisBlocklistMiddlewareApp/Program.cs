@@ -440,6 +440,7 @@ builder.Services.AddSingleton<PeerSignalLedger>();
 builder.Services.AddSingleton<PeerSyncRunner>();
 builder.Services.AddSingleton<ManagementAuthenticationService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
+builder.Services.AddSingleton<FixedWindowCounter>();
 builder.Services.AddSingleton<IntakeApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();

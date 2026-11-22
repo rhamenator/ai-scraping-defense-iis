@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Models;
 
@@ -16,6 +17,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
     private readonly IContainmentPolicyEngine _containmentPolicyEngine;
     private readonly IAssessmentTelemetry _telemetry;
     private readonly ILogger<ThreatAssessmentService> _logger;
+    private readonly bool _allowNegativeModelAdjustments;
 
     public ThreatAssessmentService(
         IRequestFrequencyTracker frequencyTracker,
@@ -25,7 +27,8 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         IThreatModelRoutingStrategy routingStrategy,
         IContainmentPolicyEngine containmentPolicyEngine,
         IAssessmentTelemetry telemetry,
-        ILogger<ThreatAssessmentService> logger)
+        ILogger<ThreatAssessmentService> logger,
+        IOptions<DefenseEngineOptions>? options = null)
     {
         _frequencyTracker = frequencyTracker;
         _scoreContributors = scoreContributors
@@ -38,6 +41,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         _containmentPolicyEngine = containmentPolicyEngine;
         _telemetry = telemetry;
         _logger = logger;
+        _allowNegativeModelAdjustments = options?.Value.Escalation.AllowNegativeModelScoreAdjustments ?? false;
     }
 
     public async Task<ThreatAssessmentResult> AssessAsync(
@@ -198,9 +202,17 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                 continue;
             }
 
-            totalScore = ThreatScoreArithmetic.Add(totalScore, assessment.ScoreAdjustment);
+            // A model's "human" or "benign crawler" verdict is advisory: it is recorded, but it only lowers the score when the
+            // operator has explicitly allowed that (#201). Positive verdicts always count.
+            var appliedAdjustment = assessment.ScoreAdjustment < 0 && !_allowNegativeModelAdjustments
+                ? 0
+                : assessment.ScoreAdjustment;
+            var contributionSignals = appliedAdjustment == assessment.ScoreAdjustment
+                ? assessment.Signals
+                : assessment.Signals.Append("model_adjustment:advisory_only").ToArray();
+            totalScore = ThreatScoreArithmetic.Add(totalScore, appliedAdjustment);
             explicitMaliciousVerdict |= assessment.IsBot == true;
-            AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
+            AppendContribution(contributions, combinedSignals, assessment.Source, appliedAdjustment, contributionSignals, assessment.Summary);
             var decisive = assessment.IsBot is not null;
             effectiveRoute = adapter.Route;
             evaluatedAdapters.Add($"{adapter.Route}:{adapter.Name}");

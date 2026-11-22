@@ -85,6 +85,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 * **ApiKeyHeaderName**: Header name required for the authenticated `/analyze` webhook endpoint.
 * **ApiKey**: Shared secret required to access `/analyze`. If blank, the endpoint is not exposed.
+* **RateLimitPerMinute**: Requests per minute the intake key may send in total, from any number of addresses (default `600`; `0` disables). Over the limit the response is `429` with `Retry-After`.
+* **FailedAuthLimitPerMinute**: Wrong-key attempts per minute one client address may make before everything from it is refused with `429` until the minute ends (default `30`; `0` disables). This stops the key being guessed at network speed; it also holds a valid key from that address until the minute ends.
 
 #### **DefenseEngine:Audit**
 
@@ -104,6 +106,7 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
     * **Cidr**: IPv4 or IPv6 CIDR to match.
     * **ScoreAdjustment**: Positive or negative score contribution applied when the CIDR matches.
     * **Signals**: Optional custom signals recorded on matching decisions.
+* **AllowNegativeModelScoreAdjustments**: Whether a model's negative score adjustment (a `HUMAN` or `BENIGN_CRAWLER` verdict) may lower the score. Default `false`: model output is advisory, so a negative verdict is recorded (and shown in the breakdown with a `model_adjustment:advisory_only` signal) but cannot suppress containment that deterministic evidence supports. Positive verdicts always count.
 * **HttpReputation**: Optional HTTP-based reputation lookup used during queued analysis.
   * **Enabled**: Turns the provider on or off.
   * **Endpoint**: URL that accepts a POST body containing `ip`, `path`, `signals`, and `frequency`.
@@ -123,6 +126,7 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
   * **MaliciousScoreAdjustment**: Score delta applied when the model classifies `MALICIOUS_BOT`.
   * **BenignCrawlerScoreAdjustment**: Score delta applied when the model classifies `BENIGN_CRAWLER`.
   * **HumanScoreAdjustment**: Score delta applied when the model classifies `HUMAN`.
+  * **UseJsonSchemaResponseFormat**: Ask the endpoint for schema-constrained output (`response_format: json_schema`, classification limited to the four allowed values). Default `false` because not every OpenAI-compatible server supports it. The reply is parsed strictly either way: only a JSON object whose `classification` is exactly one of the allowed values counts; anything else is `INCONCLUSIVE`.
 
 #### **DefenseEngine:CommunityBlocklist**
 
