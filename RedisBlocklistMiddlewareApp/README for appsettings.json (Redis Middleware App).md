@@ -111,6 +111,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
   * **ApiKey**: Optional shared secret sent to the provider.
   * **TimeoutSeconds**: Request timeout for the provider call.
   * **MaliciousScoreAdjustment**: Fallback score adjustment when the provider returns `is_malicious=true` without an explicit `score_adjustment`.
+  * **MaxScoreAdjustment**: Largest positive `score_adjustment` accepted from the provider (default `50`); larger values are reduced to it, so a remote service cannot set an arbitrary score.
+  * **AllowNegativeScoreAdjustments**: Whether a negative `score_adjustment` from the provider may lower the score (default `false`: a remote service cannot cancel evidence the engine found itself). When allowed it is limited to `-MaxScoreAdjustment`.
 * **OpenAiCompatibleModel**: Optional classifier hook for local or remote chat-completions endpoints that follow the OpenAI-compatible shape.
   * **Enabled**: Turns the classifier on or off.
   * **Endpoint**: Full chat-completions URL.

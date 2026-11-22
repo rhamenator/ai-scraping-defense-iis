@@ -88,14 +88,14 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                     continue;
                 }
 
-                totalScore += contribution.ScoreAdjustment;
+                totalScore = ThreatScoreArithmetic.Add(totalScore, contribution.ScoreAdjustment);
                 explicitMaliciousVerdict |= contribution.ExplicitMaliciousVerdict;
-                baseSignalScore += contribution.Kind == ThreatScoreContributionKind.BaseSignal
-                    ? contribution.ScoreAdjustment
-                    : 0;
-                frequencyScore += contribution.Kind == ThreatScoreContributionKind.Frequency
-                    ? contribution.ScoreAdjustment
-                    : 0;
+                baseSignalScore = ThreatScoreArithmetic.Add(
+                    baseSignalScore,
+                    contribution.Kind == ThreatScoreContributionKind.BaseSignal ? contribution.ScoreAdjustment : 0);
+                frequencyScore = ThreatScoreArithmetic.Add(
+                    frequencyScore,
+                    contribution.Kind == ThreatScoreContributionKind.Frequency ? contribution.ScoreAdjustment : 0);
                 AppendContribution(
                     contributions,
                     combinedSignals,
@@ -147,7 +147,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                 continue;
             }
 
-            totalScore += assessment.ScoreAdjustment;
+            totalScore = ThreatScoreArithmetic.Add(totalScore, assessment.ScoreAdjustment);
             explicitMaliciousVerdict |= assessment.IsMalicious;
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
             providerActivity?.SetTag("provider.source", assessment.Source);
@@ -198,7 +198,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
                 continue;
             }
 
-            totalScore += assessment.ScoreAdjustment;
+            totalScore = ThreatScoreArithmetic.Add(totalScore, assessment.ScoreAdjustment);
             explicitMaliciousVerdict |= assessment.IsBot == true;
             AppendContribution(contributions, combinedSignals, assessment.Source, assessment.ScoreAdjustment, assessment.Signals, assessment.Summary);
             var decisive = assessment.IsBot is not null;
@@ -324,7 +324,7 @@ public sealed class ThreatAssessmentService : IThreatAssessmentService
         IReadOnlyList<DefenseScoreContribution> contributions)
     {
         var dominantSources = contributions
-            .OrderByDescending(contribution => Math.Abs(contribution.ScoreDelta))
+            .OrderByDescending(contribution => Math.Abs((long)contribution.ScoreDelta))
             .Take(3)
             .Select(contribution => contribution.Source)
             .Distinct(StringComparer.OrdinalIgnoreCase)

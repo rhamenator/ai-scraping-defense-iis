@@ -458,6 +458,19 @@ public sealed class HttpReputationProviderOptions
     public int TimeoutSeconds { get; set; } = 10;
 
     public int MaliciousScoreAdjustment { get; set; } = 35;
+
+    /// <summary>
+    /// Largest positive <c>score_adjustment</c> accepted from the provider's response; larger values are reduced to it.
+    /// The provider is a remote service, so its numbers are bounded rather than trusted (#202).
+    /// </summary>
+    public int MaxScoreAdjustment { get; set; } = 50;
+
+    /// <summary>
+    /// Whether a negative <c>score_adjustment</c> from the provider may lower the score. Off by default: a remote service
+    /// cannot cancel evidence the engine found itself. Operators who trust the provider can allow it (down to
+    /// <c>-MaxScoreAdjustment</c>).
+    /// </summary>
+    public bool AllowNegativeScoreAdjustments { get; set; }
 }
 
 public sealed class OpenAiCompatibleModelAdapterOptions
