@@ -77,10 +77,11 @@ public sealed class HttpReputationProvider : IThreatReputationProvider
             var isMalicious = root.TryGetProperty("is_malicious", out var maliciousElement) &&
                 maliciousElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                 maliciousElement.GetBoolean();
-            var scoreAdjustment = root.TryGetProperty("score_adjustment", out var scoreElement) &&
+            var scoreAdjustment = BoundAdjustment(
+                root.TryGetProperty("score_adjustment", out var scoreElement) &&
                 scoreElement.TryGetInt32(out var explicitScore)
                 ? explicitScore
-                : (isMalicious ? _options.MaliciousScoreAdjustment : 0);
+                : (isMalicious ? _options.MaliciousScoreAdjustment : 0));
             var summary = root.TryGetProperty("summary", out var summaryElement) &&
                 summaryElement.ValueKind == JsonValueKind.String
                 ? summaryElement.GetString() ?? string.Empty
@@ -123,5 +124,31 @@ public sealed class HttpReputationProvider : IThreatReputationProvider
             _logger.LogWarning(ex, "HTTP reputation provider failed.");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Keeps a provider-supplied adjustment inside the configured range: positive values are capped at
+    /// <c>MaxScoreAdjustment</c>, and negative values are ignored unless the operator allows them (then capped at the
+    /// negative of that maximum).
+    /// </summary>
+    internal int BoundAdjustment(int adjustment)
+    {
+        var maximum = Math.Max(0, _options.MaxScoreAdjustment);
+        if (adjustment < 0 && !_options.AllowNegativeScoreAdjustments)
+        {
+            _logger.LogDebug("Ignored a negative score adjustment from the HTTP reputation provider.");
+            return 0;
+        }
+
+        var bounded = Math.Clamp(adjustment, -maximum, maximum);
+        if (bounded != adjustment)
+        {
+            _logger.LogWarning(
+                "HTTP reputation provider score adjustment {Adjustment} was limited to {Bounded}.",
+                adjustment,
+                bounded);
+        }
+
+        return bounded;
     }
 }

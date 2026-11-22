@@ -50,7 +50,10 @@ public sealed class ConfiguredRangeReputationProvider : IThreatReputationProvide
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var scoreAdjustment = matchingEntries.Sum(entry => entry.ScoreAdjustment);
+        var scoreAdjustment = (int)Math.Clamp(
+            matchingEntries.Sum(entry => (long)entry.ScoreAdjustment),
+            -ThreatScoreArithmetic.MaximumMagnitude,
+            ThreatScoreArithmetic.MaximumMagnitude);
         var summary = "Matched configured reputation range(s): " +
             string.Join(", ", matchingEntries.Select(entry => string.IsNullOrWhiteSpace(entry.Name) ? entry.Cidr : entry.Name.Trim()));
 
