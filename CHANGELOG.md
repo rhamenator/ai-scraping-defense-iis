@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Operator dashboard improvements (#235, #236, #237, #238): block and unblock now ask for confirmation naming the normalized address and its current status, and a reason is required to block (the silent `manual_block` default is gone); the decision detail has a "Was this decision wrong?" form that records feedback through `/defense/feedback` and lists the feedback already recorded for that decision; a Consensus card (role, term, leader, and a no-leader warning) appears when consensus is enabled; and the filtered decision table can be exported as CSV or JSON, with spreadsheet formulas neutralised in text cells.
+
 ### Fixed
 
 - The Kubernetes split example can now form its Raft cluster: the edge StatefulSet uses `podManagementPolicy: Parallel`. Its readiness probe waits for a Raft leader, which needs a quorum, so the default ordered start left pod 0 never Ready and pods 1 and 2 never created (found by running the example in a lab cluster). `podManagementPolicy` cannot be changed on an existing StatefulSet: delete it with `--cascade=orphan` and re-apply.
