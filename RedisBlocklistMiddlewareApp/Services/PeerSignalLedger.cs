@@ -24,12 +24,9 @@ public sealed class PeerSignalLedger
     private void Prune()
     {
         var now = DateTimeOffset.UtcNow;
-        foreach (var entry in _seen)
+        foreach (var signalId in _seen.Where(entry => entry.Value <= now).Select(entry => entry.Key))
         {
-            if (entry.Value <= now)
-            {
-                _seen.TryRemove(entry.Key, out _);
-            }
+            _seen.TryRemove(signalId, out _);
         }
     }
 }

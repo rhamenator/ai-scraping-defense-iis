@@ -329,10 +329,14 @@ public sealed class PeerSignalSecurityTests
 
     private sealed class StubHandler(string json) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
-                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
-            });
+                Content = new StringContent(json, System.Text.Encoding.UTF8)
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            return Task.FromResult(response);
+        }
     }
 }
