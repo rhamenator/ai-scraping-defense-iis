@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- The Docker build can no longer copy credentials into an image layer (#194). `scripts/configure_credentials.py` writes real credentials to `.env` in the repository root, `.dockerignore` did not exclude it, and the build stage ran `COPY . .`, so the secrets landed in the build stage's layers and any shared build cache. `.dockerignore` now excludes `.env`, `.env.*` and common key and certificate files, and the Dockerfile copies only `Directory.Build.props`, `global.json` and the four project folders the published apps need, restoring from the project files first. A test fails if a broad copy returns or a needed project is missing. **If images were built with a shared or registry-backed build cache after running the credential script, treat those credentials as exposed: rotate them and invalidate the cache.**
+
 ### Added
 
 - Operator dashboard improvements (#235, #236, #237, #238): block and unblock now ask for confirmation naming the normalized address and its current status, and a reason is required to block (the silent `manual_block` default is gone); the decision detail has a "Was this decision wrong?" form that records feedback through `/defense/feedback` and lists the feedback already recorded for that decision; a Consensus card (role, term, leader, and a no-leader warning) appears when consensus is enabled; and the filtered decision table can be exported as CSV or JSON, with spreadsheet formulas neutralised in text cells.

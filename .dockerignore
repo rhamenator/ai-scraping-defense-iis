@@ -15,3 +15,21 @@ secrets
 *.log
 docker-compose.override.yml
 
+# Credentials and local state must never enter a build context (#194). scripts/configure_credentials.py writes .env.
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.pfx
+**/*.p12
+**/*.jks
+**/*.keystore
+**/id_rsa*
+**/id_ed25519*
+.history
+.agent-channel
+.vs
+.idea
+TestResults
