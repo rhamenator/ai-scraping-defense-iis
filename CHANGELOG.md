@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Upgrade in two steps:** DotNext is now 6.12.2 (#196, supersedes the Dependabot PR). The Raft log is imported from the export that release 1.2 writes; a node with an old log and no export refuses to start and says how to proceed. Consensus membership is now static (`Consensus:Members`, recorded in `members.json`). See `docs/migrations.md`.
+- **Upgrade in two steps:** DotNext is now 6.12.2 (#196, supersedes the Dependabot PR). Run the new `tools/RaftLogExporter` against the stopped node's storage directory first; the Raft log is then imported from its export, and a node with an old log and no export refuses to start and says how to proceed. Consensus membership is now static (`Consensus:Members`, recorded in `members.json`). See `docs/migrations.md`.
 
 ### Added
 

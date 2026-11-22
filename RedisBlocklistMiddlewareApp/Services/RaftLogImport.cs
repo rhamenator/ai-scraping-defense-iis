@@ -7,7 +7,7 @@ using RedisBlocklistMiddlewareApp.Services.Migrations;
 namespace RedisBlocklistMiddlewareApp.Services;
 
 /// <summary>
-/// Imports the export written by release 1.2 (<c>export/raft-log-v1</c>) into a new DotNext 6 write-ahead log.
+/// Imports the export written by the RaftLogExporter tool (<c>export/raft-log-v1</c>) into a new DotNext 6 write-ahead log.
 /// </summary>
 /// <remarks>
 /// Order matters and is what makes an interruption harmless: the new log is built beside the real location, verified by
@@ -27,7 +27,7 @@ internal static class RaftLogImport
         {
             throw new StorageMigrationException(
                 $"{storagePath} holds a consensus log from DotNext 5 (the 'log' directory) but no export of it. This release cannot read that log. " +
-                "Start release 1.2 once against this directory and stop it normally; it writes the export (export/raft-log-v1). Then start this release. Nothing was changed. See docs/migrations.md.");
+                "Stop the node and run the RaftLogExporter tool (tools/RaftLogExporter, shipped with each release) against this directory; it writes the export (export/raft-log-v1) without modifying the log. Then start this release. Nothing was changed. See docs/migrations.md.");
         }
 
         var meta = JsonSerializer.Deserialize<ExportMeta>(await File.ReadAllTextAsync(metaPath, cancellationToken), Json)
@@ -41,7 +41,7 @@ internal static class RaftLogImport
         if (!string.Equals(actualHash, meta.EntriesSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new StorageMigrationException(
-                $"{entriesPath} does not match its recorded SHA-256, so the export is incomplete or damaged. Re-run release 1.2 and stop it normally to regenerate it. Nothing was changed.");
+                $"{entriesPath} does not match its recorded SHA-256, so the export is incomplete or damaged. Run the RaftLogExporter tool again to regenerate it. Nothing was changed.");
         }
 
         var building = Path.Join(storagePath, "wal.importing");
@@ -66,7 +66,7 @@ internal static class RaftLogImport
         var archive = Path.Join(storagePath, $"log.imported-{DateTime.UtcNow:yyyyMMddHHmmss}");
         Directory.Move(Path.Join(storagePath, RaftLogLayout.LegacyDirectoryName), archive);
         logger.LogInformation(
-            "Imported {Count} committed Raft log entries (term {Term}) from the release 1.2 export; the old log is kept at {Archive}.",
+            "Imported {Count} committed Raft log entries (term {Term}) from the RaftLogExporter export; the old log is kept at {Archive}.",
             imported,
             meta.Term,
             archive);

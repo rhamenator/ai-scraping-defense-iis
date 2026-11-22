@@ -83,7 +83,7 @@ public sealed class RaftStorageMigrationTests : IDisposable
         var error = await Assert.ThrowsAsync<StorageMigrationException>(() =>
             RaftLogLayout.PrepareAsync(_root, NullLogger.Instance, CancellationToken.None));
 
-        Assert.Contains("release 1.2", error.Message);
+        Assert.Contains("RaftLogExporter", error.Message);
         Assert.False(File.Exists(Path.Join(_root, RaftLogLayout.MarkerFileName)));
         Assert.Equal("old format", File.ReadAllText(Path.Join(_root, "log", "0")));
     }

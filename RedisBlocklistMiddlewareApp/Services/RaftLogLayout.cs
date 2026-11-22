@@ -8,7 +8,7 @@ namespace RedisBlocklistMiddlewareApp.Services;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item><c>log</c> (releases up to 1.2, DotNext 5.x): readable only by DotNext 5.x. Release 1.2 also writes an export of the
+/// <item><c>log</c> (releases up to 1.2, DotNext 5.x): readable only by DotNext 5.x. The RaftLogExporter tool (tools/RaftLogExporter, DotNext 5.26.2) writes an export of the
 /// committed entries (<c>export/raft-log-v1</c>); this release imports that export into a new write-ahead log and archives <c>log</c>.</item>
 /// <item><c>wal-1</c> (this release, DotNext 6): a <c>WriteAheadLog</c> in <c>wal</c> plus snapshots in <c>snapshots</c>. Marker file
 /// <c>layout.version</c> is written last, so a node interrupted during import simply imports again.</item>
