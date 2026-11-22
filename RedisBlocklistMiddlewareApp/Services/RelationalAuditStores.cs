@@ -584,16 +584,23 @@ public abstract class RelationalWebhookEventInbox : IWebhookEventInbox
         command.CommandText = _dialect.ClaimWebhookSql;
         AddParameter(command, "@leasedAtUtc", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
 
-        using var reader = command.ExecuteReader();
-        if (!reader.Read())
+        long id;
+        string payloadJson;
+        // The reader must be closed before the transaction commits: Npgsql refuses to commit while a command is still
+        // in progress, which made an empty inbox (every fresh start) crash the processing service.
+        using (var reader = command.ExecuteReader())
         {
-            transaction.Commit();
-            return null;
+            if (!reader.Read())
+            {
+                reader.Close();
+                transaction.Commit();
+                return null;
+            }
+
+            id = reader.GetInt64(0);
+            payloadJson = reader.GetString(1);
         }
 
-        var id = reader.GetInt64(0);
-        var payloadJson = reader.GetString(1);
-        reader.Close();
         transaction.Commit();
 
         var webhookEvent = JsonSerializer.Deserialize<IntakeWebhookEvent>(payloadJson)
