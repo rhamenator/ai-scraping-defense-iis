@@ -470,6 +470,11 @@ public sealed class ManagementEndpointTests
         Assert.Contains("/defense/feedback", html);
         Assert.Contains("decisionId: decision.id", html);
         Assert.Contains("Enter a reason for the feedback.", html);
+        // The 30-second refresh rebuilds the form, so the draft is kept and restored; and an empty match is only
+        // reported as "none" when the feedback page was not full.
+        Assert.Contains("feedbackDraft", html);
+        Assert.Contains("function restoreFeedbackDraft(", html);
+        Assert.Contains("older feedback for this decision may exist", html);
     }
 
     [Fact]

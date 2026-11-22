@@ -610,7 +610,9 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       authenticated: false,
       eventCount: 50,
       events: [],
-      selectedEventIndex: null
+      selectedEventIndex: null,
+      // The feedback form is rebuilt by every refresh; this keeps what the operator was typing.
+      feedbackDraft: { decisionId: null, action: "observed", reason: "", focus: null, caret: 0 }
     };
 
     const loginForm = document.getElementById("loginForm");
@@ -649,6 +651,27 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         submitFeedback();
       }
     });
+    for (const type of ["input", "change", "focusin"]) {
+      eventDetail.addEventListener(type, event => {
+        const target = event.target;
+        if (!(target instanceof Element) || (target.id !== "feedbackAction" && target.id !== "feedbackReason")) {
+          return;
+        }
+
+        const selected = state.selectedEventIndex === null ? null : state.events[state.selectedEventIndex];
+        if (!selected) {
+          return;
+        }
+
+        state.feedbackDraft = {
+          decisionId: selected.id,
+          action: document.getElementById("feedbackAction").value,
+          reason: document.getElementById("feedbackReason").value,
+          focus: target.id,
+          caret: typeof target.selectionStart === "number" ? target.selectionStart : 0
+        };
+      });
+    }
     eventSearchInput.addEventListener("input", renderEvents);
     eventActionFilter.addEventListener("change", renderEvents);
     eventsTableBody.addEventListener("click", event => {
@@ -862,7 +885,38 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
           <button class="secondary" id="feedbackSubmit" type="button">Record feedback</button>
           <div id="feedbackList" class="inline-note" aria-live="polite">Loading feedback…</div>
         </div>`;
+      restoreFeedbackDraft(event.id);
       loadFeedback(event.id);
+    }
+
+    function restoreFeedbackDraft(decisionId) {
+      const draft = state.feedbackDraft;
+      const action = document.getElementById("feedbackAction");
+      const reason = document.getElementById("feedbackReason");
+      if (draft.decisionId !== decisionId || !action || !reason) {
+        return;
+      }
+
+      action.value = draft.action;
+      reason.value = draft.reason;
+      const focused = draft.focus ? document.getElementById(draft.focus) : null;
+      if (focused) {
+        focused.focus();
+        if (typeof focused.setSelectionRange === "function" && focused.id === "feedbackReason") {
+          focused.setSelectionRange(draft.caret, draft.caret);
+        }
+      }
+    }
+
+    const feedbackPageSize = 200;
+
+    // The feedback endpoint returns the latest entries across all decisions, so an empty match is only conclusive
+    // when the page was not full.
+    function feedbackForDecision(all, decisionId) {
+      return {
+        items: all.filter(item => item.decisionId === decisionId),
+        truncated: all.length >= feedbackPageSize
+      };
     }
 
     async function loadFeedback(decisionId) {
@@ -872,13 +926,19 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       }
 
       try {
-        const all = await fetchJson("/defense/feedback?count=200");
-        const mine = all.filter(item => item.decisionId === decisionId);
-        list.innerHTML = mine.length
-          ? "<ul>" + mine.map(item =>
+        const all = await fetchJson("/defense/feedback?count=" + feedbackPageSize);
+        const { items, truncated } = feedbackForDecision(all, decisionId);
+        const note = truncated
+          ? "Only the latest " + feedbackPageSize + " feedback entries were searched; older entries for this decision may not be shown."
+          : "";
+        list.innerHTML = items.length
+          ? "<ul>" + items.map(item =>
               "<li>" + escapeHtml(formatDate(item.createdAtUtc)) + " — " + escapeHtml(item.originalAction) + " → <strong>" +
-              escapeHtml(item.updatedAction) + "</strong>: " + escapeHtml(item.reason) + " (" + escapeHtml(item.actor) + ")</li>").join("") + "</ul>"
-          : "No feedback recorded for this decision.";
+              escapeHtml(item.updatedAction) + "</strong>: " + escapeHtml(item.reason) + " (" + escapeHtml(item.actor) + ")</li>").join("") +
+              "</ul>" + (note ? "<p>" + escapeHtml(note) + "</p>" : "")
+          : escapeHtml(truncated
+              ? "No feedback found in the latest " + feedbackPageSize + " entries; older feedback for this decision may exist."
+              : "No feedback recorded for this decision.");
       } catch (error) {
         list.textContent = "Feedback could not be loaded: " + (error.message || "request failed");
       }
@@ -921,6 +981,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         }
 
         document.getElementById("feedbackReason").value = "";
+        state.feedbackDraft = { decisionId: decision.id, action: updatedAction, reason: "", focus: null, caret: 0 };
         await loadFeedback(decision.id);
         if (updatedAction === "blocked") {
           await refreshDashboard();
