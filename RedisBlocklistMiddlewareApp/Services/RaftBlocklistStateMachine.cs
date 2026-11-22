@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using DotNext.Buffers;
 using DotNext.IO;
@@ -9,10 +8,13 @@ namespace RedisBlocklistMiddlewareApp.Services;
 internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
 {
     private const int MaximumCommandBytes = 64 * 1024;
+
+    // Recent command identifiers only (#196); see BoundedCommandIdSet.
+    internal const int MaximumTrackedCommands = 65_536;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly RedisBlocklistService _blocklist;
     private readonly ILogger<RaftBlocklistStateMachine> _logger;
-    private readonly ConcurrentDictionary<Guid, byte> _appliedCommands = new();
+    private readonly BoundedCommandIdSet _appliedCommands = new(MaximumTrackedCommands);
 
     public RaftBlocklistStateMachine(
         string path,
@@ -56,7 +58,7 @@ internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
             ?? throw new InvalidDataException($"Consensus log entry {entry.Index} did not contain a command.");
         Validate(command, entry.Index);
 
-        if (!_appliedCommands.TryAdd(command.CommandId, 0))
+        if (!_appliedCommands.TryAdd(command.CommandId))
         {
             _logger.LogDebug(
                 "Skipped duplicate consensus command {CommandId} at log index {LogIndex}.",
@@ -96,7 +98,7 @@ internal sealed class RaftBlocklistStateMachine : DiskBasedStateMachine
         }
         catch
         {
-            _appliedCommands.TryRemove(command.CommandId, out _);
+            _appliedCommands.Remove(command.CommandId);
             throw;
         }
     }
