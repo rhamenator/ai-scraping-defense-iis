@@ -116,6 +116,9 @@ metadata:
   namespace: ai-scraping-defense
 spec:
   serviceName: edge-gateway-headless
+  # The edge readiness probe stays unhealthy until the Raft cluster has a leader, and a leader needs a quorum. With the
+  # default OrderedReady policy pod 0 can never become Ready alone, so pods 1 and 2 would never be created.
+  podManagementPolicy: Parallel
   replicas: 3
   selector:
     matchLabels:
