@@ -5,6 +5,7 @@ using System.Text.Json;
 using DotNext.Net;
 using DotNext.Net.Cluster.Consensus.Raft;
 using DotNext.Net.Cluster.Consensus.Raft.Membership;
+using DotNext.Net.Cluster.Consensus.Raft.StateMachine;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 
@@ -72,40 +73,16 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
 
             Directory.CreateDirectory(_options.StoragePath);
             var membershipPath = Path.Combine(_options.StoragePath, "membership");
-            var logPath = Path.Combine(_options.StoragePath, "log");
             Directory.CreateDirectory(membershipPath);
-            Directory.CreateDirectory(logPath);
+            var (logPath, snapshotPath) = await RaftLogLayout.PrepareAsync(_options.StoragePath, _logger, cancellationToken);
 
             var configuredMembers = _options.Members
                 .Select(member => ParseEndPoint(member.RaftEndpoint))
                 .ToArray();
             _localEndPoint = CreateEndPoint(_options.AdvertisedHost, _options.Port);
 
-            await using (var bootstrapStorage = new PersistentEndPointConfigurationStorage(membershipPath))
-            {
-                IClusterConfigurationStorage<EndPoint> bootstrapConfiguration = bootstrapStorage;
-                await bootstrapConfiguration.LoadConfigurationAsync(cancellationToken);
-                if (bootstrapConfiguration.ActiveConfiguration.Count == 0)
-                {
-                    foreach (var member in configuredMembers)
-                    {
-                        if (!await bootstrapConfiguration.AddMemberAsync(member, cancellationToken))
-                        {
-                            throw new InvalidOperationException(
-                                $"Raft member {member} could not be added while bootstrapping persistent membership.");
-                        }
-                        await bootstrapConfiguration.ApplyAsync(cancellationToken);
-                    }
-                }
-                else if (!HaveSameMembers(bootstrapConfiguration.ActiveConfiguration, configuredMembers))
-                {
-                    throw new InvalidOperationException(
-                        "The persisted Raft membership differs from DefenseEngine:Consensus:Members. " +
-                        "Restore the configured membership or use the supported membership-change workflow; do not replace the WAL directory.");
-                }
-            }
-
-            var storage = new PersistentEndPointConfigurationStorage(membershipPath);
+            await ConsensusMembership.EnsureMatchesAsync(membershipPath, configuredMembers, cancellationToken);
+            var storage = ConsensusMembership.CreateStorage(configuredMembers);
 
             var listenAddress = IPAddress.Parse(_options.ListenAddress);
             var configuration = new RaftCluster.TcpConfiguration(
@@ -127,12 +104,17 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             };
 
             var stateMachine = new RaftBlocklistStateMachine(
-                logPath,
+                snapshotPath,
                 _blocklist,
-                _loggerFactory.CreateLogger<RaftBlocklistStateMachine>());
+                _loggerFactory.CreateLogger<RaftBlocklistStateMachine>(),
+                _options.SnapshotEveryCommands);
+            // The most recent snapshot must be restored before the log is opened, so replay starts after it.
+            await stateMachine.RestoreAsync(cancellationToken);
+            var writeAheadLog = new WriteAheadLog(new WriteAheadLog.Options { Location = logPath }, stateMachine);
+            await writeAheadLog.InitializeAsync(cancellationToken);
             var cluster = new RaftCluster(configuration)
             {
-                AuditTrail = stateMachine
+                AuditTrail = writeAheadLog
             };
 
             try
@@ -250,7 +232,17 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
         }
 
         var payload = JsonSerializer.SerializeToUtf8Bytes(command, SerializerOptions);
-        return await cluster.ReplicateAsync(payload, command.CommandId, cancellationToken);
+        try
+        {
+            // In DotNext 6 this completes when the entry is committed and throws when it cannot be.
+            await cluster.ReplicateAsync(payload, command.CommandId, cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(exception, "Raft replication of command {CommandId} did not commit.", command.CommandId);
+            return false;
+        }
     }
 
     private async Task<ConsensusMutationResponse> ForwardToLeaderAsync(
@@ -259,7 +251,7 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
         CancellationToken cancellationToken)
     {
         var leaderMember = _options.Members.FirstOrDefault(member =>
-            EndPointFormatter.UriEndPointComparer.Equals(
+            ConsensusMembership.Comparer.Equals(
                 ParseEndPoint(member.RaftEndpoint),
                 leaderEndPoint));
         if (leaderMember is null)
@@ -288,12 +280,6 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             SerializerOptions,
             cancellationToken) ?? new ConsensusMutationResponse(false, "empty_leader_response");
     }
-
-    private static bool HaveSameMembers(
-        IReadOnlySet<EndPoint> persisted,
-        IReadOnlyCollection<EndPoint> configured) =>
-        persisted.Count == configured.Count && configured.All(candidate =>
-            persisted.Any(existing => EndPointFormatter.UriEndPointComparer.Equals(existing, candidate)));
 
     private static bool IsLocalLeader(RaftCluster cluster) =>
         !cluster.LeadershipToken.IsCancellationRequested;
