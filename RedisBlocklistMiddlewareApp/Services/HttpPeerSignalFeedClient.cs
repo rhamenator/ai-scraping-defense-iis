@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -21,6 +22,9 @@ public sealed class HttpPeerSignalFeedClient : IPeerSignalFeedClient
         _logger = logger;
     }
 
+    /// <summary>Largest peer feed accepted: 2 MiB. The record cap in the runner applies only after parsing, so the byte bound comes first (#200).</summary>
+    internal const long MaxResponseBytes = 2 * 1024 * 1024;
+
     public async Task<PeerDefenseSignalEnvelope> FetchAsync(
         PeerSyncPeerOptions peer,
         CancellationToken cancellationToken)
@@ -35,10 +39,10 @@ public sealed class HttpPeerSignalFeedClient : IPeerSignalFeedClient
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.RequestTimeoutSeconds)));
 
         var client = _httpClientFactory.CreateClient(nameof(HttpPeerSignalFeedClient));
-        using var response = await client.SendAsync(request, timeoutCts.Token);
+        using var response = await client.SendWithHeadersOnlyAsync(request, timeoutCts.Token);
         response.EnsureSuccessStatusCode();
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
+        await using var responseStream = await response.Content.ReadBoundedAsync(MaxResponseBytes, timeoutCts.Token);
         using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: timeoutCts.Token);
         var root = document.RootElement;
 

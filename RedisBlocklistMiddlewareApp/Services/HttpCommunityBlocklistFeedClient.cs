@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,9 @@ public sealed class HttpCommunityBlocklistFeedClient : ICommunityBlocklistFeedCl
         _logger = logger;
     }
 
+    /// <summary>Largest feed accepted: 5 MiB, enough for a large public blocklist, not for an unbounded stream (#200).</summary>
+    internal const long MaxResponseBytes = 5 * 1024 * 1024;
+
     public async Task<IReadOnlyList<string>> FetchAsync(
         CommunityBlocklistSourceOptions source,
         CancellationToken cancellationToken)
@@ -35,17 +39,17 @@ public sealed class HttpCommunityBlocklistFeedClient : ICommunityBlocklistFeedCl
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.RequestTimeoutSeconds)));
 
         var client = _httpClientFactory.CreateClient(nameof(HttpCommunityBlocklistFeedClient));
-        using var response = await client.SendAsync(request, timeoutCts.Token);
+        using var response = await client.SendWithHeadersOnlyAsync(request, timeoutCts.Token);
         response.EnsureSuccessStatusCode();
 
         var contentType = response.Content.Headers.ContentType;
         if (IsPlainText(contentType))
         {
-            var text = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            var text = await response.Content.ReadBoundedStringAsync(MaxResponseBytes, timeoutCts.Token);
             return ReadPlainTextIps(text);
         }
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
+        await using var responseStream = await response.Content.ReadBoundedAsync(MaxResponseBytes, timeoutCts.Token);
         using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: timeoutCts.Token);
         var root = document.RootElement;
 

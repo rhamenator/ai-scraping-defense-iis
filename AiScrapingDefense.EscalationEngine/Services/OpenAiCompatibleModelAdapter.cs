@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,9 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class OpenAiCompatibleModelAdapter : IThreatModelAdapter
 {
+    /// <summary>Largest model response accepted; a classification verdict is a few kilobytes (#200).</summary>
+    public const long MaxResponseBytes = 4 * 1024 * 1024;
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly OpenAiCompatibleModelAdapterOptions _options;
     private readonly ILogger<OpenAiCompatibleModelAdapter> _logger;
@@ -88,7 +92,7 @@ public sealed class OpenAiCompatibleModelAdapter : IThreatModelAdapter
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds)));
 
             var client = _httpClientFactory.CreateClient(Name);
-            using var response = await client.SendAsync(request, timeoutCts.Token);
+            using var response = await client.SendWithHeadersOnlyAsync(request, timeoutCts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
@@ -97,7 +101,7 @@ public sealed class OpenAiCompatibleModelAdapter : IThreatModelAdapter
                 return null;
             }
 
-            await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
+            await using var responseStream = await response.Content.ReadBoundedAsync(MaxResponseBytes, timeoutCts.Token);
             using var envelope = await JsonDocument.ParseAsync(responseStream, cancellationToken: timeoutCts.Token);
 
             if (!TryGetMessageContent(envelope.RootElement, out var content))

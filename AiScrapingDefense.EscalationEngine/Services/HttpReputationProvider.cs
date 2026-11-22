@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,9 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class HttpReputationProvider : IThreatReputationProvider
 {
+    /// <summary>Largest reputation answer accepted; the expected JSON is a few hundred bytes (#200).</summary>
+    public const long MaxResponseBytes = 256 * 1024;
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HttpReputationProviderOptions _options;
     private readonly ILogger<HttpReputationProvider> _logger;
@@ -57,7 +61,7 @@ public sealed class HttpReputationProvider : IThreatReputationProvider
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds)));
 
             var client = _httpClientFactory.CreateClient(Name);
-            using var response = await client.SendAsync(request, timeoutCts.Token);
+            using var response = await client.SendWithHeadersOnlyAsync(request, timeoutCts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
@@ -66,7 +70,7 @@ public sealed class HttpReputationProvider : IThreatReputationProvider
                 return null;
             }
 
-            await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
+            await using var responseStream = await response.Content.ReadBoundedAsync(MaxResponseBytes, timeoutCts.Token);
             using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: timeoutCts.Token);
             var root = document.RootElement;
 
