@@ -74,13 +74,38 @@ public static class BoundedHttpResponse
         return buffer;
     }
 
-    /// <summary>The whole body decoded as UTF-8 text, or <see cref="ResponseTooLargeException"/>.</summary>
+    /// <summary>
+    /// The whole body decoded as text, or <see cref="ResponseTooLargeException"/>. Decoding follows what
+    /// <c>ReadAsStringAsync</c> did: a byte-order mark wins, then the declared charset, then UTF-8; the BOM is not
+    /// part of the text.
+    /// </summary>
     public static async Task<string> ReadBoundedStringAsync(
         this HttpContent content,
         long maxBytes,
         CancellationToken cancellationToken)
     {
         await using var buffer = await content.ReadBoundedAsync(maxBytes, cancellationToken);
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        using var reader = new StreamReader(
+            buffer,
+            ResolveEncoding(content.Headers.ContentType?.CharSet),
+            detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    private static Encoding ResolveEncoding(string? charset)
+    {
+        if (string.IsNullOrWhiteSpace(charset))
+        {
+            return Encoding.UTF8;
+        }
+
+        try
+        {
+            return Encoding.GetEncoding(charset.Trim('"', '\'', ' '));
+        }
+        catch (ArgumentException)
+        {
+            return Encoding.UTF8;
+        }
     }
 }

@@ -96,6 +96,32 @@ public sealed class BoundedHttpResponseTests
     }
 
     [Fact]
+    public async Task ReadBoundedStringAsync_HonoursTheDeclaredCharset()
+    {
+        var utf16 = new ByteArrayContent(Encoding.Unicode.GetBytes("198.51.100.1\n198.51.100.2\n"));
+        utf16.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") { CharSet = "utf-16" };
+        var latin1 = new ByteArrayContent(Encoding.Latin1.GetBytes("caf\u00e9"));
+        latin1.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") { CharSet = "iso-8859-1" };
+
+        Assert.Equal("198.51.100.1\n198.51.100.2\n", await utf16.ReadBoundedStringAsync(1024, TestContext.Current.CancellationToken));
+        Assert.Equal("caf\u00e9", await latin1.ReadBoundedStringAsync(1024, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ReadBoundedStringAsync_StripsAByteOrderMarkAndFallsBackToUtf8()
+    {
+        var withBom = new ByteArrayContent([.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes("198.51.100.3\n")]);
+        var unknownCharset = new ByteArrayContent(Encoding.UTF8.GetBytes("h\u00e9llo"));
+        unknownCharset.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") { CharSet = "not-a-real-charset" };
+
+        var bomText = await withBom.ReadBoundedStringAsync(1024, TestContext.Current.CancellationToken);
+
+        Assert.Equal("198.51.100.3\n", bomText);
+        Assert.DoesNotContain('\uFEFF', bomText);
+        Assert.Equal("h\u00e9llo", await unknownCharset.ReadBoundedStringAsync(1024, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task SendWithHeadersOnlyAsync_ReturnsBeforeTheBodyHasBeenRead()
     {
         var source = new TrackingStream(endless: true);
