@@ -242,6 +242,16 @@ public sealed class ManagementOptions
     public string ApiKey { get; set; } = string.Empty;
 
     public int DashboardSessionHours { get; set; } = 8;
+
+    /// <summary>
+    /// When true, the management API and dashboard are served only over HTTPS: in Production the application refuses to
+    /// start unless HTTPS is provided (an https:// listener, or <c>Networking:ClientIpResolutionMode=TrustedProxy</c> with
+    /// the proxy listed in <c>TrustedProxies</c> so its <c>X-Forwarded-Proto</c> is honoured), and at runtime a management request that did not arrive over
+    /// HTTPS is refused with 403 (#186). On by default: management credentials and session cookies must not travel over
+    /// plain HTTP. A deployment that really is HTTP-only (local development, a private test network) sets it to false
+    /// explicitly, which in Production logs a warning at every start.
+    /// </summary>
+    public bool RequireSecureTransport { get; set; } = true;
 }
 
 public sealed class IntakeOptions

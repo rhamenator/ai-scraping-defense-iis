@@ -29,6 +29,10 @@ services:
       MCP_SERVER_PRIMARY_AUTH_TOKEN: ${MCP_SERVER_PRIMARY_AUTH_TOKEN:-}
       MCP_SERVER_PRIMARY_TIMEOUT: ${MCP_SERVER_PRIMARY_TIMEOUT:-10}
       DefenseEngine__Management__ApiKey: ${ASD_MANAGEMENT_API_KEY:?Set ASD_MANAGEMENT_API_KEY to a random value}
+      # The management API requires HTTPS by default (#186). This compose file serves plain HTTP on one host, so the quick
+      # start turns it off explicitly. Put TLS in front, then set ASD_REQUIRE_SECURE_MANAGEMENT=true and configure
+      # DefenseEngine__Networking__ClientIpResolutionMode=TrustedProxy with your proxy in TrustedProxies.
+      DefenseEngine__Management__RequireSecureTransport: ${ASD_REQUIRE_SECURE_MANAGEMENT:-false}
       DefenseEngine__Intake__ApiKey: ${ASD_INTAKE_API_KEY:?Set ASD_INTAKE_API_KEY to a random value}
       DefenseEngine__Audit__DatabasePath: /app/data/defense-events.db
       DefenseEngine__Tarpit__ResponseDelayMilliseconds: "0"
