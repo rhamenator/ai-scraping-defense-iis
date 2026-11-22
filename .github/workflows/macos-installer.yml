@@ -39,9 +39,11 @@ jobs:
         run: |
           set -euo pipefail
           prerelease=false
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-            if [[ "${version}" == *-* ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            # Exact SemVer grammar only; the tag is data, never shell source.
+            version="$(python3 scripts/validate_release_version.py "${GITHUB_REF_NAME}")"
+            core="${version%%+*}"
+            if [[ "${core}" == *-* ]]; then
               prerelease=true
             fi
           else
@@ -55,7 +57,8 @@ jobs:
         shell: bash
         env:
           RUNTIME: ${{ matrix.runtime }}
-        run: ./installer/macos/build-macos-packages.sh "${{ steps.version.outputs.version }}"
+          INSTALLER_VERSION: ${{ steps.version.outputs.version }}
+        run: ./installer/macos/build-macos-packages.sh "${INSTALLER_VERSION}"
 
       - name: Install and smoke test package
         shell: bash
@@ -102,6 +105,7 @@ jobs:
           exit 1
 
       - name: Import Apple Installer Certificate
+        if: github.ref_type == 'tag'
         shell: bash
         env:
           MACOS_INSTALLER_CERT_BASE64: ${{ secrets.MACOS_INSTALLER_CERT_BASE64 }}
@@ -127,6 +131,7 @@ jobs:
           echo "MACOS_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Sign macOS Packages
+        if: github.ref_type == 'tag'
         shell: bash
         env:
           MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}

@@ -23,6 +23,9 @@ jobs:
         with:
           dotnet-version: 10.0.402
 
+      - name: Release version grammar tests
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
       - name: Restore
         run: dotnet restore anti-scraping-defense-iis.sln
 
@@ -32,5 +35,16 @@ jobs:
       - name: Test
         run: dotnet test anti-scraping-defense-iis.sln --no-build
 
+      - name: Observability stack refuses to start without a Grafana admin password
+        run: |
+          if docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /dev/null 2>&1; then
+            echo "Grafana must not start without GRAFANA_ADMIN_PASSWORD." >&2
+            exit 1
+          fi
+
       - name: Validate Observability Compose Stack
-        run: docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml
+        env:
+          GRAFANA_ADMIN_PASSWORD: config-validation-only
+        run: |
+          docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml
+          grep -q 'host_ip: 127.0.0.1' /tmp/compose-observability.yml
