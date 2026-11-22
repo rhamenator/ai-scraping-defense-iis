@@ -27,11 +27,12 @@ services:
   grafana:
     image: grafana/grafana:11.2.2
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD to a strong, unique value before starting Grafana}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      - "3000:3000"
+      # Local access only. Put authenticated TLS and network controls in front of any remote listener.
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
