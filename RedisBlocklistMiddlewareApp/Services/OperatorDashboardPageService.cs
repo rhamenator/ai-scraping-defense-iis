@@ -356,6 +356,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       word-break: break-word;
     }
 
+    dialog { border: 1px solid rgba(0, 0, 0, 0.3); border-radius: 14px; padding: 20px 24px; max-width: 30rem; }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    .feedback-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, 0.15); display: grid; gap: 8px; }
+    .feedback-box ul { margin: 0; padding-left: 1.1rem; }
     .banner {
       display: none;
       padding: 14px 16px;
@@ -506,6 +510,8 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             </select>
           </label>
           <span id="eventMatchCount" class="status-pill">0 matches</span>
+          <button id="exportCsvButton" class="secondary" type="button">Export CSV</button>
+          <button id="exportJsonButton" class="secondary" type="button">Export JSON</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -551,8 +557,8 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <input id="ipInput" type="text" inputmode="text" placeholder="203.0.113.10">
           </label>
           <label>
-            Reason
-            <input id="reasonInput" type="text" placeholder="manual_block">
+            Reason (required to block)
+            <input id="reasonInput" type="text" placeholder="Why this address is being blocked">
           </label>
           <div class="action-row">
             <button class="primary" id="lookupButton" type="button">Check status</button>
@@ -578,17 +584,35 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <h3>Peer sync</h3>
             <p id="peerStatusCopy">Waiting for session.</p>
           </section>
+          <section class="status-card hidden" id="consensusCard">
+            <h3>Consensus</h3>
+            <p id="consensusStatusCopy">Waiting for session.</p>
+            <p id="consensusWarning" class="inline-note" role="status"></p>
+          </section>
         </div>
       </aside>
     </section>
   </main>
+
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle">
+    <form method="dialog">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmMessage" class="mono"></p>
+      <div class="action-row">
+        <button class="ghost" id="confirmCancel" value="cancel" type="submit">Cancel</button>
+        <button class="primary" id="confirmOk" value="ok" type="submit">Confirm</button>
+      </div>
+    </form>
+  </dialog>
 
   <script>
     const state = {
       authenticated: false,
       eventCount: 50,
       events: [],
-      selectedEventIndex: null
+      selectedEventIndex: null,
+      // The feedback form is rebuilt by every refresh; this keeps what the operator was typing.
+      feedbackDraft: { decisionId: null, action: "observed", reason: "", focus: null, caret: 0 }
     };
 
     const loginForm = document.getElementById("loginForm");
@@ -620,6 +644,34 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       refreshEvents();
     });
     logoutButton.addEventListener("click", logout);
+    document.getElementById("exportCsvButton").addEventListener("click", () => exportEvents("csv"));
+    document.getElementById("exportJsonButton").addEventListener("click", () => exportEvents("json"));
+    eventDetail.addEventListener("click", event => {
+      if (event.target instanceof Element && event.target.id === "feedbackSubmit") {
+        submitFeedback();
+      }
+    });
+    for (const type of ["input", "change", "focusin"]) {
+      eventDetail.addEventListener(type, event => {
+        const target = event.target;
+        if (!(target instanceof Element) || (target.id !== "feedbackAction" && target.id !== "feedbackReason")) {
+          return;
+        }
+
+        const selected = state.selectedEventIndex === null ? null : state.events[state.selectedEventIndex];
+        if (!selected) {
+          return;
+        }
+
+        state.feedbackDraft = {
+          decisionId: selected.id,
+          action: document.getElementById("feedbackAction").value,
+          reason: document.getElementById("feedbackReason").value,
+          focus: target.id,
+          caret: typeof target.selectionStart === "number" ? target.selectionStart : 0
+        };
+      });
+    }
     eventSearchInput.addEventListener("input", renderEvents);
     eventActionFilter.addEventListener("change", renderEvents);
     eventsTableBody.addEventListener("click", event => {
@@ -725,10 +777,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         : state.events[state.selectedEventIndex]);
     }
 
-    function renderEvents() {
+    function filteredEvents() {
       const query = eventSearchInput.value.trim().toLowerCase();
       const action = eventActionFilter.value;
-      const matches = state.events
+      return state.events
         .map((event, index) => ({ event, index }))
         .filter(({ event }) => {
           if (action !== "all" && String(event.action).toLowerCase() !== action) {
@@ -748,6 +800,11 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
           ].filter(Boolean).join(" ").toLowerCase();
           return searchable.includes(query);
         });
+
+    }
+
+    function renderEvents() {
+      const matches = filteredEvents();
 
       eventMatchCount.textContent = `${number(matches.length)} match${matches.length === 1 ? "" : "es"}`;
       if (!state.events.length) {
@@ -810,7 +867,209 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         <p><strong>Signals</strong><br>${(event.signals || []).map(signal => '<span class="chip">' + escapeHtml(signal) + '</span>').join("") || '<span class="empty">none</span>'}</p>
         <p><strong>Routing</strong><br><span class="mono">${routing ? escapeHtml(routing.primaryRoute + ' → ' + routing.effectiveRoute) : "not recorded"}</span></p>
         <p><strong>Containment</strong><br><span class="mono">${containment ? escapeHtml(containment.action + ' / ' + containment.reason + ' / ' + (containment.contributor || 'unknown')) : "not recorded"}</span></p>
-        <p><strong>Adapter evidence</strong><br>${adapters.map(verdict => '<span class="chip">' + escapeHtml(verdict.adapter + ': ' + verdict.classification) + '</span>').join("") || '<span class="empty">none</span>'}</p>`;
+        <p><strong>Adapter evidence</strong><br>${adapters.map(verdict => '<span class="chip">' + escapeHtml(verdict.adapter + ': ' + verdict.classification) + '</span>').join("") || '<span class="empty">none</span>'}</p>
+        <div class="feedback-box">
+          <h4>Was this decision wrong?</h4>
+          <label>Correct action
+            <select id="feedbackAction">
+              <option value="observed">Observed</option>
+              <option value="challenged">Challenged</option>
+              <option value="tarpitted">Tarpitted</option>
+              <option value="throttled">Throttled</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </label>
+          <label>Reason
+            <input id="feedbackReason" type="text" maxlength="500" placeholder="Why the correct action is different">
+          </label>
+          <button class="secondary" id="feedbackSubmit" type="button">Record feedback</button>
+          <div id="feedbackList" class="inline-note" aria-live="polite">Loading feedback…</div>
+        </div>`;
+      restoreFeedbackDraft(event.id);
+      loadFeedback(event.id);
+    }
+
+    function restoreFeedbackDraft(decisionId) {
+      const draft = state.feedbackDraft;
+      const action = document.getElementById("feedbackAction");
+      const reason = document.getElementById("feedbackReason");
+      if (draft.decisionId !== decisionId || !action || !reason) {
+        return;
+      }
+
+      action.value = draft.action;
+      reason.value = draft.reason;
+      const focused = draft.focus ? document.getElementById(draft.focus) : null;
+      if (focused) {
+        focused.focus();
+        if (typeof focused.setSelectionRange === "function" && focused.id === "feedbackReason") {
+          focused.setSelectionRange(draft.caret, draft.caret);
+        }
+      }
+    }
+
+    const feedbackPageSize = 200;
+
+    // The feedback endpoint returns the latest entries across all decisions, so an empty match is only conclusive
+    // when the page was not full.
+    function feedbackForDecision(all, decisionId) {
+      return {
+        items: all.filter(item => item.decisionId === decisionId),
+        truncated: all.length >= feedbackPageSize
+      };
+    }
+
+    async function loadFeedback(decisionId) {
+      const list = document.getElementById("feedbackList");
+      if (!list || decisionId === undefined || decisionId === null) {
+        return;
+      }
+
+      try {
+        const all = await fetchJson("/defense/feedback?count=" + feedbackPageSize);
+        const { items, truncated } = feedbackForDecision(all, decisionId);
+        const note = truncated
+          ? "Only the latest " + feedbackPageSize + " feedback entries were searched; older entries for this decision may not be shown."
+          : "";
+        list.innerHTML = items.length
+          ? "<ul>" + items.map(item =>
+              "<li>" + escapeHtml(formatDate(item.createdAtUtc)) + " — " + escapeHtml(item.originalAction) + " → <strong>" +
+              escapeHtml(item.updatedAction) + "</strong>: " + escapeHtml(item.reason) + " (" + escapeHtml(item.actor) + ")</li>").join("") +
+              "</ul>" + (note ? "<p>" + escapeHtml(note) + "</p>" : "")
+          : escapeHtml(truncated
+              ? "No feedback found in the latest " + feedbackPageSize + " entries; older feedback for this decision may exist."
+              : "No feedback recorded for this decision.");
+      } catch (error) {
+        list.textContent = "Feedback could not be loaded: " + (error.message || "request failed");
+      }
+    }
+
+    async function submitFeedback() {
+      clearError();
+      const decision = state.selectedEventIndex === null ? null : state.events[state.selectedEventIndex];
+      if (!decision) {
+        showError("Select a decision first.");
+        return;
+      }
+
+      const updatedAction = document.getElementById("feedbackAction").value;
+      const reason = document.getElementById("feedbackReason").value.trim();
+      if (!reason) {
+        showError("Enter a reason for the feedback.");
+        return;
+      }
+
+      if (updatedAction === "blocked") {
+        const proceed = await confirmAction(
+          "Record feedback and block?",
+          "Recording the correct action as blocked also blocks " + decision.ipAddress + ". Reason: " + reason);
+        if (!proceed) {
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch("/defense/feedback", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decisionId: decision.id, updatedAction, reason })
+        });
+        const payload = await parseJson(response);
+        if (!response.ok) {
+          throw new Error(payload.error || "The feedback could not be recorded.");
+        }
+
+        document.getElementById("feedbackReason").value = "";
+        state.feedbackDraft = { decisionId: decision.id, action: updatedAction, reason: "", focus: null, caret: 0 };
+        await loadFeedback(decision.id);
+        if (updatedAction === "blocked") {
+          await refreshDashboard();
+        }
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function confirmAction(title, message) {
+      const dialog = document.getElementById("confirmDialog");
+      if (!dialog || typeof dialog.showModal !== "function") {
+        return Promise.resolve(window.confirm(message));
+      }
+
+      document.getElementById("confirmTitle").textContent = title;
+      document.getElementById("confirmMessage").textContent = message;
+      return new Promise(resolve => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue === "ok"), { once: true });
+        dialog.returnValue = "cancel";
+        dialog.showModal();
+      });
+    }
+
+    async function refreshConsensus() {
+      const card = document.getElementById("consensusCard");
+      try {
+        const response = await fetch("/defense/consensus/status", { credentials: "same-origin" });
+        const status = response.ok ? await parseJson(response) : null;
+        if (!status || !status.enabled) {
+          card.classList.add("hidden");
+          return;
+        }
+
+        card.classList.remove("hidden");
+        document.getElementById("consensusStatusCopy").textContent =
+          (status.isLeader ? "Leader" : "Follower") + " · term " + number(status.term) +
+          " · leader " + (status.leaderEndPoint || "none");
+        document.getElementById("consensusWarning").textContent = !status.started
+          ? "This node's consensus service has not started."
+          : !status.leaderEndPoint
+            ? "No leader is elected. Blocklist changes are refused and /health reports degraded until a quorum elects one."
+            : "";
+      } catch {
+        card.classList.add("hidden");
+      }
+    }
+
+    const csvColumns = ["observedAtUtc", "action", "ipAddress", "path", "score", "frequency", "summary", "signals"];
+
+    function toCsvCell(value) {
+      let text = Array.isArray(value) ? value.join("; ") : String(value ?? "");
+      // Neutralise spreadsheet formulas in text cells; numbers are written as they are.
+      if (typeof value !== "number" && /^[=+\-@\t\r]/.test(text)) {
+        text = "'" + text;
+      }
+
+      return /[",\r\n]/.test(text) ? '"' + text.replaceAll('"', '""') + '"' : text;
+    }
+
+    function toCsv(events) {
+      const lines = [csvColumns.join(",")];
+      for (const event of events) {
+        lines.push(csvColumns.map(column => toCsvCell(event[column])).join(","));
+      }
+
+      return lines.join("\r\n") + "\r\n";
+    }
+
+    function exportEvents(format) {
+      const events = filteredEvents().map(match => match.event);
+      if (!events.length) {
+        showError("There are no decisions to export with the current search and filter.");
+        return;
+      }
+
+      clearError();
+      const stamp = new Date().toISOString().replaceAll(":", "-").replace(/\..*$/, "");
+      const content = format === "csv" ? toCsv(events) : JSON.stringify(events, null, 2);
+      const blob = new Blob([content], { type: format === "csv" ? "text/csv;charset=utf-8" : "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "defense-decisions-" + stamp + "." + format;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     }
 
     async function refreshRecommendations() {
@@ -851,6 +1110,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       document.getElementById("intakeStatusCopy").textContent = summarizeIntakeStatus(intake);
       document.getElementById("communityStatusCopy").textContent = summarizeStatus(community.enabled, community.importedCount, community.rejectedCount, community.lastSuccessAtUtc, community.lastError);
       document.getElementById("peerStatusCopy").textContent = summarizePeerStatus(peer);
+      await refreshConsensus();
     }
 
     async function runBlocklistAction(action) {
@@ -862,10 +1122,15 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
       }
 
       const ip = ipInput.value.trim();
-      const reason = reasonInput.value.trim() || "manual_block";
+      const reason = reasonInput.value.trim();
 
       if (!ip) {
         showError("Enter an IP address first.");
+        return;
+      }
+
+      if (action === "block" && !reason) {
+        showError("Enter a reason before blocking an address.");
         return;
       }
 
@@ -876,16 +1141,27 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
 
         if (action === "lookup") {
           response = await fetch(baseUrl, { credentials: "same-origin" });
-        } else if (action === "block") {
-          response = await fetch(baseUrl + "&reason=" + encodeURIComponent(reason), {
-            method: "POST",
-            credentials: "same-origin"
-          });
         } else {
-          response = await fetch(baseUrl, {
-            method: "DELETE",
-            credentials: "same-origin"
-          });
+          // Look the address up first so the confirmation names the normalized address and its current status.
+          const current = await fetch(baseUrl, { credentials: "same-origin" });
+          const currentPayload = await parseJson(current);
+          if (!current.ok) {
+            throw new Error(currentPayload.error || "The address could not be checked.");
+          }
+
+          const target = currentPayload.ip || ip;
+          const status = currentPayload.blocked ? "currently blocked" : "not currently blocked";
+          const message = action === "block"
+            ? "Block " + target + " (" + status + "). Reason: " + reason
+            : "Unblock " + target + " (" + status + ").";
+          const proceed = await confirmAction(action === "block" ? "Block this address?" : "Unblock this address?", message);
+          if (!proceed) {
+            return;
+          }
+
+          response = action === "block"
+            ? await fetch(baseUrl + "&reason=" + encodeURIComponent(reason), { method: "POST", credentials: "same-origin" })
+            : await fetch(baseUrl, { method: "DELETE", credentials: "same-origin" });
         }
 
         const payload = await parseJson(response);
@@ -893,9 +1169,10 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
           throw new Error(payload.error || "The blocklist action failed.");
         }
 
+        const performed = action === "block" ? "Blocked" : action === "unblock" ? "Unblocked" : "Checked";
         blocklistResult.innerHTML = `
           <h3>Blocklist result</h3>
-          <p class="mono">IP ${escapeHtml(payload.ip || ip)} is ${payload.blocked ? "blocked" : "not blocked"}.</p>`;
+          <p class="mono">${escapeHtml(performed)} ${escapeHtml(payload.ip || ip)}. It is now ${payload.blocked ? "blocked" : "not blocked"}.</p>`;
 
         await refreshDashboard();
       } catch (error) {

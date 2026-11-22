@@ -23,6 +23,12 @@ jobs:
         with:
           dotnet-version: 10.0.402
 
+      - name: Dashboard export tests
+        run: node scripts/tests/test_dashboard_export.mjs
+
+      - name: Dashboard feedback tests
+        run: node scripts/tests/test_dashboard_feedback.mjs
+
       - name: Release version grammar tests
         run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
