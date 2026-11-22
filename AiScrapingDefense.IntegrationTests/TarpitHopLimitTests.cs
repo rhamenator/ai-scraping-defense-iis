@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
 using StackExchange.Redis;
@@ -25,6 +26,7 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
         using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
         var db = redis.GetDatabase(14);
         await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
         await db.KeyDeleteAsync($"tarpit:hops:{ip}");
         await db.KeyDeleteAsync($"{options.Redis.BlocklistKeyPrefix}{ip}");
 
@@ -43,8 +45,37 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
         await Task.Delay(1300, TestContext.Current.CancellationToken);
         Assert.Equal(1, await limiter.CountFlaggedHopAsync(ip));
         await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
         await db.KeyDeleteAsync($"tarpit:hops:{ip}");
         await db.KeyDeleteAsync($"{options.Redis.BlocklistKeyPrefix}{ip}");
+    }
+
+    [Fact]
+    public async Task FlagExpiry_AndRepeatOffenderPersistence_MatchPython()
+    {
+        const string ip = "198.51.100.245";
+        var options = new DefenseEngineOptions();
+        options.Redis.ConnectionString = fixture.RedisConnectionString;
+        options.Redis.BlocklistDatabase = 14;
+        options.Tarpit.FlaggedIpTtlSeconds = 2;
+        options.Tarpit.RepeatOffenderThreshold = 3;
+        await using var limiter = new TarpitHopLimiter(options, NullLogger<TarpitHopLimiter>.Instance);
+        using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
+        var db = redis.GetDatabase(14);
+        await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
+
+        for (var hit = 1; hit <= 3; hit++)
+        {
+            await limiter.FlagAsync(ip);
+            Assert.True(await db.KeyTimeToLiveAsync($"ip_flag:{ip}") > TimeSpan.Zero);
+        }
+        await limiter.FlagAsync(ip);
+        Assert.True(await db.KeyExistsAsync($"ip_flag:{ip}"));
+        Assert.Null(await db.KeyTimeToLiveAsync($"ip_flag:{ip}"));
+
+        await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
     }
 
     [Fact]
@@ -80,6 +111,7 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
         using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
         var db = redis.GetDatabase(14);
         await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
         await db.KeyDeleteAsync($"tarpit:hops:{ip}");
         var first = await factory.Server.SendAsync(context =>
         {
@@ -103,7 +135,53 @@ public sealed class TarpitHopLimitTests(DefenseStackFixture fixture)
         Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)second.Response.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (HttpStatusCode)third.Response.StatusCode);
         await db.KeyDeleteAsync($"ip_flag:{ip}");
+        await db.KeyDeleteAsync($"ip_flag_count:{ip}");
         await db.KeyDeleteAsync($"tarpit:hops:{ip}");
         await db.KeyDeleteAsync($"blocklist:ip:{ip}");
+    }
+
+    [Fact]
+    public void DedicatedTarpitOrigin_RejectsTrustedProxyModeWithoutTrustedAddresses()
+    {
+        using var factory = new WebApplicationFactory<TarpitApiAssemblyMarker>()
+            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DefenseEngine:Networking:ClientIpResolutionMode"] = ClientIpResolutionModes.TrustedProxy
+                })));
+        Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+    }
+
+    [Fact]
+    public async Task DedicatedTarpitOrigin_DoesNotCountUnresolvedTrustedProxy()
+    {
+        var proxy = IPAddress.Parse("198.51.100.246");
+        using var factory = new WebApplicationFactory<TarpitApiAssemblyMarker>()
+            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DefenseEngine:Redis:ConnectionString"] = fixture.RedisConnectionString,
+                    ["DefenseEngine:Redis:BlocklistDatabase"] = "14",
+                    ["DefenseEngine:Networking:ClientIpResolutionMode"] = ClientIpResolutionModes.TrustedProxy,
+                    ["DefenseEngine:Networking:TrustedProxies:0"] = proxy.ToString(),
+                    ["DefenseEngine:Tarpit:MaxHops"] = "1",
+                    ["DefenseEngine:Tarpit:ResponseDelayMilliseconds"] = "0"
+                })));
+        using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
+        var db = redis.GetDatabase(14);
+        await db.KeyDeleteAsync($"ip_flag:{proxy}");
+        await db.KeyDeleteAsync($"tarpit:hops:{proxy}");
+        for (var hit = 0; hit < 3; hit++)
+        {
+            var response = await factory.Server.SendAsync(context =>
+            {
+                context.Connection.RemoteIpAddress = proxy;
+                context.Request.Method = "GET";
+                context.Request.Path = $"/tarpit/proxy-{hit}";
+            }, TestContext.Current.CancellationToken);
+            Assert.Equal(200, response.Response.StatusCode);
+        }
+        Assert.False(await db.KeyExistsAsync($"ip_flag:{proxy}"));
+        Assert.False(await db.KeyExistsAsync($"tarpit:hops:{proxy}"));
     }
 }

@@ -7,7 +7,21 @@ using RedisBlocklistMiddlewareApp.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddOptions<DefenseEngineOptions>()
-    .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName));
+    .Bind(builder.Configuration.GetSection(DefenseEngineOptions.SectionName))
+    .Validate(options => options.Tarpit.FlaggedIpTtlSeconds > 0 &&
+                         options.Tarpit.RepeatOffenderThreshold >= 0 &&
+                         options.Tarpit.MaxHops >= 0 && options.Tarpit.HopWindowSeconds > 0,
+        "Tarpit hop and flag settings must be valid.")
+    .Validate(options =>
+    {
+        var networking = options.Networking;
+        if (!string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy,
+                StringComparison.OrdinalIgnoreCase)) return true;
+        var trusted = networking.TrustedProxies.Concat(networking.TrustedCdnProxies).ToArray();
+        return trusted.Length > 0 && trusted.All(entry =>
+            IPAddress.TryParse(entry, out _) || System.Net.IPNetwork.TryParse(entry, out _));
+    }, "TrustedProxy mode requires valid trusted proxy addresses.")
+    .ValidateOnStart();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
 builder.Services.AddSingleton<ITarpitArtifactService, TarpitArtifactService>();
@@ -57,7 +71,7 @@ app.MapGet("/tarpit/{**path}", async (
 {
     // Filler content must never be indexed under the protected site's domain.
     context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
-    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var clientIp = ResolveTarpitClientIp(context, options.Value.Networking) ?? "unknown";
     var count = await hopLimiter.CountFlaggedHopAsync(clientIp);
     if (count > options.Value.Tarpit.MaxHops)
     {
@@ -85,6 +99,20 @@ app.MapGet("/tarpit/{**path}", async (
     return Results.Content(pageService.GeneratePage(normalizedPath, clientIp), "text/html");
 });
 app.Run();
+
+static string? ResolveTarpitClientIp(HttpContext context, NetworkingOptions networking)
+{
+    var address = context.Connection.RemoteIpAddress;
+    if (address is null) return null;
+    if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+    if (string.Equals(networking.ClientIpResolutionMode, ClientIpResolutionModes.TrustedProxy,
+            StringComparison.OrdinalIgnoreCase) &&
+        networking.TrustedProxies.Concat(networking.TrustedCdnProxies).Any(entry =>
+            IPAddress.TryParse(entry, out var proxy) && proxy.Equals(address) ||
+            System.Net.IPNetwork.TryParse(entry, out var network) && network.Contains(address)))
+        return null;
+    return address.ToString();
+}
 
 public sealed class TarpitApiAssemblyMarker;
 

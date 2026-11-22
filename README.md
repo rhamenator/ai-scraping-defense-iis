@@ -138,6 +138,7 @@ Key areas:
 - `DefenseEngine:Tarpit`
   - `MaxHops` defaults to `250` counted fetches for an already flagged IP; `0` disables the limit. The next hit returns 403 and stores a block reason with the existing `Redis:BlockDurationMinutes` TTL (default `1440`).
   - `HopWindowSeconds` defaults to `86400`; Redis expiry refreshes on each counted hit, so the count resets after this much inactivity. The edge and dedicated tarpit origin must use the same Redis connection and blocklist database in split topology. Redis errors fail open.
+  - `FlaggedIpTtlSeconds` defaults to `604800` (seven days) and `RepeatOffenderThreshold` defaults to `3`, matching Python's tarpit flagger. Served hits refresh ordinary flag expiry; after more than three flags in the window, the flag has no expiry. In trusted-proxy mode, configure explicit trusted proxy addresses on the public tarpit origin.
   - `ArchiveDirectory`, `ArchiveRotationMinutes`, and `MaximumArchivesToKeep` control rotating ZIP decoy retention.
   - `JavaScriptDecoyFileCount`, `MinJavaScriptDecoyFileSizeKb`, and `MaxJavaScriptDecoyFileSizeKb` control generated JavaScript archive contents.
 - `DefenseEngine:Observability`

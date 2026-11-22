@@ -10,6 +10,7 @@ namespace RedisBlocklistMiddlewareApp.Services;
 public sealed class TarpitHopLimiter : IAsyncDisposable
 {
     private const string CountScript = "local n = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], ARGV[1]); return n";
+    private const string FlagScript = "local n = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], ARGV[1]); if n > tonumber(ARGV[2]) then redis.call('SET', KEYS[2], ARGV[3]) else redis.call('SETEX', KEYS[2], ARGV[1], ARGV[3]) end; return n";
     private readonly DefenseEngineOptions _options;
     private readonly ILogger<TarpitHopLimiter> _logger;
     private readonly Lazy<Task<ConnectionMultiplexer>> _connection;
@@ -68,7 +69,10 @@ public sealed class TarpitHopLimiter : IAsyncDisposable
         if (normalized is null) return;
         try
         {
-            await (await DatabaseAsync()).StringSetAsync($"ip_flag:{normalized}", "Tarpit Hit");
+            await (await DatabaseAsync()).ScriptEvaluateAsync(
+                FlagScript,
+                [$"ip_flag_count:{normalized}", $"ip_flag:{normalized}"],
+                [_options.Tarpit.FlaggedIpTtlSeconds, _options.Tarpit.RepeatOffenderThreshold, "Tarpit Hit"]);
         }
         catch (Exception exception) when (exception is RedisException or TimeoutException or ArgumentException)
         {

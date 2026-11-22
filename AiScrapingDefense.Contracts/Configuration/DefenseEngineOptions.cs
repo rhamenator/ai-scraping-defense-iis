@@ -573,6 +573,10 @@ public sealed class TarpitOptions
 
     public int HopWindowSeconds { get; set; } = 86400;
 
+    public int FlaggedIpTtlSeconds { get; set; } = 604800;
+
+    public int RepeatOffenderThreshold { get; set; } = 3;
+
     public int ArchiveRotationMinutes { get; set; } = 60;
 
     public int MaximumArchivesToKeep { get; set; } = 5;
