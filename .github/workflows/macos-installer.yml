@@ -105,6 +105,7 @@ jobs:
           exit 1
 
       - name: Import Apple Installer Certificate
+        if: github.ref_type == 'tag'
         shell: bash
         env:
           MACOS_INSTALLER_CERT_BASE64: ${{ secrets.MACOS_INSTALLER_CERT_BASE64 }}
@@ -130,6 +131,7 @@ jobs:
           echo "MACOS_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Sign macOS Packages
+        if: github.ref_type == 'tag'
         shell: bash
         env:
           MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}

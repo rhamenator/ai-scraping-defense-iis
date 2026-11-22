@@ -63,6 +63,7 @@ jobs:
         run: .\installer\Build-WindowsInstaller.ps1 -Version $env:INSTALLER_VERSION -Runtime $env:INSTALLER_RUNTIME
 
       - name: Import Windows Signing Certificate
+        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
@@ -78,6 +79,7 @@ jobs:
           "WINDOWS_SIGN_CERT_PATH=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
 
       - name: Authenticode Sign Installer
+        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
