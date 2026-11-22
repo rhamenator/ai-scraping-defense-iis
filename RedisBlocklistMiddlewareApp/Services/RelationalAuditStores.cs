@@ -65,13 +65,27 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
     private readonly string _connectionString;
     private readonly RelationalAuditDialect _dialect;
     private readonly int _maxRecentEvents;
+    private readonly int _maxStoredEvents;
+    private readonly int _retentionDays;
+    private int _insertsSincePrune;
 
     protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect)
     {
         _connectionString = options.Value.Audit.ConnectionString;
         _dialect = dialect;
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
+        _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _retentionDays = options.Value.Audit.RetentionDays;
         EnsureSchema();
+        Prune();
+    }
+
+    /// <summary>Applies the row cap and age retention now (also done at start and every 500 inserts).</summary>
+    internal void Prune()
+    {
+        using var connection = OpenConnection();
+        _insertsSincePrune = 0;
+        RelationalRetention.Prune(connection, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
     }
 
     public void Add(DefenseDecision decision)
@@ -140,6 +154,12 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         AddParameter(summaryCommand, "@action", decision.Action);
         AddParameter(summaryCommand, "@decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
         summaryCommand.ExecuteNonQuery();
+
+        if (Interlocked.Increment(ref _insertsSincePrune) >= RelationalRetention.PruneEveryInserts)
+        {
+            _insertsSincePrune = 0;
+            RelationalRetention.Prune(connection, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+        }
     }
 
     public IReadOnlyList<DefenseDecision> GetRecent(int count)
@@ -346,13 +366,27 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
     private readonly string _connectionString;
     private readonly RelationalAuditDialect _dialect;
     private readonly int _maxRecentEvents;
+    private readonly int _maxStoredEvents;
+    private readonly int _retentionDays;
+    private int _insertsSincePrune;
 
     protected RelationalIntakeDeliveryStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect)
     {
         _connectionString = options.Value.Audit.ConnectionString;
         _dialect = dialect;
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
+        _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _retentionDays = options.Value.Audit.RetentionDays;
         EnsureSchema();
+        Prune();
+    }
+
+    /// <summary>Applies the row cap and age retention now (also done at start and every 500 inserts).</summary>
+    internal void Prune()
+    {
+        using var connection = OpenConnection();
+        _insertsSincePrune = 0;
+        RelationalRetention.Prune(connection, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
     }
 
     public void Add(IntakeDeliveryRecord record)
@@ -395,6 +429,12 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
         AddParameter(command, "@detail", record.Detail);
         AddParameter(command, "@attemptedAtUtc", record.AttemptedAtUtc.UtcDateTime.ToString("O"));
         command.ExecuteNonQuery();
+
+        if (Interlocked.Increment(ref _insertsSincePrune) >= RelationalRetention.PruneEveryInserts)
+        {
+            _insertsSincePrune = 0;
+            RelationalRetention.Prune(connection, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+        }
     }
 
     public IReadOnlyList<IntakeDeliveryRecord> GetRecent(int count)
@@ -856,7 +896,9 @@ public sealed class RelationalAuditDialect
                 FROM defense_events
             ),
             latest_decision_at_utc = (SELECT MAX(decided_at_utc) FROM defense_events)
-        WHERE summary_key = 1;
+        -- Only a summary that has not counted anything is recomputed from the rows (a database from before the summary
+        -- table). Otherwise the totals are kept, so retention removing old rows does not shrink them on the next start.
+        WHERE summary_key = 1 AND total_decisions = 0;
         """;
 
     private const string PostgresIntakeDeliverySchemaSql =
@@ -1062,7 +1104,9 @@ public sealed class RelationalAuditDialect
                 FROM defense_events
             ),
             latest_decision_at_utc = (SELECT MAX(decided_at_utc) FROM defense_events)
-        WHERE summary_key = 1;
+        -- Only a summary that has not counted anything is recomputed from the rows (a database from before the summary
+        -- table). Otherwise the totals are kept, so retention removing old rows does not shrink them on the next start.
+        WHERE summary_key = 1 AND total_decisions = 0;
         """;
 
     private const string SqlServerIntakeDeliverySchemaSql =
