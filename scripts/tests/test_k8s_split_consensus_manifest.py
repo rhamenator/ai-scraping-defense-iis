@@ -44,6 +44,10 @@ class SplitConsensusManifest(unittest.TestCase):
             self.assertIn("tls:", doc)
             self.assertIn('force-ssl-redirect: "true"', doc)
 
+    def test_edge_pods_start_in_parallel_so_the_raft_quorum_can_form(self):
+        doc = find("StatefulSet", "edge-gateway")
+        self.assertRegex(doc, r"(?m)^  podManagementPolicy: Parallel\s*$")
+
     def test_management_routes_are_limited_to_an_allowlist(self):
         doc = find("Ingress", "edge-gateway-management")
         self.assertIn("path: /defense", doc)
