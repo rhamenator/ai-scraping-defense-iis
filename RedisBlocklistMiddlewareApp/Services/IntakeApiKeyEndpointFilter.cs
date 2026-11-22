@@ -48,7 +48,7 @@ public sealed class IntakeApiKeyEndpointFilter : IEndpointFilter
         }
 
         // Per credential: the key may send at most this many requests a minute, however many addresses it comes from.
-        if (!_counter.TryAcquire("intake-credential", _requestsPerMinute, Window, out var retryAfter))
+        if (!_counter.TryAcquire("intake-credential", _requestsPerMinute, Window, out var retryAfter, exemptFromCap: true))
         {
             return ValueTask.FromResult<object?>(TooManyRequests(http, retryAfter));
         }

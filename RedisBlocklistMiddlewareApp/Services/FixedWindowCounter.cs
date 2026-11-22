@@ -2,7 +2,9 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 /// <summary>
 /// A small in-memory fixed-window counter: at most <c>limit</c> events per key per window. Memory is bounded: when many
-/// distinct keys have been seen, expired windows are dropped first.
+/// distinct keys have been seen, expired windows are dropped first; if the table is still full, a NEW key is refused (fail
+/// closed) and existing keys, with their limits and lockouts, are left alone. A flood of distinct keys therefore cannot reset
+/// anyone's limit.
 /// </summary>
 public sealed class FixedWindowCounter
 {
@@ -11,14 +13,15 @@ public sealed class FixedWindowCounter
     private readonly object _gate = new();
     private readonly Dictionary<string, (long Window, int Count)> _counts = new(StringComparer.Ordinal);
     private readonly Func<DateTimeOffset> _clock;
+    private long _lastPurgeWindow = -1;
 
     public FixedWindowCounter(Func<DateTimeOffset>? clock = null)
     {
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
-    /// <summary>Counts one event for <paramref name="key"/>. False, with the time to wait, once the window's limit is passed.</summary>
-    public bool TryAcquire(string key, int limit, TimeSpan window, out TimeSpan retryAfter)
+    /// <summary>Counts one event for <paramref name="key"/>. False, with the time to wait, once the window's limit is passed. <paramref name="exemptFromCap"/> is for the few fixed keys that must always be tracked.</summary>
+    public bool TryAcquire(string key, int limit, TimeSpan window, out TimeSpan retryAfter, bool exemptFromCap = false)
     {
         retryAfter = TimeSpan.Zero;
         if (limit <= 0)
@@ -30,13 +33,17 @@ public sealed class FixedWindowCounter
         var windowId = now.UtcTicks / window.Ticks;
         lock (_gate)
         {
-            if (_counts.Count >= MaximumKeys)
+            if (_counts.Count >= MaximumKeys && _lastPurgeWindow != windowId)
             {
+                // Once per window is enough (nothing new can have expired within it), and keeps a flood from costing O(n) per request.
+                _lastPurgeWindow = windowId;
                 Purge(windowId);
             }
 
-            var count = _counts.TryGetValue(key, out var existing) && existing.Window == windowId ? existing.Count : 0;
-            if (count >= limit)
+            var known = _counts.TryGetValue(key, out var existing);
+            var count = known && existing.Window == windowId ? existing.Count : 0;
+            var full = !known && !exemptFromCap && _counts.Count >= MaximumKeys;
+            if (full || count >= limit)
             {
                 var windowEnd = new DateTimeOffset((windowId + 1) * window.Ticks, TimeSpan.Zero);
                 retryAfter = windowEnd - now;
@@ -89,9 +96,5 @@ public sealed class FixedWindowCounter
             _counts.Remove(key);
         }
 
-        if (_counts.Count >= MaximumKeys)
-        {
-            _counts.Clear(); // a flood of distinct keys within one window: start over rather than grow
-        }
     }
 }

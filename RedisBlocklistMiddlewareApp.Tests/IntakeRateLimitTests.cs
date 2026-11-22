@@ -72,6 +72,39 @@ public sealed class IntakeRateLimitTests
         Assert.True(counter.TrackedKeys <= 50_000, counter.TrackedKeys.ToString());
     }
 
+    [Fact]
+    public void Counter_AFloodOfDistinctKeysDoesNotResetAnExistingLimit()
+    {
+        var counter = new FixedWindowCounter();
+        var window = TimeSpan.FromMinutes(1);
+        Assert.True(counter.TryAcquire("locked", 1, window, out _));
+        Assert.False(counter.TryAcquire("locked", 1, window, out _));
+
+        for (var i = 0; i < 120_000; i++)
+        {
+            counter.TryAcquire($"key-{i}", 5, window, out _);
+        }
+
+        Assert.False(counter.TryAcquire("locked", 1, window, out _), "the existing limit survived the flood");
+        Assert.True(counter.IsExhausted("locked", 1, window, out _));
+        Assert.False(counter.TryAcquire("brand-new", 5, window, out _), "a new key is refused while the table is full");
+    }
+
+    [Fact]
+    public void Counter_AFixedKeyExemptFromTheCapIsStillTrackedWhenTheTableIsFull()
+    {
+        var counter = new FixedWindowCounter();
+        var window = TimeSpan.FromMinutes(1);
+        for (var i = 0; i < 60_000; i++)
+        {
+            counter.TryAcquire($"key-{i}", 5, window, out _);
+        }
+
+        Assert.True(counter.TryAcquire("credential", 2, window, out _, exemptFromCap: true));
+        Assert.True(counter.TryAcquire("credential", 2, window, out _, exemptFromCap: true));
+        Assert.False(counter.TryAcquire("credential", 2, window, out _, exemptFromCap: true));
+    }
+
     // ---- the filter ------------------------------------------------------------------------------------------------
 
     [Fact]
