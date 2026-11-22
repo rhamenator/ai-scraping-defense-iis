@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 
@@ -9,6 +10,11 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class TarpitArtifactService : ITarpitArtifactService
 {
+    private const int MaximumVariants = 4;
+    private const int MaximumClientRequestsPerMinute = 30;
+    private const int MaximumGlobalRequestsPerMinute = 1000;
+    private const int MaximumTrackedClients = 4096;
+    private const long MaximumArchiveBytes = 4L * 1024 * 1024;
     private static readonly string[] FilePrefixes =
     [
         "analytics_bundle",
@@ -33,67 +39,188 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
     private readonly TarpitOptions _options;
     private readonly IHostEnvironment _environment;
     private readonly TimeProvider _timeProvider;
-    private readonly object _gate = new();
+    private readonly ILogger<TarpitArtifactService> _logger;
+    private readonly SemaphoreSlim _generationGate = new(1);
+    private readonly SemaphoreSlim _readGate = new(8);
+    private readonly object _rateGate = new();
+    private readonly Dictionary<string, int> _clientRequests = new(StringComparer.Ordinal);
+    private long _requestWindow = -1;
+    private int _globalRequests;
+    private long _readyBucket = -1;
+    private Task _pendingGeneration = Task.CompletedTask;
+    private CancellationToken _shutdownToken;
 
     public TarpitArtifactService(
         IOptions<DefenseEngineOptions> options,
         IHostEnvironment environment,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<TarpitArtifactService> logger)
     {
         _options = options.Value.Tarpit;
         _environment = environment;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
-    public Task<TarpitArtifact?> TryGetArtifactAsync(string path, CancellationToken cancellationToken)
+    public async Task PrepareAsync(CancellationToken shutdownToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        _shutdownToken = shutdownToken;
+        try { await WarmBucketAsync(shutdownToken); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return Task.FromResult<TarpitArtifact?>(null);
+            _logger.LogWarning("Tarpit archive preparation failed; serving HTML fallback");
         }
+    }
 
-        var archiveDirectory = ResolveArchiveDirectory();
-        Directory.CreateDirectory(archiveDirectory);
+    public async Task<TarpitArtifact?> TryGetArtifactAsync(
+        string path, string clientIp, CancellationToken cancellationToken)
+    {
+        if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) return null;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(clientIp) || clientIp == "unknown") return null;
 
-        var slug = SanitizeSlug(Path.GetFileNameWithoutExtension(path));
-        var bucket = _timeProvider.GetUtcNow().ToUnixTimeSeconds() / Math.Max(60, _options.ArchiveRotationMinutes * 60);
-        var archiveFileName = $"{slug}_{bucket}.zip";
-        var archivePath = Path.Combine(archiveDirectory, archiveFileName);
-        byte[] content;
-
-        lock (_gate)
+        var bucket = CurrentBucket();
+        if (Interlocked.Read(ref _readyBucket) != bucket)
         {
+            QueueWarmBucket();
+            return null;
+        }
+        if (!AdmitClient(clientIp)) return null;
+        if (!await _readGate.WaitAsync(0, cancellationToken)) return null;
+
+        try
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(path));
+            var variant = (int)(BitConverter.ToUInt32(hash, 0) % (uint)VariantCount);
+            var archiveFileName = ArchiveFileName(bucket, variant);
+            var archivePath = Path.Combine(ResolveArchiveDirectory(), archiveFileName);
             if (!File.Exists(archivePath))
             {
-                content = BuildArchive(slug, bucket);
-                File.WriteAllBytes(archivePath, content);
-                CleanupOldArchives(archiveDirectory);
+                Interlocked.Exchange(ref _readyBucket, -1);
+                QueueWarmBucket();
+                return null;
+            }
+            if (new FileInfo(archivePath).Length > MaximumArchiveBytes)
+            {
+                _logger.LogWarning("Tarpit archive exceeds the read limit; serving HTML fallback");
+                return null;
+            }
+
+            return new TarpitArtifact(
+                archiveFileName,
+                "application/zip",
+                await File.ReadAllBytesAsync(archivePath, cancellationToken));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Tarpit archive read failed; serving HTML fallback");
+            return null;
+        }
+        finally
+        {
+            _readGate.Release();
+        }
+    }
+
+    private int VariantCount => Math.Min(MaximumVariants, Math.Max(1, _options.MaximumArchivesToKeep));
+
+    private long CurrentBucket() => _timeProvider.GetUtcNow().ToUnixTimeSeconds() /
+        Math.Max(60L, (long)_options.ArchiveRotationMinutes * 60L);
+
+    private static string ArchiveFileName(long bucket, int variant) => $"decoy_{variant}_{bucket}.zip";
+
+    private bool AdmitClient(string clientIp)
+    {
+        var window = _timeProvider.GetUtcNow().ToUnixTimeSeconds() / 60;
+        lock (_rateGate)
+        {
+            if (_requestWindow != window)
+            {
+                _requestWindow = window;
+                _globalRequests = 0;
+                _clientRequests.Clear();
+            }
+            if (_globalRequests >= MaximumGlobalRequestsPerMinute) return false;
+            if (_clientRequests.TryGetValue(clientIp, out var count))
+            {
+                if (count >= MaximumClientRequestsPerMinute) return false;
+                _clientRequests[clientIp] = count + 1;
             }
             else
             {
-                content = File.ReadAllBytes(archivePath);
+                if (_clientRequests.Count >= MaximumTrackedClients) return false;
+                _clientRequests.Add(clientIp, 1);
             }
+            _globalRequests++;
+            return true;
         }
-
-        return Task.FromResult<TarpitArtifact?>(new TarpitArtifact(
-            archiveFileName,
-            "application/zip",
-            content));
     }
 
-    private byte[] BuildArchive(string slug, long bucket)
+    private void QueueWarmBucket()
+    {
+        lock (_rateGate)
+        {
+            if (!_pendingGeneration.IsCompleted) return;
+            _pendingGeneration = Task.Run(async () =>
+            {
+                try { await WarmBucketAsync(_shutdownToken); }
+                catch (OperationCanceledException) { _logger.LogDebug("Tarpit archive warm-up canceled"); }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning("Tarpit archive warm-up failed; serving HTML fallback");
+                }
+            });
+        }
+    }
+
+    private async Task WarmBucketAsync(CancellationToken cancellationToken)
+    {
+        await _generationGate.WaitAsync(cancellationToken);
+        try
+        {
+            var bucket = CurrentBucket();
+            if (Interlocked.Read(ref _readyBucket) == bucket) return;
+            var archiveDirectory = ResolveArchiveDirectory();
+            Directory.CreateDirectory(archiveDirectory);
+            for (var variant = 0; variant < VariantCount; variant++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var archivePath = Path.Combine(archiveDirectory, ArchiveFileName(bucket, variant));
+                if (File.Exists(archivePath)) continue;
+                var content = await Task.Run(
+                    () => BuildArchive($"decoy_{variant}", bucket, cancellationToken), cancellationToken);
+                var temporaryPath = $"{archivePath}.{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    await File.WriteAllBytesAsync(temporaryPath, content, cancellationToken);
+                    File.Move(temporaryPath, archivePath, overwrite: true);
+                }
+                finally
+                {
+                    if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+                }
+            }
+            CleanupOldArchives(archiveDirectory, bucket);
+            Interlocked.Exchange(ref _readyBucket, bucket);
+        }
+        finally
+        {
+            _generationGate.Release();
+        }
+    }
+
+    private byte[] BuildArchive(string slug, long bucket, CancellationToken cancellationToken)
     {
         var random = new Random(GetSeed(slug, bucket));
         using var memoryStream = new MemoryStream();
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            for (var index = 0; index < Math.Max(1, _options.JavaScriptDecoyFileCount); index++)
+            for (var index = 0; index < Math.Clamp(_options.JavaScriptDecoyFileCount, 1, 32); index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var entry = archive.CreateEntry(BuildEntryName(random), CompressionLevel.SmallestSize);
                 using var writer = new StreamWriter(entry.Open(), Encoding.UTF8, leaveOpen: false);
-                writer.Write(BuildJavaScriptPayload(slug, bucket, random, index));
+                writer.Write(BuildJavaScriptPayload(slug, bucket, random, index, cancellationToken));
             }
         }
 
@@ -108,11 +235,14 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
         return $"{prefix}{suffix}.{hash}.js";
     }
 
-    private string BuildJavaScriptPayload(string slug, long bucket, Random random, int index)
+    private string BuildJavaScriptPayload(
+        string slug, long bucket, Random random, int index, CancellationToken cancellationToken)
     {
+        var minimumKb = Math.Clamp(_options.MinJavaScriptDecoyFileSizeKb, 1, 64);
+        var maximumKb = Math.Clamp(_options.MaxJavaScriptDecoyFileSizeKb, minimumKb, 64);
         var targetBytes = random.Next(
-            Math.Max(1, _options.MinJavaScriptDecoyFileSizeKb) * 1024,
-            Math.Max(Math.Max(1, _options.MinJavaScriptDecoyFileSizeKb) * 1024 + 1, _options.MaxJavaScriptDecoyFileSizeKb * 1024));
+            minimumKb * 1024,
+            maximumKb * 1024 + 1);
         var builder = new StringBuilder();
         builder.AppendLine($"// synthetic decoy archive {slug}");
         builder.AppendLine($"// rotation bucket {bucket}");
@@ -135,8 +265,10 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
         builder.AppendLine("})();");
         builder.Append("/*");
 
-        while (Encoding.UTF8.GetByteCount(builder.ToString()) < targetBytes)
+        // The generated payload is ASCII, so Length is also its UTF-8 byte count.
+        while (builder.Length < targetBytes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             builder.Append(RandomAscii(random, 96));
         }
 
@@ -144,16 +276,19 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
         return builder.ToString();
     }
 
-    private void CleanupOldArchives(string archiveDirectory)
+    private void CleanupOldArchives(string archiveDirectory, long currentBucket)
     {
-        var archives = new DirectoryInfo(archiveDirectory)
-            .GetFiles("*.zip")
-            .OrderByDescending(file => file.LastWriteTimeUtc)
-            .ToArray();
-
-        foreach (var archive in archives.Skip(Math.Max(1, _options.MaximumArchivesToKeep)))
+        var keep = new HashSet<string>(StringComparer.Ordinal);
+        var maximum = Math.Clamp(_options.MaximumArchivesToKeep, 1, 64);
+        for (var offset = 0L; keep.Count < maximum && offset <= maximum; offset++)
         {
-            archive.Delete();
+            for (var variant = 0; variant < VariantCount && keep.Count < maximum; variant++)
+                keep.Add(ArchiveFileName(currentBucket - offset, variant));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(archiveDirectory, "*.zip"))
+        {
+            if (!keep.Contains(Path.GetFileName(file))) File.Delete(file);
         }
     }
 
@@ -168,14 +303,6 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{_options.Seed}|{slug}|{bucket}"));
         return BitConverter.ToInt32(bytes, 0);
-    }
-
-    private static string SanitizeSlug(string slug)
-    {
-        var cleaned = new string(slug
-            .Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_')
-            .ToArray());
-        return string.IsNullOrWhiteSpace(cleaned) ? "assets" : cleaned;
     }
 
     private static string RandomIdentifier(Random random)

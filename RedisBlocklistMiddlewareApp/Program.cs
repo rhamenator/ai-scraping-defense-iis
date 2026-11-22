@@ -403,7 +403,8 @@ builder.Services.AddSingleton<ISuspiciousRequestQueue, SuspiciousRequestQueue>()
 builder.Services.AddSingleton<IRequestSignalEvaluator, RequestSignalEvaluator>();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
-builder.Services.AddSingleton<ITarpitArtifactService, TarpitArtifactService>();
+builder.Services.AddSingleton<TarpitArtifactService>();
+builder.Services.AddSingleton<ITarpitArtifactService>(sp => sp.GetRequiredService<TarpitArtifactService>());
 builder.Services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 builder.Services.AddSingleton<IThreatScoreContributor, EdgeSignalScoreContributor>();
 builder.Services.AddSingleton<IThreatScoreContributor, FrequencyScoreContributor>();
@@ -625,7 +626,7 @@ app.MapGet(tarpitRoutePattern, async (
     var normalizedPath = path ?? string.Empty;
     tarpitLogger.LogInformation("TAR_PIT HIT: Path={Path}, IP={IpAddress}, Reason={Reason}",
         context.Request.Path, clientIp, "Tarpit Hit");
-    var artifact = await tarpitArtifactService.TryGetArtifactAsync(normalizedPath, cancellationToken);
+    var artifact = await tarpitArtifactService.TryGetArtifactAsync(normalizedPath, clientIp, cancellationToken);
     if (artifact is not null)
     {
         await hopLimiter.FlagAsync(clientIp);
@@ -645,6 +646,7 @@ app.MapFallback(async context =>
     await context.Response.WriteAsync("Endpoint not found.");
 });
 
+await app.Services.GetRequiredService<TarpitArtifactService>().PrepareAsync(app.Lifetime.ApplicationStopping);
 app.Run();
 
 public partial class Program

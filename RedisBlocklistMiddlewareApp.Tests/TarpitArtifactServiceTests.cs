@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
@@ -14,9 +15,10 @@ public sealed class TarpitArtifactServiceTests
     {
         using var harness = TarpitArtifactHarness.Create();
         var service = harness.CreateService();
+        await service.PrepareAsync(CancellationToken.None);
 
-        var first = await service.TryGetArtifactAsync("manual/archive/assets.zip", CancellationToken.None);
-        var second = await service.TryGetArtifactAsync("manual/archive/assets.zip", CancellationToken.None);
+        var first = await service.TryGetArtifactAsync("manual/archive/assets.zip", "198.51.100.101", CancellationToken.None);
+        var second = await service.TryGetArtifactAsync("manual/archive/assets.zip", "198.51.100.101", CancellationToken.None);
 
         Assert.NotNull(first);
         Assert.NotNull(second);
@@ -33,15 +35,67 @@ public sealed class TarpitArtifactServiceTests
     {
         using var harness = TarpitArtifactHarness.Create();
         var service = harness.CreateService(maximumArchivesToKeep: 2, archiveRotationMinutes: 1);
+        await service.PrepareAsync(CancellationToken.None);
 
-        await service.TryGetArtifactAsync("manual/archive/assets.zip", CancellationToken.None);
+        await service.TryGetArtifactAsync("manual/archive/assets.zip", "198.51.100.102", CancellationToken.None);
         harness.AdvanceMinutes(1);
-        await service.TryGetArtifactAsync("manual/archive/assets.zip", CancellationToken.None);
+        await service.PrepareAsync(CancellationToken.None);
+        await service.TryGetArtifactAsync("manual/archive/assets.zip", "198.51.100.102", CancellationToken.None);
         harness.AdvanceMinutes(1);
-        await service.TryGetArtifactAsync("manual/archive/assets.zip", CancellationToken.None);
+        await service.PrepareAsync(CancellationToken.None);
+        await service.TryGetArtifactAsync("manual/archive/assets.zip", "198.51.100.102", CancellationToken.None);
 
         var archives = Directory.GetFiles(harness.ArchiveDirectory, "*.zip");
         Assert.Equal(2, archives.Length);
+    }
+
+    [Fact]
+    public async Task TryGetArtifactAsync_MapsArbitraryPathsToFixedArchiveSet()
+    {
+        using var harness = TarpitArtifactHarness.Create();
+        var service = harness.CreateService();
+        await service.PrepareAsync(CancellationToken.None);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var index = 0; index < 20; index++)
+        {
+            var artifact = await service.TryGetArtifactAsync($"manual/archive/assets-{index}.zip", "198.51.100.103", CancellationToken.None);
+            Assert.NotNull(artifact);
+            names.Add(artifact.FileName);
+        }
+
+        Assert.True(names.Count <= 4, $"Expected at most four archive variants, found {names.Count}.");
+    }
+
+    [Fact]
+    public async Task TryGetArtifactAsync_BoundsPerClientFetches_AndResetsAfterWindow()
+    {
+        using var harness = TarpitArtifactHarness.Create();
+        var service = harness.CreateService();
+        await service.PrepareAsync(CancellationToken.None);
+
+        for (var index = 0; index < 30; index++)
+            Assert.NotNull(await service.TryGetArtifactAsync("assets.zip", "198.51.100.104", CancellationToken.None));
+        Assert.Null(await service.TryGetArtifactAsync("assets.zip", "198.51.100.104", CancellationToken.None));
+        Assert.Null(await service.TryGetArtifactAsync("assets.zip", "unknown", CancellationToken.None));
+
+        harness.AdvanceMinutes(1);
+        Assert.NotNull(await service.TryGetArtifactAsync("assets.zip", "198.51.100.104", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TryGetArtifactAsync_RebuildsMissingPreparedArchive()
+    {
+        using var harness = TarpitArtifactHarness.Create();
+        var service = harness.CreateService(maximumArchivesToKeep: 1);
+        await service.PrepareAsync(CancellationToken.None);
+        var first = await service.TryGetArtifactAsync("assets.zip", "198.51.100.105", CancellationToken.None);
+        Assert.NotNull(first);
+        File.Delete(Path.Combine(harness.ArchiveDirectory, first.FileName));
+
+        Assert.Null(await service.TryGetArtifactAsync("assets.zip", "198.51.100.105", CancellationToken.None));
+        await service.PrepareAsync(CancellationToken.None);
+        Assert.NotNull(await service.TryGetArtifactAsync("assets.zip", "198.51.100.105", CancellationToken.None));
     }
 
     private sealed class TarpitArtifactHarness : IDisposable
@@ -80,7 +134,8 @@ public sealed class TarpitArtifactServiceTests
                     }
                 }),
                 new TestHostEnvironment(_rootPath),
-                _timeProvider);
+                _timeProvider,
+                NullLogger<TarpitArtifactService>.Instance);
         }
 
         public void AdvanceMinutes(int minutes)
