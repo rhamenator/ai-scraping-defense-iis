@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -56,7 +57,7 @@ public sealed class CommunityReporter : ICommunityReporter
                 _options.ProviderName,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                _options.Endpoint,
+                UrlRedaction.SafeEndpoint(_options.Endpoint),
                 response.IsSuccessStatusCode ? IntakeDeliveryStatuses.Succeeded : IntakeDeliveryStatuses.Failed,
                 detail,
                 attemptedAtUtc);
@@ -68,9 +69,9 @@ public sealed class CommunityReporter : ICommunityReporter
                 _options.ProviderName,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                _options.Endpoint,
+                UrlRedaction.SafeEndpoint(_options.Endpoint),
                 IntakeDeliveryStatuses.Failed,
-                ex.Message,
+                UrlRedaction.RedactUrls(ex.Message),
                 attemptedAtUtc);
         }
     }

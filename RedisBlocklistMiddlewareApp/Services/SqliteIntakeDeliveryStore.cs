@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
@@ -37,6 +38,8 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
 
     public void Add(IntakeDeliveryRecord record)
     {
+        // Whatever produced the record, a URL that may carry a credential is never persisted (#199).
+        record = record.Redacted();
         lock (_gate)
         {
             using var connection = OpenConnection();
@@ -115,7 +118,7 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
                     reader.GetString(4),
                     reader.GetString(5),
                     reader.GetString(6),
-                    DateTimeOffset.Parse(reader.GetString(7))));
+                    DateTimeOffset.Parse(reader.GetString(7))).Redacted());
             }
         }
 
@@ -176,7 +179,53 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
                     ON intake_delivery_events (attempted_at_utc DESC, id DESC);
                 """;
             command.ExecuteNonQuery();
+            ScrubStoredUrls(connection);
         }
+    }
+
+    /// <summary>
+    /// Rows written by earlier releases hold the full webhook URL, which can carry a credential. Rewrite them in place;
+    /// the pass is idempotent, so it costs one query on later starts (#199).
+    /// </summary>
+    private static void ScrubStoredUrls(SqliteConnection connection)
+    {
+        var rows = new List<(long Id, string Target, string Detail)>();
+        using (var select = connection.CreateCommand())
+        {
+            select.CommandText =
+                "SELECT id, target, detail FROM intake_delivery_events WHERE target LIKE '%://%' OR detail LIKE '%://%';";
+            using var reader = select.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+            }
+        }
+
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        using var transaction = connection.BeginTransaction();
+        foreach (var (id, target, detail) in rows)
+        {
+            var safeTarget = UrlRedaction.SafeTarget(target);
+            var safeDetail = UrlRedaction.RedactUrls(detail);
+            if (safeTarget == target && safeDetail == detail)
+            {
+                continue;
+            }
+
+            using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = "UPDATE intake_delivery_events SET target = $target, detail = $detail WHERE id = $id;";
+            update.Parameters.AddWithValue("$target", safeTarget);
+            update.Parameters.AddWithValue("$detail", safeDetail);
+            update.Parameters.AddWithValue("$id", id);
+            update.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
     }
 
     private SqliteConnection OpenConnection()

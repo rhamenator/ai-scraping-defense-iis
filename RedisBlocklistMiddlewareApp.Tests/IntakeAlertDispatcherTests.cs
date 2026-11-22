@@ -124,6 +124,50 @@ public sealed class IntakeAlertDispatcherTests
         Assert.Contains("slack down", slackResult.Detail);
     }
 
+    private const string Canary = "CANARY-WEBHOOK-TOKEN-9f3a";
+
+    [Fact]
+    public async Task DispatchAsync_NeverPutsAWebhookCredentialInTheDeliveryRecords()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var options = CreateOptions();
+        options.Intake.Alerting.GenericWebhook.Url = $"https://alerts.example.test/hooks/{Canary}?key={Canary}";
+        options.Intake.Alerting.Slack = new SlackAlertOptions
+        {
+            Enabled = true,
+            WebhookUrl = $"https://hooks.slack.example.test/services/T000/B000/{Canary}",
+            TimeoutSeconds = 5
+        };
+        var succeeded = new IntakeAlertDispatcher(
+            Options.Create(options),
+            new FakeHttpClientFactory(new RecordingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK))),
+            new RecordingSmtpAlertSender());
+        // HTTP stacks and proxies often repeat the full request URL in their error text.
+        var failed = new IntakeAlertDispatcher(
+            Options.Create(options),
+            new FakeHttpClientFactory(new ThrowingHttpMessageHandler(
+                new HttpRequestException($"No such host for https://alerts.example.test/hooks/{Canary}?key={Canary}."))),
+            new RecordingSmtpAlertSender());
+
+        var records = (await succeeded.DispatchAsync(CreateEvent(), cancellationToken))
+            .Concat(await failed.DispatchAsync(CreateEvent(), cancellationToken))
+            .ToList();
+
+        Assert.True(records.Count >= 6);
+        foreach (var record in records)
+        {
+            Assert.DoesNotContain(Canary, record.Target);
+            Assert.DoesNotContain(Canary, record.Detail);
+            Assert.DoesNotContain(Canary, record.Reason);
+        }
+
+        Assert.Contains(records, record => record.Channel == IntakeDeliveryChannels.GenericWebhook && record.Target.StartsWith("https://alerts.example.test (id=", StringComparison.Ordinal));
+        Assert.Contains(records, record => record.Channel == IntakeDeliveryChannels.Slack && record.Target.StartsWith("https://hooks.slack.example.test (id=", StringComparison.Ordinal));
+        Assert.Contains(records, record => record.Status == IntakeDeliveryStatuses.Failed && record.Detail.Contains("No such host", StringComparison.Ordinal));
+        // email recipients are not secrets and stay readable
+        Assert.Contains(records, record => record.Channel == IntakeDeliveryChannels.Smtp && record.Target == "ops@example.test,security@example.test");
+    }
+
     private static DefenseEngineOptions CreateOptions()
     {
         return new DefenseEngineOptions

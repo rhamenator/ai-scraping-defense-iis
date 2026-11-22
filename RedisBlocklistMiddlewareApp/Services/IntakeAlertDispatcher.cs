@@ -1,3 +1,4 @@
+using AiScrapingDefense.Contracts;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -85,7 +86,7 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 IntakeDeliveryChannels.GenericWebhook,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                options.Url,
+                UrlRedaction.SafeEndpoint(options.Url),
                 response.IsSuccessStatusCode ? IntakeDeliveryStatuses.Succeeded : IntakeDeliveryStatuses.Failed,
                 detail,
                 attemptedAtUtc);
@@ -97,9 +98,9 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 IntakeDeliveryChannels.GenericWebhook,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                options.Url,
+                UrlRedaction.SafeEndpoint(options.Url),
                 IntakeDeliveryStatuses.Failed,
-                ex.Message,
+                UrlRedaction.RedactUrls(ex.Message),
                 attemptedAtUtc);
         }
     }
@@ -135,7 +136,7 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 IntakeDeliveryChannels.Slack,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                options.WebhookUrl,
+                UrlRedaction.SafeEndpoint(options.WebhookUrl),
                 response.IsSuccessStatusCode ? IntakeDeliveryStatuses.Succeeded : IntakeDeliveryStatuses.Failed,
                 detail,
                 attemptedAtUtc);
@@ -147,9 +148,9 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 IntakeDeliveryChannels.Slack,
                 webhookEvent.Details.IpAddress,
                 webhookEvent.Reason,
-                options.WebhookUrl,
+                UrlRedaction.SafeEndpoint(options.WebhookUrl),
                 IntakeDeliveryStatuses.Failed,
-                ex.Message,
+                UrlRedaction.RedactUrls(ex.Message),
                 attemptedAtUtc);
         }
     }
@@ -214,7 +215,7 @@ public sealed class IntakeAlertDispatcher : IIntakeAlertDispatcher
                 webhookEvent.Reason,
                 string.Join(",", options.To),
                 IntakeDeliveryStatuses.Failed,
-                ex.Message,
+                UrlRedaction.RedactUrls(ex.Message),
                 attemptedAtUtc);
         }
     }

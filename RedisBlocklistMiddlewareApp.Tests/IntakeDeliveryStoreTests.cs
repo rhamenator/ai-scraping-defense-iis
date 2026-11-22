@@ -56,6 +56,86 @@ public sealed class IntakeDeliveryStoreTests
         Assert.Equal("persisted", recent[0].Detail);
     }
 
+    private const string Canary = "CANARY-WEBHOOK-TOKEN-9f3a";
+
+    [Fact]
+    public void Add_NeverPersistsAWebhookCredentialAndGetRecentNeverReturnsOne()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var store = harness.CreateStore();
+        store.Add(CreateRecord("198.51.100.40", IntakeDeliveryStatuses.Failed, $"failed for https://hooks.example.test/services/{Canary}")
+            with { Target = $"https://hooks.example.test/services/{Canary}?token={Canary}" });
+
+        var recent = store.GetRecent(10);
+
+        Assert.DoesNotContain(Canary, recent[0].Target);
+        Assert.DoesNotContain(Canary, recent[0].Detail);
+        Assert.DoesNotContain(Canary, File.ReadAllText(harness.DatabasePath, System.Text.Encoding.Latin1));
+    }
+
+    [Fact]
+    public void Opening_TheStore_ScrubsRowsWrittenByEarlierReleases()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        harness.CreateStore(); // creates the schema
+        InsertRawRow(harness.DatabasePath, $"https://hooks.slack.example.test/services/T000/B000/{Canary}", $"POST https://hooks.slack.example.test/services/T000/B000/{Canary} returned 500");
+        InsertRawRow(harness.DatabasePath, "ops@example.test", "Alert delivered successfully.");
+        Assert.Contains(Canary, File.ReadAllText(harness.DatabasePath, System.Text.Encoding.Latin1));
+
+        var reopened = harness.CreateStore();
+
+        // SQLite may keep freed pages; assert on what the store returns and on the live rows instead of raw bytes.
+        var rows = ReadRawRows(harness.DatabasePath);
+        Assert.All(rows, row => Assert.DoesNotContain(Canary, row.Target + row.Detail));
+        Assert.Contains(rows, row => row.Target.StartsWith("https://hooks.slack.example.test (id=", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.Target == "ops@example.test" && row.Detail == "Alert delivered successfully.");
+        Assert.All(reopened.GetRecent(10), record => Assert.DoesNotContain(Canary, record.Target + record.Detail));
+    }
+
+    [Fact]
+    public void Scrubbing_IsIdempotentAndLeavesCleanRowsAlone()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        harness.CreateStore();
+        InsertRawRow(harness.DatabasePath, $"https://hooks.example.test/{Canary}", "first");
+        harness.CreateStore();
+        var afterFirst = ReadRawRows(harness.DatabasePath);
+
+        harness.CreateStore();
+
+        Assert.Equal(afterFirst, ReadRawRows(harness.DatabasePath));
+    }
+
+    private static void InsertRawRow(string databasePath, string target, string detail)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "INSERT INTO intake_delivery_events (delivery_type, channel, ip_address, reason, target, status, detail, attempted_at_utc) " +
+            "VALUES ('alert', 'slack', '198.51.100.50', 'legacy row', $target, 'failed', $detail, $at);";
+        command.Parameters.AddWithValue("$target", target);
+        command.Parameters.AddWithValue("$detail", detail);
+        command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
+    private static List<(string Target, string Detail)> ReadRawRows(string databasePath)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT target, detail FROM intake_delivery_events ORDER BY id;";
+        using var reader = command.ExecuteReader();
+        var rows = new List<(string, string)>();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1)));
+        }
+
+        return rows;
+    }
+
     private static IntakeDeliveryRecord CreateRecord(string ipAddress, string status, string detail)
     {
         return new IntakeDeliveryRecord(
@@ -87,6 +167,8 @@ public sealed class IntakeDeliveryStoreTests
         }
 
         public IOptions<DefenseEngineOptions> Options { get; }
+
+        public string DatabasePath => Path.Combine(_rootPath, "events.db");
 
         public static SqliteStoreHarness Create(int maxRecentEvents = 500)
         {
