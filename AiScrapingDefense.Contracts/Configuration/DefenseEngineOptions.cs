@@ -253,6 +253,15 @@ public sealed class QueueOptions
     public int Capacity { get; set; } = 1024;
 
     public int WebhookLeaseTimeoutMinutes { get; set; } = 5;
+
+    /// <summary>Attempts before a failing webhook intake item is moved to the dead-letter state.</summary>
+    public int WebhookMaxAttempts { get; set; } = 5;
+
+    /// <summary>First retry delay for a failed webhook intake item; doubles on each attempt.</summary>
+    public int WebhookRetryBaseMilliseconds { get; set; } = 5000;
+
+    /// <summary>Upper bound for the retry delay.</summary>
+    public int WebhookRetryMaxMilliseconds { get; set; } = 300000;
 }
 
 public sealed class AuditOptions
