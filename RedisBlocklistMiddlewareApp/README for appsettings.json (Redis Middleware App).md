@@ -92,6 +92,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 * **DatabasePath**: Path to the SQLite database file when `Provider` is `Sqlite`. Relative paths are resolved from the application content root.
 * **ConnectionString**: PostgreSQL or SQL Server connection string when `Provider` is `Postgres` or `SqlServer`. `ConnectionStrings:AuditDatabase` is used as a fallback when this value is blank.
 * **MaxRecentEvents**: Maximum number of persisted events returned from the recent-events feed.
+* **MaxStoredEvents**: Most decision rows the **SQLite** audit store keeps (default `1000000`; `0` disables the cap). Older rows are removed when the store opens and every few hundred inserts. Decisions that an operator has given feedback on are kept (the feedback refers to them), so the cap can be exceeded by that handful of rows. The dashboard totals are kept separately, including across restarts, and are not reduced. The PostgreSQL and SQL Server stores are not pruned yet.
+* **RetentionDays**: Delete SQLite decision rows older than this many days (default `0`, keep them). Whether to age out audit history is your policy decision, so it is off by default.
 
 #### **DefenseEngine:Escalation**
 
@@ -109,6 +111,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
   * **ApiKey**: Optional shared secret sent to the provider.
   * **TimeoutSeconds**: Request timeout for the provider call.
   * **MaliciousScoreAdjustment**: Fallback score adjustment when the provider returns `is_malicious=true` without an explicit `score_adjustment`.
+  * **MaxScoreAdjustment**: Largest positive `score_adjustment` accepted from the provider (default `50`); larger values are reduced to it, so a remote service cannot set an arbitrary score.
+  * **AllowNegativeScoreAdjustments**: Whether a negative `score_adjustment` from the provider may lower the score (default `false`: a remote service cannot cancel evidence the engine found itself). When allowed it is limited to `-MaxScoreAdjustment`.
 * **OpenAiCompatibleModel**: Optional classifier hook for local or remote chat-completions endpoints that follow the OpenAI-compatible shape.
   * **Enabled**: Turns the classifier on or off.
   * **Endpoint**: Full chat-completions URL.

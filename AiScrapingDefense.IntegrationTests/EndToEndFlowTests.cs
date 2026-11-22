@@ -134,6 +134,39 @@ public sealed class EndToEndFlowTests
     }
 
     [Fact]
+    public async Task WebhookIntake_RefusesAnOversizedEvent_WithoutQueueingIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await _fixture.CreateHostAsync();
+        var client = host.Client;
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/analyze")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "ml_verdict",
+                reason = new string('r', 5000),
+                timestamp_utc = DateTimeOffset.UtcNow,
+                details = new
+                {
+                    ip = "198.51.100.78",
+                    method = "GET",
+                    path = "/pricing",
+                    query_string = "",
+                    user_agent = "integration-test",
+                    signals = new[] { "model_positive" }
+                }
+            })
+        };
+        request.Headers.Add("X-Webhook-Key", _fixture.IntakeApiKey);
+
+        var response = await client.SendAsync(request, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Contains("reason", await response.Content.ReadAsStringAsync(cancellationToken));
+    }
+
+    [Fact]
     public async Task Tarpit_UsesPostgresMarkovCorpus_WhenEnabled()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

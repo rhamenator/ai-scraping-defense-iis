@@ -263,6 +263,9 @@ public sealed class IntakeOptions
     public IntakeAlertingOptions Alerting { get; set; } = new();
 
     public CommunityReportingOptions CommunityReporting { get; set; } = new();
+
+    /// <summary>Largest serialized webhook event accepted at /analyze, in bytes (the per-field limits apply first).</summary>
+    public int MaxEventBytes { get; set; } = 32 * 1024;
 }
 
 public sealed class QueueOptions
@@ -290,6 +293,18 @@ public sealed class AuditOptions
     public string ConnectionString { get; set; } = string.Empty;
 
     public int MaxRecentEvents { get; set; } = 500;
+
+    /// <summary>
+    /// Most decision rows the SQLite audit store keeps; the oldest are removed beyond it (0 disables the cap). The decision
+    /// totals shown on the dashboard are kept separately and are not reduced.
+    /// </summary>
+    public int MaxStoredEvents { get; set; } = 1_000_000;
+
+    /// <summary>
+    /// Delete decision rows older than this many days (0, the default, keeps them until the row cap removes them). Whether
+    /// to age out audit history is the operator's policy decision.
+    /// </summary>
+    public int RetentionDays { get; set; }
 }
 
 public sealed class CloudflareOptions
@@ -443,6 +458,19 @@ public sealed class HttpReputationProviderOptions
     public int TimeoutSeconds { get; set; } = 10;
 
     public int MaliciousScoreAdjustment { get; set; } = 35;
+
+    /// <summary>
+    /// Largest positive <c>score_adjustment</c> accepted from the provider's response; larger values are reduced to it.
+    /// The provider is a remote service, so its numbers are bounded rather than trusted (#202).
+    /// </summary>
+    public int MaxScoreAdjustment { get; set; } = 50;
+
+    /// <summary>
+    /// Whether a negative <c>score_adjustment</c> from the provider may lower the score. Off by default: a remote service
+    /// cannot cancel evidence the engine found itself. Operators who trust the provider can allow it (down to
+    /// <c>-MaxScoreAdjustment</c>).
+    /// </summary>
+    public bool AllowNegativeScoreAdjustments { get; set; }
 }
 
 public sealed class OpenAiCompatibleModelAdapterOptions
