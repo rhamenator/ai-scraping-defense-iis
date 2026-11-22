@@ -36,7 +36,7 @@ byte-compatible (checked with real bytes), and the two library versions cannot b
 reads the old log is a separate project, `tools/RaftLogExporter` (its own `tools/RaftLogExporter.slnx`, DotNext 5.26.2), and
 the upgrade is:
 
-1. Stop the node. Run `RaftLogExporter <Consensus:StoragePath>`. It reads `log` (never modifying it) and writes
+1. Stop the node. Download `raft-log-exporter-<runtime>` (zip for Windows, tar.gz otherwise, with a `.sha256`) from the release's assets, check the checksum, and run `RaftLogExporter <Consensus:StoragePath>`. It reads `log` (never modifying it) and writes
    `export/raft-log-v1/` (`entries.jsonl`, `meta.json` with counts, commit index, term and SHA-256).
 2. Start this release (DotNext 6). On first start it verifies the export's SHA-256 and entry count, builds a new write-ahead
    log in `wal.importing`, reopens it to verify, moves it to `wal`, writes `layout.version` (`wal-1`) and renames the old
