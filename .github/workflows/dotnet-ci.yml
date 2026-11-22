@@ -54,3 +54,20 @@ jobs:
         run: |
           docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config > /tmp/compose-observability.yml
           grep -q 'host_ip: 127.0.0.1' /tmp/compose-observability.yml
+
+      - name: Observability collector is loopback-only, bounded and valid
+        env:
+          GRAFANA_ADMIN_PASSWORD: config-validation-only
+        run: |
+          docker compose --env-file compose.env.example -f compose.yaml -f compose.observability.yaml config --format json > /tmp/compose-observability.json
+          # Every published collector port is bound to loopback (the receiver has no authentication).
+          jq -e '[.services["otel-collector"].ports[] | select(.host_ip != "127.0.0.1")] | length == 0' /tmp/compose-observability.json
+          jq -e '.services["otel-collector"].ports | length >= 3' /tmp/compose-observability.json
+          for config in otel-collector-config.yaml otel-collector-remote.example.yaml; do
+            docker run --rm -v "$PWD/deploy/observability:/cfg:ro" -e OTEL_INGEST_TOKEN=config-validation-only \
+              otel/opentelemetry-collector-contrib:0.111.0 validate --config="/cfg/$config"
+          done
+          # The memory limiter must come first in the pipeline and the receivers must bound request size.
+          grep -q 'max_request_body_size' deploy/observability/otel-collector-config.yaml
+          grep -q 'max_recv_msg_size_mib' deploy/observability/otel-collector-config.yaml
+          awk '/processors:/ && ++n == 2 {f=1; next} f && /^ *- / {print $2; exit}' deploy/observability/otel-collector-config.yaml | grep -qx memory_limiter
