@@ -40,9 +40,11 @@ jobs:
         shell: pwsh
         run: |
           $prerelease = 'false'
-          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME.StartsWith('v')) {
-            $version = $env:GITHUB_REF_NAME.Substring(1)
-            if ($version.Contains('-')) {
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            # Exact SemVer grammar only; the tag is data, never shell source.
+            $version = (python scripts/validate_release_version.py $env:GITHUB_REF_NAME)
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            if (($version -split '\+')[0].Contains('-')) {
               $prerelease = 'true'
             }
           }
@@ -55,7 +57,10 @@ jobs:
 
       - name: Build Windows Installer
         shell: pwsh
-        run: .\installer\Build-WindowsInstaller.ps1 -Version "${{ steps.version.outputs.version }}" -Runtime "${{ matrix.runtime }}"
+        env:
+          INSTALLER_VERSION: ${{ steps.version.outputs.version }}
+          INSTALLER_RUNTIME: ${{ matrix.runtime }}
+        run: .\installer\Build-WindowsInstaller.ps1 -Version $env:INSTALLER_VERSION -Runtime $env:INSTALLER_RUNTIME
 
       - name: Import Windows Signing Certificate
         shell: pwsh

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Installer workflows validate the release tag against the exact SemVer grammar before using it, and pass the version to the build scripts through environment variables instead of interpolating it into shell source (#192). Tags that are not valid semantic versions now fail the workflow.
 - Bounded tarpit ZIP generation and fetch concurrency (#191): arbitrary paths now map to at most four prebuilt archives per rotation, with per-client and global fetch limits, bounded file sizes, cancellation during generation, and an HTML fallback while archives are unavailable. Archive reads no longer wait for generation under a request lock.
 
 ## [1.1.4] - 2026-11-21
