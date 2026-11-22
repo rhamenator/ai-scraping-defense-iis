@@ -124,6 +124,7 @@ Key areas:
   - Polls recent decisions for a distributed attack and sends a cooldown-limited operator alert through configured generic webhook, Slack, and SMTP channels. Optional primary and backup health URLs add a manual failover choice when only the primary is unhealthy. Neither Cloudflare mode nor origin routing changes automatically.
 - `DefenseEngine:Management`
   - `DashboardSessionHours` controls the browser dashboard session lifetime after successful sign-in.
+  - `RequireSecureTransport` (default `true`) serves the management API and dashboard only over HTTPS. In Production the app refuses to start unless HTTPS is provided: an `https://` listener, a TLS-terminating proxy in `TrustedProxy` mode with the proxy listed in `Networking:TrustedProxies` (so its `X-Forwarded-Proto` is honoured), or IIS bindings (IIS owns the listener, so the startup check defers to it). A management request that did not arrive over HTTPS gets 403. For an HTTP-only development or test deployment set it to `false`; Production then logs a warning at every start. `scripts/check_secure_transport_locally.sh` exercises all of this against the real app with a throwaway certificate.
 - `DefenseEngine:Intake`
   - `Alerting:GenericWebhook` controls optional outbound webhook alerts for processed intake events.
   - `Alerting:Slack` controls optional Slack Incoming Webhook alerts for processed intake events.

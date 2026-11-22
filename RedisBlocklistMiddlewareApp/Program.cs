@@ -493,6 +493,8 @@ if (Program.ShouldUseForwardedHeaders(runtimeOptions))
     app.UseForwardedHeaders();
 }
 
+Program.UseManagementSecureTransportGuard(app, runtimeOptions);
+
 app.UseMiddleware<RedisBlocklistMiddleware>();
 
 if (runtimeOptions.Observability.EnablePrometheusEndpoint)
@@ -966,6 +968,32 @@ public partial class Program
     public static bool ShouldExposeManagementEndpoints(DefenseEngineOptions runtimeOptions)
     {
         return !string.IsNullOrWhiteSpace(runtimeOptions.Management.ApiKey);
+    }
+
+    /// <summary>
+    /// With <c>Management:RequireSecureTransport</c>, refuses any <c>/defense</c> request that did not arrive over HTTPS.
+    /// Add it after forwarded headers so <c>Request.IsHttps</c> reflects the proxy's <c>X-Forwarded-Proto</c> (#186).
+    /// </summary>
+    public static void UseManagementSecureTransportGuard(IApplicationBuilder app, DefenseEngineOptions runtimeOptions)
+    {
+        if (!runtimeOptions.Management.RequireSecureTransport)
+        {
+            return;
+        }
+
+        app.UseWhen(
+            context => context.Request.Path.StartsWithSegments("/defense", StringComparison.OrdinalIgnoreCase),
+            branch => branch.Use(async (context, next) =>
+            {
+                if (!context.Request.IsHttps)
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsJsonAsync(new { error = "The management API requires HTTPS." });
+                    return;
+                }
+
+                await next();
+            }));
     }
 
     public static bool ShouldUseForwardedHeaders(DefenseEngineOptions runtimeOptions)

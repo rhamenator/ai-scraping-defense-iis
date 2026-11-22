@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking default:** the management API and dashboard now require HTTPS (#186). New setting `DefenseEngine:Management:RequireSecureTransport`, on by default. In Production the app refuses to start when management is enabled and no HTTPS is provided (an `https://` listener, a TLS-terminating proxy in `TrustedProxy` mode with `Networking:TrustedProxies` set, or IIS, which owns the bindings), and every `/defense` request that did not arrive over HTTPS (after `X-Forwarded-Proto` from a trusted proxy is applied) gets 403. **Upgrading an HTTP-only install:** set `DefenseEngine__Management__RequireSecureTransport=false` to keep the old behaviour; Production logs a warning at each start while it is off. The shipped `compose.yaml` (single-host HTTP quick start, via `ASD_REQUIRE_SECURE_MANAGEMENT`) and the Kubernetes manifest (TLS ends at the Ingress and the trusted-proxy range is cluster specific) opt out explicitly, with comments on how to turn it on. `scripts/check_secure_transport_locally.sh` verifies the behaviour end to end locally.
+
 ### Security
 
 - The Docker build can no longer copy credentials into an image layer (#194). `scripts/configure_credentials.py` writes real credentials to `.env` in the repository root, `.dockerignore` did not exclude it, and the build stage ran `COPY . .`, so the secrets landed in the build stage's layers and any shared build cache. `.dockerignore` now excludes `.env`, `.env.*` and common key and certificate files, and the Dockerfile copies only `Directory.Build.props`, `global.json` and the four project folders the published apps need, restoring from the project files first. A test fails if a broad copy returns or a needed project is missing. **If images were built with a shared or registry-backed build cache after running the credential script, treat those credentials as exposed: rotate them and invalidate the cache.**

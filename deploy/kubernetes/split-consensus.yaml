@@ -182,6 +182,12 @@ spec:
                 secretKeyRef:
                   name: defense-secrets
                   key: management-api-key
+            # The management API requires HTTPS by default (#186). TLS ends at the Ingress, so the pod sees HTTP; to keep the
+            # requirement, set DefenseEngine__Networking__ClientIpResolutionMode=TrustedProxy and list your ingress
+            # controller's pod range in DefenseEngine__Networking__TrustedProxies__0 (cluster specific), then remove this
+            # override. The management Ingress already redirects HTTP to HTTPS and is limited to an allowlist.
+            - name: DefenseEngine__Management__RequireSecureTransport
+              value: "false"
             - name: DefenseEngine__Audit__Provider
               value: Postgres
             - name: POSTGRES_PASSWORD
