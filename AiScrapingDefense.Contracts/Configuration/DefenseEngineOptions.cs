@@ -548,6 +548,18 @@ public sealed class PeerSyncOptions
 
     public string ExportApiKey { get; set; } = string.Empty;
 
+    /// <summary>This node's identity in exported signals. Peers configure it as the peer's Name.</summary>
+    public string NodeId { get; set; } = string.Empty;
+
+    /// <summary>Shared secret used to sign exported signals; each importing peer configures it as VerificationKey.</summary>
+    public string SigningKey { get; set; } = string.Empty;
+
+    /// <summary>When true (the default) an imported signal must carry a valid signature from a configured peer key.</summary>
+    public bool RequireSignedSignals { get; set; } = true;
+
+    /// <summary>Highest hop count accepted on import. 0 accepts only signals the peer originated itself.</summary>
+    public int MaximumHops { get; set; }
+
     public PeerSyncPeerOptions[] Peers { get; set; } = [];
 }
 
@@ -560,6 +572,9 @@ public sealed class PeerSyncPeerOptions
     public string ApiKeyHeaderName { get; set; } = "X-Peer-Key";
 
     public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Shared secret that verifies this peer's signal signatures (the peer's PeerSync:SigningKey).</summary>
+    public string VerificationKey { get; set; } = string.Empty;
 
     public string TrustMode { get; set; } = PeerTrustModes.ObserveOnly;
 }

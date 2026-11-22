@@ -167,15 +167,20 @@ public sealed record CommunityBlocklistSourceSyncStatus(
     string? LastError);
 
 public sealed record PeerDefenseSignal(
-    string IpAddress,
-    string Summary,
-    IReadOnlyList<string> Signals,
-    DateTimeOffset ObservedAtUtc,
-    DateTimeOffset DecidedAtUtc);
+    [property: JsonPropertyName("ip_address")] string IpAddress,
+    [property: JsonPropertyName("summary")] string Summary,
+    [property: JsonPropertyName("signals")] IReadOnlyList<string> Signals,
+    [property: JsonPropertyName("observed_at_utc")] DateTimeOffset ObservedAtUtc,
+    [property: JsonPropertyName("decided_at_utc")] DateTimeOffset DecidedAtUtc,
+    [property: JsonPropertyName("signal_id")] string? SignalId = null,
+    [property: JsonPropertyName("origin")] string? Origin = null,
+    [property: JsonPropertyName("expires_at_utc")] DateTimeOffset? ExpiresAtUtc = null,
+    [property: JsonPropertyName("hops")] int Hops = 0,
+    [property: JsonPropertyName("signature")] string? Signature = null);
 
 public sealed record PeerDefenseSignalEnvelope(
-    string Source,
-    IReadOnlyList<PeerDefenseSignal> Signals);
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("signals")] IReadOnlyList<PeerDefenseSignal> Signals);
 
 public sealed record PeerSyncStatus(
     bool Enabled,

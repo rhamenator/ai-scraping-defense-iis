@@ -433,6 +433,7 @@ builder.Services.AddSingleton<CommunityBlocklistSyncRunner>();
 builder.Services.AddSingleton<IPublicBlocklistService, RedisPublicBlocklistService>();
 builder.Services.AddSingleton<IPeerSignalFeedClient, HttpPeerSignalFeedClient>();
 builder.Services.AddSingleton<IPeerSyncStatusStore, PeerSyncStatusStore>();
+builder.Services.AddSingleton<PeerSignalLedger>();
 builder.Services.AddSingleton<PeerSyncRunner>();
 builder.Services.AddSingleton<ManagementAuthenticationService>();
 builder.Services.AddSingleton<ApiKeyEndpointFilter>();
@@ -1099,23 +1100,52 @@ public partial class Program
         DefenseEngineOptions runtimeOptions,
         int count)
     {
-        var maxSignals = runtimeOptions.PeerSync.MaximumExportSignals;
+        var peerSync = runtimeOptions.PeerSync;
+        var maxSignals = peerSync.MaximumExportSignals;
         var safeCount = Math.Clamp(count <= 0 ? maxSignals : count, 1, maxSignals);
         var scanWindow = Math.Max(safeCount, runtimeOptions.Audit.MaxRecentEvents);
+        var origin = peerSync.NodeId.Trim();
+        var blockLifetime = TimeSpan.FromMinutes(Math.Max(1, runtimeOptions.Redis.BlockDurationMinutes));
         var signals = store.GetRecent(scanWindow)
-            .Where(decision => string.Equals(decision.Action, "blocked", StringComparison.OrdinalIgnoreCase))
+            // Only decisions this node made itself: never re-export what was imported from a peer or a community list.
+            .Where(decision => string.Equals(decision.Action, "blocked", StringComparison.OrdinalIgnoreCase) &&
+                               !IsImportedDecision(decision))
             .Take(safeCount)
-            .Select(decision => new PeerDefenseSignal(
-                decision.IpAddress,
-                decision.Summary,
-                decision.Signals,
-                decision.ObservedAtUtc,
-                decision.DecidedAtUtc))
+            .Select(decision => CreatePeerSignal(decision, peerSync, origin, blockLifetime))
             .ToArray();
 
         return new PeerDefenseSignalEnvelope(
             "ai-scraping-defense-dotnet",
             signals);
+    }
+
+    private static bool IsImportedDecision(DefenseDecision decision) =>
+        decision.Signals.Any(signal =>
+            signal.StartsWith("peer_sync:", StringComparison.OrdinalIgnoreCase) ||
+            signal.StartsWith("community_blocklist:", StringComparison.OrdinalIgnoreCase));
+
+    private static PeerDefenseSignal CreatePeerSignal(
+        DefenseDecision decision,
+        PeerSyncOptions peerSync,
+        string origin,
+        TimeSpan blockLifetime)
+    {
+        var unsigned = new PeerDefenseSignal(
+            decision.IpAddress,
+            decision.Summary,
+            decision.Signals,
+            decision.ObservedAtUtc,
+            decision.DecidedAtUtc,
+            SignalId: PeerSignalSigner.CreateSignalId(origin, decision.IpAddress, decision.DecidedAtUtc),
+            Origin: string.IsNullOrEmpty(origin) ? null : origin,
+            ExpiresAtUtc: decision.DecidedAtUtc + blockLifetime,
+            Hops: 0);
+
+        // Without both a node identity and a signing key the signal goes out unsigned; importers that require
+        // signatures (the default) will reject it.
+        return string.IsNullOrEmpty(origin) || string.IsNullOrEmpty(peerSync.SigningKey)
+            ? unsigned
+            : unsigned with { Signature = PeerSignalSigner.Sign(peerSync.SigningKey, unsigned) };
     }
 
     public static string GetTarpitRoutePattern(DefenseEngineOptions runtimeOptions)

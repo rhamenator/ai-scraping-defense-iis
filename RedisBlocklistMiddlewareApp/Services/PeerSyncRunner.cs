@@ -7,6 +7,8 @@ namespace RedisBlocklistMiddlewareApp.Services;
 public sealed class PeerSyncRunner
 {
     private readonly PeerSyncOptions _options;
+    private readonly TimeSpan _maximumBlockLifetime;
+    private readonly PeerSignalLedger _ledger;
     private readonly IPeerSignalFeedClient _feedClient;
     private readonly IBlocklistService _blocklistService;
     private readonly IDefenseEventStore _eventStore;
@@ -21,9 +23,12 @@ public sealed class PeerSyncRunner
         IDefenseEventStore eventStore,
         IPeerSyncStatusStore statusStore,
         DefenseTelemetry telemetry,
-        ILogger<PeerSyncRunner> logger)
+        ILogger<PeerSyncRunner> logger,
+        PeerSignalLedger? ledger = null)
     {
         _options = options.Value.PeerSync;
+        _maximumBlockLifetime = TimeSpan.FromMinutes(Math.Max(1, options.Value.Redis.BlockDurationMinutes));
+        _ledger = ledger ?? new PeerSignalLedger();
         _feedClient = feedClient;
         _blocklistService = blocklistService;
         _eventStore = eventStore;
@@ -80,6 +85,17 @@ public sealed class PeerSyncRunner
                         continue;
                     }
 
+                    if (!IsAcceptable(peer, signal, attemptAt, out var rejection))
+                    {
+                        _logger.LogWarning(
+                            "Rejected a peer signal from {Peer}: {Reason}.",
+                            peerName,
+                            rejection);
+                        rejectedCount++;
+                        rejectedForPeer++;
+                        continue;
+                    }
+
                     normalizedSignals.Add((normalizedIp, signal));
                 }
 
@@ -103,11 +119,20 @@ public sealed class PeerSyncRunner
 
                     if (string.Equals(peer.TrustMode, PeerTrustModes.BlockList, StringComparison.OrdinalIgnoreCase))
                     {
-                        var blockApplied = await _blocklistService.BlockAsync(
-                            normalizedIp,
-                            $"peer_sync:{peerName}",
-                            combinedSignals,
-                            cancellationToken);
+                        // Keep the signal's own expiry (never longer than this node's block lifetime), so a peer cannot
+                        // extend a block and an old signal does not restart the clock.
+                        var blockApplied = signal.ExpiresAtUtc is { } expiresAt
+                            ? await _blocklistService.BlockUntilAsync(
+                                normalizedIp,
+                                $"peer_sync:{peerName}",
+                                combinedSignals,
+                                Min(expiresAt, attemptAt + _maximumBlockLifetime),
+                                cancellationToken)
+                            : await _blocklistService.BlockAsync(
+                                normalizedIp,
+                                $"peer_sync:{peerName}",
+                                combinedSignals,
+                                cancellationToken);
                         if (blockApplied)
                         {
                             blockedCount++;
@@ -190,6 +215,78 @@ public sealed class PeerSyncRunner
         _statusStore.Update(status);
         return status;
     }
+
+    private bool IsAcceptable(
+        PeerSyncPeerOptions peer,
+        PeerDefenseSignal signal,
+        DateTimeOffset now,
+        out string? rejection)
+    {
+        rejection = null;
+        var peerIdentity = peer.Name.Trim();
+        var hasKey = !string.IsNullOrEmpty(peer.VerificationKey);
+        var hasSignature = !string.IsNullOrEmpty(signal.Signature);
+
+        if (_options.RequireSignedSignals)
+        {
+            if (!hasKey)
+            {
+                rejection = "signatures are required but this peer has no VerificationKey";
+            }
+            else if (string.IsNullOrEmpty(peerIdentity) ||
+                     string.IsNullOrEmpty(signal.SignalId) ||
+                     string.IsNullOrEmpty(signal.Origin) ||
+                     signal.ExpiresAtUtc is null ||
+                     !hasSignature)
+            {
+                rejection = "the signal is unsigned or lacks an id, origin or expiry";
+            }
+        }
+
+        // A signature that is present is always checked when a key is configured, even if signatures are optional.
+        if (rejection is null && hasKey && hasSignature && !PeerSignalSigner.Verify(peer.VerificationKey, signal))
+        {
+            rejection = "the signature does not match";
+        }
+
+        if (rejection is null && _options.RequireSignedSignals &&
+            !string.Equals(signal.Origin, peerIdentity, StringComparison.Ordinal))
+        {
+            rejection = "the signal's origin is not the configured peer";
+        }
+
+        if (rejection is null && signal.Hops > Math.Max(0, _options.MaximumHops))
+        {
+            rejection = "the signal has travelled more hops than allowed";
+        }
+
+        if (rejection is null && signal.Hops < 0)
+        {
+            rejection = "the signal has an invalid hop count";
+        }
+
+        if (rejection is null &&
+            !string.IsNullOrEmpty(_options.NodeId) &&
+            string.Equals(signal.Origin, _options.NodeId.Trim(), StringComparison.Ordinal))
+        {
+            rejection = "the signal originated from this node (loop)";
+        }
+
+        if (rejection is null && signal.ExpiresAtUtc is { } expiresAtUtc && expiresAtUtc <= now)
+        {
+            rejection = "the signal has already expired";
+        }
+
+        if (rejection is null && !string.IsNullOrEmpty(signal.SignalId) &&
+            !_ledger.TryAdd(signal.SignalId, signal.ExpiresAtUtc ?? now + _maximumBlockLifetime))
+        {
+            rejection = "the signal was already imported";
+        }
+
+        return rejection is null;
+    }
+
+    private static DateTimeOffset Min(DateTimeOffset left, DateTimeOffset right) => left <= right ? left : right;
 
     private static string GetPeerName(PeerSyncPeerOptions peer)
     {
