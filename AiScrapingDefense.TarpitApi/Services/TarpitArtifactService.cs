@@ -286,9 +286,10 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
                 keep.Add(ArchiveFileName(currentBucket - offset, variant));
         }
 
-        foreach (var file in Directory.EnumerateFiles(archiveDirectory, "*.zip"))
+        foreach (var file in Directory.EnumerateFiles(archiveDirectory, "*.zip")
+                     .Where(file => !keep.Contains(Path.GetFileName(file))))
         {
-            if (!keep.Contains(Path.GetFileName(file))) File.Delete(file);
+            File.Delete(file);
         }
     }
 
