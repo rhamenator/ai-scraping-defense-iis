@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RaftLogExporter/RaftLogExporter.csproj" />
+  <Project Path="RaftLogExporter.Tests/RaftLogExporter.Tests.csproj" />
+</Solution>
