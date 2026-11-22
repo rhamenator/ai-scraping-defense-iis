@@ -1,9 +1,21 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 WORKDIR /src
 
-COPY . .
-RUN dotnet restore anti-scraping-defense-iis.sln \
-    && dotnet publish RedisBlocklistMiddlewareApp/RedisBlocklistMiddlewareApp.csproj \
+# Copy only what the three published projects need. A broad `COPY . .` also copies whatever sits in the build context,
+# including the .env that scripts/configure_credentials.py writes, into the layers of the build stage and any shared
+# build cache (#194). Restore from the project files alone first so that layer is cached until a dependency changes.
+COPY Directory.Build.props global.json ./
+COPY AiScrapingDefense.Contracts/*.csproj AiScrapingDefense.Contracts/
+COPY AiScrapingDefense.EscalationEngine/*.csproj AiScrapingDefense.EscalationEngine/
+COPY AiScrapingDefense.TarpitApi/*.csproj AiScrapingDefense.TarpitApi/
+COPY RedisBlocklistMiddlewareApp/*.csproj RedisBlocklistMiddlewareApp/
+RUN dotnet restore RedisBlocklistMiddlewareApp/RedisBlocklistMiddlewareApp.csproj
+
+COPY AiScrapingDefense.Contracts/ AiScrapingDefense.Contracts/
+COPY AiScrapingDefense.EscalationEngine/ AiScrapingDefense.EscalationEngine/
+COPY AiScrapingDefense.TarpitApi/ AiScrapingDefense.TarpitApi/
+COPY RedisBlocklistMiddlewareApp/ RedisBlocklistMiddlewareApp/
+RUN dotnet publish RedisBlocklistMiddlewareApp/RedisBlocklistMiddlewareApp.csproj \
         -c Release \
         -o /app/edge \
         /p:UseAppHost=false \
