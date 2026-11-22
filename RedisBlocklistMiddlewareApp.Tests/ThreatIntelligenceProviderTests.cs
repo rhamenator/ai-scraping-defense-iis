@@ -115,6 +115,59 @@ public sealed class ThreatIntelligenceProviderTests
         Assert.Contains("model_verdict:malicious_bot", assessment.Signals);
     }
 
+    [Fact]
+    public async Task HttpReputationProvider_IgnoresAnOversizedResponse()
+    {
+        var provider = new HttpReputationProvider(
+            new FakeHttpClientFactory(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[HttpReputationProvider.MaxResponseBytes + 1])
+            }),
+            Options.Create(new DefenseEngineOptions
+            {
+                Escalation = new EscalationOptions
+                {
+                    HttpReputation = new HttpReputationProviderOptions
+                    {
+                        Enabled = true,
+                        Endpoint = "https://reputation.example.test/check"
+                    }
+                }
+            }),
+            NullLogger<HttpReputationProvider>.Instance);
+
+        var assessment = await provider.AssessAsync(CreateContext("198.51.100.47"), CancellationToken.None);
+
+        Assert.Null(assessment);
+    }
+
+    [Fact]
+    public async Task OpenAiCompatibleModelAdapter_IgnoresAnOversizedResponse()
+    {
+        var adapter = new OpenAiCompatibleModelAdapter(
+            new FakeHttpClientFactory(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[OpenAiCompatibleModelAdapter.MaxResponseBytes + 1])
+            }),
+            Options.Create(new DefenseEngineOptions
+            {
+                Escalation = new EscalationOptions
+                {
+                    OpenAiCompatibleModel = new OpenAiCompatibleModelAdapterOptions
+                    {
+                        Enabled = true,
+                        Endpoint = "https://llm.example.test/v1/chat/completions",
+                        Model = "test-model"
+                    }
+                }
+            }),
+            NullLogger<OpenAiCompatibleModelAdapter>.Instance);
+
+        var assessment = await adapter.AssessAsync(CreateContext("198.51.100.48"), CancellationToken.None);
+
+        Assert.Null(assessment);
+    }
+
     private static ThreatAssessmentContext CreateContext(string ipAddress)
     {
         return new ThreatAssessmentContext(
