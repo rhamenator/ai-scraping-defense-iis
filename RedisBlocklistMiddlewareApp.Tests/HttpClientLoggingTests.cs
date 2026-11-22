@@ -10,13 +10,14 @@ public sealed class HttpClientLoggingTests
     public async Task TheHttpClientFactoryNeverLogsAWebhookUrlPath()
     {
         var logs = new List<string>();
+        using var handler = new StubHandler();
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(new CapturingProvider(logs)));
         services.AddHttpClient();
         // the same call Program.cs makes
         services.ConfigureHttpClientDefaults(httpClient => httpClient.RemoveAllLoggers());
         services.ConfigureHttpClientDefaults(builder =>
-            builder.ConfigurePrimaryHttpMessageHandler(() => new StubHandler()));
+            builder.ConfigurePrimaryHttpMessageHandler(() => handler));
         using var provider = services.BuildServiceProvider();
 
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient();
@@ -27,10 +28,27 @@ public sealed class HttpClientLoggingTests
         Assert.DoesNotContain(logs, line => line.Contains("/services/", StringComparison.Ordinal));
     }
 
+    /// <summary>Owns the responses it hands out and disposes them when the test is done.</summary>
     private sealed class StubHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)); // the caller disposes the response it receives
+        private readonly List<HttpResponseMessage> _responses = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            _responses.Add(response);
+            return Task.FromResult(response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _responses.ForEach(response => response.Dispose());
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class CapturingProvider(List<string> sink) : ILoggerProvider
