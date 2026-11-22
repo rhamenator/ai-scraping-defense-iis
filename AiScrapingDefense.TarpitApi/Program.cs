@@ -24,7 +24,8 @@ builder.Services
     .ValidateOnStart();
 builder.Services.AddSingleton<ITarpitMarkovStore, PostgresTarpitMarkovStore>();
 builder.Services.AddSingleton<ITarpitPageService, TarpitPageService>();
-builder.Services.AddSingleton<ITarpitArtifactService, TarpitArtifactService>();
+builder.Services.AddSingleton<TarpitArtifactService>();
+builder.Services.AddSingleton<ITarpitArtifactService>(sp => sp.GetRequiredService<TarpitArtifactService>());
 builder.Services.AddSingleton(sp => new TarpitHopLimiter(
     sp.GetRequiredService<IOptions<DefenseEngineOptions>>().Value,
     sp.GetRequiredService<ILogger<TarpitHopLimiter>>()));
@@ -88,7 +89,7 @@ app.MapGet("/tarpit/{**path}", async (
     var normalizedPath = path ?? string.Empty;
     logger.LogInformation("TAR_PIT HIT: Path={Path}, IP={IpAddress}, Reason={Reason}",
         context.Request.Path, clientIp, "Tarpit Hit");
-    var artifact = await artifactService.TryGetArtifactAsync(normalizedPath, cancellationToken);
+    var artifact = await artifactService.TryGetArtifactAsync(normalizedPath, clientIp, cancellationToken);
     if (artifact is not null)
     {
         await hopLimiter.FlagAsync(clientIp);
@@ -98,6 +99,7 @@ app.MapGet("/tarpit/{**path}", async (
     await hopLimiter.FlagAsync(clientIp);
     return Results.Content(pageService.GeneratePage(normalizedPath, clientIp), "text/html");
 });
+await app.Services.GetRequiredService<TarpitArtifactService>().PrepareAsync(app.Lifetime.ApplicationStopping);
 app.Run();
 
 static string? ResolveTarpitClientIp(HttpContext context, NetworkingOptions networking)

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Bounded tarpit ZIP generation and fetch concurrency (#191): arbitrary paths now map to at most four prebuilt archives per rotation, with per-client and global fetch limits, bounded file sizes, cancellation during generation, and an HTML fallback while archives are unavailable. Archive reads no longer wait for generation under a request lock.
+
 ## [1.1.4] - 2026-11-21
 
 ### Added

@@ -141,6 +141,7 @@ Key areas:
   - `FlaggedIpTtlSeconds` defaults to `604800` (seven days) and `RepeatOffenderThreshold` defaults to `3`, matching Python's tarpit flagger. Served hits refresh ordinary flag expiry; after more than three flags in the window, the flag has no expiry. In trusted-proxy mode, configure explicit trusted proxy addresses on the public tarpit origin.
   - `ArchiveDirectory`, `ArchiveRotationMinutes`, and `MaximumArchivesToKeep` control rotating ZIP decoy retention.
   - `JavaScriptDecoyFileCount`, `MinJavaScriptDecoyFileSizeKb`, and `MaxJavaScriptDecoyFileSizeKb` control generated JavaScript archive contents.
+  - ZIP requests select one of at most four prebuilt archive variants per rotation. Generation runs outside the request path; an archive that is not ready, an overloaded reader, or an exceeded rate limit serves the ordinary tarpit HTML response. Archive fetches are capped at 30 per client and 1000 globally per minute, with at most 8 concurrent reads. Generated archives contain at most 32 JavaScript files of 64 KiB each, and reads reject archives over 4 MiB. These resource limits apply to the edge and dedicated tarpit origin independently.
 - `DefenseEngine:Observability`
 
 For direct edge deployments, leave `DefenseEngine:Networking:ClientIpResolutionMode` as `Direct`. If the app is behind a reverse proxy or CDN, switch it to `TrustedProxy`. Put ordinary TLS collectors/reverse proxies in `DefenseEngine:Networking:TrustedProxies` and CDN edges in the separate `TrustedCdnProxies` list.
