@@ -64,7 +64,8 @@ public sealed class IntakeDeliveryStoreTests
         using var harness = SqliteStoreHarness.Create();
         var store = harness.CreateStore();
         store.Add(CreateRecord("198.51.100.40", IntakeDeliveryStatuses.Failed, $"failed for https://hooks.example.test/services/{Canary}")
-            with { Target = $"https://hooks.example.test/services/{Canary}?token={Canary}" });
+            with
+        { Target = $"https://hooks.example.test/services/{Canary}?token={Canary}" });
 
         var recent = store.GetRecent(10);
 
