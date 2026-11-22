@@ -85,6 +85,8 @@ The appsettings.json file provides configuration values used by the ASP.NET Core
 
 * **ApiKeyHeaderName**: Header name required for the authenticated `/analyze` webhook endpoint.
 * **ApiKey**: Shared secret required to access `/analyze`. If blank, the endpoint is not exposed.
+* **RateLimitPerMinute**: Requests per minute the intake key may send in total, from any number of addresses (default `600`; `0` disables). Over the limit the response is `429` with `Retry-After`.
+* **FailedAuthLimitPerMinute**: Wrong-key attempts per minute one client address may make before everything from it is refused with `429` until the minute ends (default `30`; `0` disables). This stops the key being guessed at network speed; it also holds a valid key from that address until the minute ends.
 
 #### **DefenseEngine:Audit**
 

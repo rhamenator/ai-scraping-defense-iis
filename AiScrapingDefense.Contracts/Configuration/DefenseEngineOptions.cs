@@ -266,6 +266,18 @@ public sealed class IntakeOptions
 
     /// <summary>Largest serialized webhook event accepted at /analyze, in bytes (the per-field limits apply first).</summary>
     public int MaxEventBytes { get; set; } = 32 * 1024;
+
+    /// <summary>
+    /// Requests per minute the intake credential may send in total, however many addresses it comes from (0 disables). Over
+    /// the limit the response is 429 with <c>Retry-After</c>.
+    /// </summary>
+    public int RateLimitPerMinute { get; set; } = 600;
+
+    /// <summary>
+    /// Wrong-credential attempts per minute one client address may make before everything from it is refused (429) until the
+    /// minute ends (0 disables).
+    /// </summary>
+    public int FailedAuthLimitPerMinute { get; set; } = 30;
 }
 
 public sealed class QueueOptions
