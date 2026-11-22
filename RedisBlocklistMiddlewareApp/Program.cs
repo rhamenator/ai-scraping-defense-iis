@@ -379,6 +379,9 @@ builder.Services.AddOpenTelemetry()
     });
 
 builder.Services.AddSingleton<IRedisConnectionProvider, RedisConnectionProvider>();
+builder.Services.AddSingleton(sp => new TarpitHopLimiter(
+    sp.GetRequiredService<IOptions<DefenseEngineOptions>>().Value,
+    sp.GetRequiredService<ILogger<TarpitHopLimiter>>()));
 builder.Services.AddSingleton<RedisBlocklistService>();
 var configuredConsensusEnabled = builder.Configuration.GetValue<bool>(
     $"{DefenseEngineOptions.SectionName}:Consensus:Enabled");
@@ -583,6 +586,8 @@ app.MapGet(tarpitRoutePattern, async (
     string? path,
     ITarpitPageService tarpitPageService,
     ITarpitArtifactService tarpitArtifactService,
+    TarpitHopLimiter hopLimiter,
+    ILogger<Program> tarpitLogger,
     IClientIpResolver clientIpResolver,
     DefenseTelemetry telemetry,
     IOptions<DefenseEngineOptions> options,
@@ -603,22 +608,32 @@ app.MapGet(tarpitRoutePattern, async (
             preserveMethod: true);
     }
 
+    // Filler content must never be indexed under the protected site's domain.
+    context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+    var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
+    var count = await hopLimiter.CountFlaggedHopAsync(clientIp);
+    if (count > tarpitOptions.MaxHops)
+    {
+        var reason = $"Tarpit hop limit exceeded ({count} hits in {tarpitOptions.HopWindowSeconds}s)";
+        await hopLimiter.BlockAsync(clientIp, reason);
+        return Results.Content("<html><head><title>Forbidden</title></head><body>Access Denied.</body></html>", "text/html", statusCode: 403);
+    }
     if (tarpitOptions.ResponseDelayMilliseconds > 0)
     {
         await Task.Delay(tarpitOptions.ResponseDelayMilliseconds, cancellationToken);
     }
-
-    // Filler content must never be indexed under the protected site's domain.
-    context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
-    var clientIp = clientIpResolver.Resolve(context) ?? "unknown";
     var normalizedPath = path ?? string.Empty;
+    tarpitLogger.LogInformation("TAR_PIT HIT: Path={Path}, IP={IpAddress}, Reason={Reason}",
+        context.Request.Path, clientIp, "Tarpit Hit");
     var artifact = await tarpitArtifactService.TryGetArtifactAsync(normalizedPath, cancellationToken);
     if (artifact is not null)
     {
+        await hopLimiter.FlagAsync(clientIp);
         telemetry.RecordTarpitRender();
         return Results.File(artifact.Content, artifact.ContentType, artifact.FileName);
     }
 
+    await hopLimiter.FlagAsync(clientIp);
     var content = tarpitPageService.GeneratePage(normalizedPath, clientIp);
     telemetry.RecordTarpitRender();
     return Results.Content(content, "text/html");

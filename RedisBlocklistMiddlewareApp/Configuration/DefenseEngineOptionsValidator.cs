@@ -167,6 +167,12 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 "DefenseEngine:Networking:TrustedProxies and TrustedCdnProxies must be empty when ClientIpResolutionMode is 'Direct'.");
         }
 
+        if (options.Tarpit.FlaggedIpTtlSeconds <= 0 || options.Tarpit.RepeatOffenderThreshold < 0 ||
+            options.Tarpit.MaxHops < 0 || options.Tarpit.HopWindowSeconds <= 0)
+        {
+            errors.Add("DefenseEngine:Tarpit hop and flag settings must be valid: MaxHops and RepeatOffenderThreshold nonnegative, HopWindowSeconds and FlaggedIpTtlSeconds positive.");
+        }
+
         if (IsEmptyEquivalentRoute(options.Tarpit.PathPrefix))
         {
             errors.Add(

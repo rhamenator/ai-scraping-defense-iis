@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-21
+
+### Added
+
+- Flagged tarpit clients now have a Redis per-IP hop limit (`DefenseEngine:Tarpit:MaxHops` = 250, `HopWindowSeconds` = 86400). The hit after the limit returns 403 and stores `Tarpit hop limit exceeded (N hits in Ws)` using the existing blocklist key format and `BlockDurationMinutes` TTL. Set `MaxHops` to `0` to disable it. The dedicated public tarpit origin counts split-topology fetches, including ZIP decoys; Redis failures fail open (#219). Archive generation and concurrency work remains tracked in #191.
+- Served tarpit hits flag the client with Python's seven-day ordinary flag expiry (`FlaggedIpTtlSeconds` = 604800); repeat offenders above `RepeatOffenderThreshold` = 3 retain their flags. The public tarpit origin validates trusted-proxy configuration and excludes unresolved proxy addresses from hop accounting.
+
 ## [1.1.3] - 2026-11-20
 
 ### Changed

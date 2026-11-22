@@ -20,6 +20,7 @@ public sealed class RedisBlocklistMiddleware
     private readonly DefenseTelemetry _telemetry;
     private readonly DefenseEngineOptions _options;
     private readonly IRequestRateTracker? _rateTracker;
+    private readonly TarpitHopLimiter? _hopLimiter;
 
     public RedisBlocklistMiddleware(
         RequestDelegate next,
@@ -32,7 +33,8 @@ public sealed class RedisBlocklistMiddleware
         ITarpitPageService tarpitPageService,
         DefenseTelemetry telemetry,
         IOptions<DefenseEngineOptions> options,
-        IRequestRateTracker? rateTracker = null)
+        IRequestRateTracker? rateTracker = null,
+        TarpitHopLimiter? hopLimiter = null)
     {
         _next = next;
         _logger = logger;
@@ -45,6 +47,7 @@ public sealed class RedisBlocklistMiddleware
         _telemetry = telemetry;
         _options = options.Value;
         _rateTracker = rateTracker;
+        _hopLimiter = hopLimiter;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -188,8 +191,20 @@ public sealed class RedisBlocklistMiddleware
                         preserveMethod: true);
                     return;
                 }
+                var count = _hopLimiter is null ? null : await _hopLimiter.CountFlaggedHopAsync(ipAddress);
+                if (count > _options.Tarpit.MaxHops)
+                {
+                    var reason = $"Tarpit hop limit exceeded ({count} hits in {_options.Tarpit.HopWindowSeconds}s)";
+                    await _hopLimiter!.BlockAsync(ipAddress, reason);
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsync("<html><head><title>Forbidden</title></head><body>Access Denied.</body></html>");
+                    return;
+                }
                 context.Request.Headers["X-Tarpit-Reason"] = string.Join(';', signals);
+                _logger.LogInformation("TAR_PIT HIT: Path={Path}, IP={IpAddress}, Reason={Reason}",
+                    originalPath, ipAddress, "Tarpit Hit");
                 var content = _tarpitPageService.GeneratePage(originalPath, ipAddress);
+                if (_hopLimiter is not null) await _hopLimiter.FlagAsync(ipAddress);
                 _telemetry.RecordTarpitRender();
                 context.Response.StatusCode = StatusCodes.Status200OK;
                 context.Response.ContentType = "text/html";

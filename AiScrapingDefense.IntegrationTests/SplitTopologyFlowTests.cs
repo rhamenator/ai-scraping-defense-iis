@@ -48,6 +48,8 @@ public sealed class SplitTopologyFlowTests
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["DefenseEngine:Tarpit:ResponseDelayMilliseconds"] = "0",
+                        ["DefenseEngine:Redis:ConnectionString"] = _fixture.RedisConnectionString,
+                        ["DefenseEngine:Redis:BlocklistDatabase"] = "2",
                         ["DefenseEngine:Tarpit:PostgresMarkov:Enabled"] = "true",
                         ["DefenseEngine:Tarpit:PostgresMarkov:ConnectionString"] = _fixture.PostgresConnectionString
                     }));
