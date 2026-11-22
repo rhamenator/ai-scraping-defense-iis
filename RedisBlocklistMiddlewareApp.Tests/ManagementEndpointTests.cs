@@ -447,6 +447,55 @@ public sealed class ManagementEndpointTests
     }
 
     [Fact]
+    public void OperatorDashboardPageService_ConfirmsBlockAndUnblockAndRequiresAReasonToBlock()
+    {
+        var html = new OperatorDashboardPageService().Render();
+
+        Assert.Contains("id=\"confirmDialog\"", html);
+        Assert.Contains("confirmAction(", html);
+        Assert.Contains("Reason (required to block)", html);
+        Assert.Contains("Enter a reason before blocking an address.", html);
+        // The old silent default reason is gone.
+        Assert.DoesNotContain("|| \"manual_block\"", html);
+    }
+
+    [Fact]
+    public void OperatorDashboardPageService_OffersDecisionFeedback()
+    {
+        var html = new OperatorDashboardPageService().Render();
+
+        Assert.Contains("id=\"feedbackAction\"", html);
+        Assert.Contains("id=\"feedbackReason\"", html);
+        Assert.Contains("id=\"feedbackSubmit\"", html);
+        Assert.Contains("/defense/feedback", html);
+        Assert.Contains("decisionId: decision.id", html);
+        Assert.Contains("Enter a reason for the feedback.", html);
+    }
+
+    [Fact]
+    public void OperatorDashboardPageService_ShowsConsensusStatusOnlyWhenEnabled()
+    {
+        var html = new OperatorDashboardPageService().Render();
+
+        Assert.Contains("id=\"consensusCard\"", html);
+        Assert.Contains("/defense/consensus/status", html);
+        Assert.Contains("No leader is elected", html);
+        // Hidden until the status call says consensus is enabled.
+        Assert.Contains("class=\"status-card hidden\" id=\"consensusCard\"", html);
+    }
+
+    [Fact]
+    public void OperatorDashboardPageService_ExportsTheFilteredDecisions()
+    {
+        var html = new OperatorDashboardPageService().Render();
+
+        Assert.Contains("id=\"exportCsvButton\"", html);
+        Assert.Contains("id=\"exportJsonButton\"", html);
+        Assert.Contains("function filteredEvents()", html);
+        Assert.Contains("function toCsvCell(", html);
+    }
+
+    [Fact]
     public void OperatorDashboardPageService_KeepsDecisionTableUncutAndSignalChipsWrapped()
     {
         var html = new OperatorDashboardPageService().Render();
