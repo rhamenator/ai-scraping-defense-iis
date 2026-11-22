@@ -93,7 +93,7 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
             var hash = SHA256.HashData(Encoding.UTF8.GetBytes(path));
             var variant = (int)(BitConverter.ToUInt32(hash, 0) % (uint)VariantCount);
             var archiveFileName = ArchiveFileName(bucket, variant);
-            var archivePath = Path.Combine(ResolveArchiveDirectory(), archiveFileName);
+            var archivePath = Path.Join(ResolveArchiveDirectory(), archiveFileName);
             if (!File.Exists(archivePath))
             {
                 Interlocked.Exchange(ref _readyBucket, -1);
@@ -185,7 +185,7 @@ public sealed class TarpitArtifactService : ITarpitArtifactService
             for (var variant = 0; variant < VariantCount; variant++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var archivePath = Path.Combine(archiveDirectory, ArchiveFileName(bucket, variant));
+                var archivePath = Path.Join(archiveDirectory, ArchiveFileName(bucket, variant));
                 if (File.Exists(archivePath)) continue;
                 var content = await Task.Run(
                     () => BuildArchive($"decoy_{variant}", bucket, cancellationToken), cancellationToken);

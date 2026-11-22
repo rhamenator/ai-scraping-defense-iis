@@ -91,7 +91,7 @@ public sealed class TarpitArtifactServiceTests
         await service.PrepareAsync(CancellationToken.None);
         var first = await service.TryGetArtifactAsync("assets.zip", "198.51.100.105", CancellationToken.None);
         Assert.NotNull(first);
-        File.Delete(Path.Combine(harness.ArchiveDirectory, first.FileName));
+        File.Delete(Path.Join(harness.ArchiveDirectory, first.FileName));
 
         Assert.Null(await service.TryGetArtifactAsync("assets.zip", "198.51.100.105", CancellationToken.None));
         await service.PrepareAsync(CancellationToken.None);
