@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Operator dashboard improvements (#235, #236, #237, #238): block and unblock now ask for confirmation naming the normalized address and its current status, and a reason is required to block (the silent `manual_block` default is gone); the decision detail has a "Was this decision wrong?" form that records feedback through `/defense/feedback` and lists the feedback already recorded for that decision; a Consensus card (role, term, leader, and a no-leader warning) appears when consensus is enabled; and the filtered decision table can be exported as CSV or JSON, with spreadsheet formulas neutralised in text cells.
+- Consensus (when enabled) now stores its Raft log with DotNext's `WriteAheadLog` in `<StoragePath>/wal` instead of the `DiskBasedStateMachine` directory `<StoragePath>/log`, with a one-time automatic migration on first start (committed entries, terms and exact bytes are copied; the old directory is kept as `log.legacy-<timestamp>`; a failed migration changes nothing and the node does not start). This prepares the later move to DotNext 6. Upgrade all nodes of a cluster together; see `docs/consensus_log_storage.md` for the details, including that uncommitted trailing entries are not migrated and that committed entries are no longer replayed into Redis on each restart.
 
 ### Fixed
 
