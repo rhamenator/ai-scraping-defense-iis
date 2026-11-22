@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Upgrade in two steps:** DotNext is now 6.12.2 (#196, supersedes the Dependabot PR). Run the new `tools/RaftLogExporter` against the stopped node's storage directory first; the Raft log is then imported from its export, and a node with an old log and no export refuses to start and says how to proceed. Consensus membership is now static (`Consensus:Members`, recorded in `members.json`). See `docs/migrations.md`.
+
+### Added
+
+- Raft snapshots and log compaction (#196): a blocklist snapshot every `Consensus:SnapshotEveryCommands` (default 1000) commands; lagging followers are brought up with a snapshot. `docs/migrations.md` documents the reusable migration pattern.
+
+### Changed
+
 - **Breaking default:** the management API and dashboard now require HTTPS (#186). New setting `DefenseEngine:Management:RequireSecureTransport`, on by default. In Production the app refuses to start when management is enabled and no HTTPS is provided (an `https://` listener, a TLS-terminating proxy in `TrustedProxy` mode with `Networking:TrustedProxies` set, or IIS, which owns the bindings), and every `/defense` request that did not arrive over HTTPS (after `X-Forwarded-Proto` from a trusted proxy is applied) gets 403. The Development environment is exempt, and HTTPS configured through `ASPNETCORE_URLS`, `Kestrel:Endpoints`, or `ASPNETCORE_HTTPS_PORTS` all count. **Upgrading an HTTP-only install:** set `DefenseEngine__Management__RequireSecureTransport=false` to keep the old behaviour; Production logs a warning at each start while it is off. The shipped `compose.yaml` (single-host HTTP quick start, via `ASD_REQUIRE_SECURE_MANAGEMENT`) and the Kubernetes manifest (TLS ends at the Ingress and the trusted-proxy range is cluster specific) opt out explicitly, with comments on how to turn it on. `scripts/check_secure_transport_locally.sh` verifies the behaviour end to end locally.
 
 ### Security
@@ -35,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Operator dashboard improvements (#235, #236, #237, #238): block and unblock now ask for confirmation naming the normalized address and its current status, and a reason is required to block (the silent `manual_block` default is gone); the decision detail has a "Was this decision wrong?" form that records feedback through `/defense/feedback` and lists the feedback already recorded for that decision; a Consensus card (role, term, leader, and a no-leader warning) appears when consensus is enabled; and the filtered decision table can be exported as CSV or JSON, with spreadsheet formulas neutralised in text cells.
+- Consensus (when enabled) now stores its Raft log with DotNext's `WriteAheadLog` in `<StoragePath>/wal` instead of the `DiskBasedStateMachine` directory `<StoragePath>/log`, with a one-time automatic migration on first start (committed entries, terms and exact bytes are copied; the old directory is kept as `log.legacy-<timestamp>`; a failed migration changes nothing and the node does not start). This prepares the later move to DotNext 6. Upgrade all nodes of a cluster together; see `docs/consensus_log_storage.md` for the details, including that uncommitted trailing entries are not migrated and that committed entries are no longer replayed into Redis on each restart.
 
 ### Fixed
 

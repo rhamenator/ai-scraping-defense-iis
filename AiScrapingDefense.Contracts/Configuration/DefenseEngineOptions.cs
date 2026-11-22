@@ -64,6 +64,12 @@ public sealed class ConsensusOptions
     public int UpperElectionTimeoutMilliseconds { get; set; } = 1200;
 
     public ConsensusMemberOptions[] Members { get; set; } = [];
+
+    /// <summary>
+    /// A snapshot of the blocklist is written, and the log before it compacted, after this many committed commands
+    /// (#196). Smaller values keep the log and restart time shorter at the cost of more snapshot writes.
+    /// </summary>
+    public int SnapshotEveryCommands { get; set; } = 1000;
 }
 
 public sealed class ConsensusMemberOptions
