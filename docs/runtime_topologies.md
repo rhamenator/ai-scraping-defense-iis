@@ -52,3 +52,13 @@ Cloudflare integration only produces an operator recommendation to enable Under 
 6. The public edge never treats a configured proxy/CDN address as the originating client.
 
 `compose.yaml` is the local split-runtime example. `deploy/kubernetes/split-consensus.yaml` is the three-edge-node example.
+
+## Kubernetes example: production prerequisites
+
+`deploy/kubernetes/split-consensus.yaml` is an example, not a turnkey production deployment. Before using it outside a lab:
+
+- **Secrets:** replace every value in the `defense-secrets` Secret, including the new `redis-password`. Redis now requires that password, every Redis client in the manifest sends it, and a NetworkPolicy lets only the edge, escalation and tarpit pods reach Redis. Your CNI must enforce NetworkPolicy for that to mean anything.
+- **TLS in front of the edge:** the edge runs plain HTTP and serves the management login and dashboard. The example publishes it only through two Ingress objects with TLS and HTTP-to-HTTPS redirect (annotations are for ingress-nginx; use your controller's equivalents). Replace the host, the `edge-gateway-tls` secret and your certificate automation.
+- **Management allowlist:** the `/defense` routes are on their own Ingress limited by `whitelist-source-range`. Replace the example CIDR with your operator or VPN ranges. A wrong list locks you out of management, which is the safe failure.
+- **Session cookie:** outside the Development environment the management session cookie is always marked Secure, even when the app only sees plain HTTP behind the Ingress.
+- **Not provided:** TLS between pods (use a service mesh or an encrypting CNI if traffic crosses untrusted nodes), TLS for Redis itself, and a startup check that refuses to run management without a secure transport. The tarpit Service stays a public LoadBalancer on purpose; it serves only decoy content.

@@ -17,6 +17,7 @@ stringData:
   # tls-fingerprint-attestation-previous-key: set-only-during-a-rolling-rotation
   consensus-shared-secret: replace-with-a-random-consensus-secret-of-at-least-32-chars
   postgres-password: replace-with-a-random-postgres-password
+  redis-password: replace-with-a-random-redis-password-of-at-least-32-chars
 ---
 apiVersion: v1
 kind: Service
@@ -42,14 +43,71 @@ metadata:
   name: edge-gateway-public
   namespace: ai-scraping-defense
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
+  # Not exposed directly: traffic reaches the edge only through the TLS Ingress objects below, because the edge runs
+  # plain HTTP and serves the management login and dashboard.
+  type: ClusterIP
   selector:
     app: edge-gateway
   ports:
     - name: http
       port: 80
       targetPort: http
+---
+# Public site traffic: HTTPS only. Replace the host and the TLS secret, and use your own ingress class and certificate
+# automation. The annotations below are for ingress-nginx; other controllers have equivalents.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edge-gateway-public
+  namespace: ai-scraping-defense
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [protected.example.com]
+      secretName: edge-gateway-tls
+  rules:
+    - host: protected.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: edge-gateway-public
+                port:
+                  name: http
+---
+# Management routes (login, dashboard, API) are reachable only from operator networks. The longer /defense prefix wins
+# over / on the same host. Replace the CIDR list with your operator or VPN ranges; with an empty or wrong list nobody
+# can reach management, which is the safe failure.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edge-gateway-management
+  namespace: ai-scraping-defense
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/whitelist-source-range: "192.0.2.0/24"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [protected.example.com]
+      secretName: edge-gateway-tls
+  rules:
+    - host: protected.example.com
+      http:
+        paths:
+          - path: /defense
+            pathType: Prefix
+            backend:
+              service:
+                name: edge-gateway-public
+                port:
+                  name: http
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -87,8 +145,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: redis-password
             - name: DefenseEngine__Redis__ConnectionString
-              value: redis:6379
+              value: redis:6379,password=$(REDIS_PASSWORD)
             - name: DefenseEngine__Topology__Mode
               value: Split
             - name: DefenseEngine__Topology__EscalationBaseUrl
@@ -225,8 +288,13 @@ spec:
               value: Production
             - name: ASPNETCORE_URLS
               value: http://+:8080
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: redis-password
             - name: DefenseEngine__Redis__ConnectionString
-              value: redis:6379
+              value: redis:6379,password=$(REDIS_PASSWORD)
             - name: DefenseEngine__Topology__ServiceToken
               valueFrom:
                 secretKeyRef:
@@ -306,8 +374,13 @@ spec:
               value: Production
             - name: ASPNETCORE_URLS
               value: http://+:8080
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: redis-password
             - name: DefenseEngine__Redis__ConnectionString
-              value: redis:6379
+              value: redis:6379,password=$(REDIS_PASSWORD)
           readinessProbe:
             httpGet:
               path: /health
@@ -361,7 +434,13 @@ spec:
       containers:
         - name: redis
           image: redis:7.2-alpine
-          args: ["redis-server", "--appendonly", "yes"]
+          args: ["redis-server", "--appendonly", "yes", "--requirepass", "$(REDIS_PASSWORD)"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: defense-secrets
+                  key: redis-password
           ports:
             - name: redis
               containerPort: 6379
@@ -456,3 +535,25 @@ spec:
       ports:
         - protocol: TCP
           port: 3262
+---
+# Redis holds the enforcement state, so only the defense workloads may connect to it, in addition to its password.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-only-from-defense-pods
+  namespace: ai-scraping-defense
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [edge-gateway, escalation-engine, tarpit-api]
+      ports:
+        - protocol: TCP
+          port: 6379

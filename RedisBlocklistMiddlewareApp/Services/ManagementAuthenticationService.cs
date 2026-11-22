@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using RedisBlocklistMiddlewareApp.Configuration;
 
@@ -15,11 +16,14 @@ public sealed class ManagementAuthenticationService
     private readonly byte[] _expectedApiKeyBytes;
     private readonly IDataProtector _dataProtector;
     private readonly TimeSpan _sessionLifetime;
+    private readonly bool _developmentEnvironment;
 
     public ManagementAuthenticationService(
         IOptions<DefenseEngineOptions> options,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        IHostEnvironment environment)
     {
+        _developmentEnvironment = environment.IsDevelopment();
         _headerName = options.Value.Management.ApiKeyHeaderName;
         _expectedApiKeyBytes = Encoding.UTF8.GetBytes(options.Value.Management.ApiKey);
         _dataProtector = dataProtectionProvider.CreateProtector("management-dashboard-session");
@@ -58,7 +62,7 @@ public sealed class ManagementAuthenticationService
                 IsEssential = true,
                 Path = "/defense",
                 SameSite = SameSiteMode.Strict,
-                Secure = response.HttpContext.Request.IsHttps,
+                Secure = ShouldSecureCookie(response.HttpContext),
                 MaxAge = _sessionLifetime
             });
     }
@@ -71,7 +75,7 @@ public sealed class ManagementAuthenticationService
             {
                 Path = "/defense",
                 SameSite = SameSiteMode.Strict,
-                Secure = response.HttpContext.Request.IsHttps
+                Secure = ShouldSecureCookie(response.HttpContext)
             });
     }
 
@@ -119,4 +123,10 @@ public sealed class ManagementAuthenticationService
 
         return CryptographicOperations.FixedTimeEquals(expected, supplied);
     }
+
+    // Outside Development the cookie is always Secure. Behind a TLS-terminating ingress the app sees plain HTTP
+    // unless forwarded headers are configured, and a cookie that is only Secure when the request looks like HTTPS
+    // would then be sent without the flag over the public connection.
+    private bool ShouldSecureCookie(HttpContext httpContext) =>
+        httpContext.Request.IsHttps || !_developmentEnvironment;
 }
