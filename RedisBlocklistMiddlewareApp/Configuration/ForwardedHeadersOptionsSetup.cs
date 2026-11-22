@@ -48,5 +48,15 @@ public sealed class ForwardedHeadersOptionsSetup : IConfigureOptions<ForwardedHe
                 options.KnownIPNetworks.Add(new System.Net.IPNetwork(networkAddress, prefixLength));
             }
         }
+
+        // With one CDN or ingress in front, the single trailing hop is the client. With a chain (client, CDN,
+        // ingress) a limit of 1 stops on a trusted proxy address and the client is never identified. Walking the
+        // whole chain is only safe because the walk stops at the first address that is not a configured proxy, so
+        // entries a client prepends cannot be reached. Without any configured proxy the header is not trusted at all.
+        var configuredLimit = _options.Networking.TrustedProxyHopLimit;
+        var hasTrustedProxies = options.KnownProxies.Count > 0 || options.KnownIPNetworks.Count > 0;
+        options.ForwardLimit = configuredLimit > 0
+            ? configuredLimit
+            : hasTrustedProxies ? null : 1;
     }
 }

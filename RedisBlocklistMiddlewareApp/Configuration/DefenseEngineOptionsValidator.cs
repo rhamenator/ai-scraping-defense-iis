@@ -132,6 +132,11 @@ public sealed class DefenseEngineOptionsValidator : IValidateOptions<DefenseEngi
                 $"DefenseEngine:Networking:ClientIpResolutionMode must be '{ClientIpResolutionModes.Direct}' or '{ClientIpResolutionModes.TrustedProxy}'.");
         }
 
+        if (networking.TrustedProxyHopLimit < 0)
+        {
+            errors.Add("DefenseEngine:Networking:TrustedProxyHopLimit must be zero (walk the verified chain) or a positive number.");
+        }
+
         var invalidTrustedProxies = networking.TrustedProxies
             .Where(proxy => !IsValidProxyOrNetwork(proxy))
             .ToArray();

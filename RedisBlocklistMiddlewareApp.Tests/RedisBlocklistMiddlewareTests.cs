@@ -496,6 +496,65 @@ public sealed class RedisBlocklistMiddlewareTests
         }
     }
 
+    [Fact]
+    public async Task InvokeAsync_FailsClosed_WhenTrustedProxyModeCannotResolveAClient()
+    {
+        var blocklist = new FakeBlocklistService();
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            blocklist,
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver(null),
+            options => options.Networking.ClientIpResolutionMode = ClientIpResolutionModes.TrustedProxy);
+        var context = CreateContext("/products");
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextState.WasCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/health")]
+    [InlineData("/live")]
+    [InlineData("/robots.txt")]
+    public async Task InvokeAsync_KeepsBypassedRoutesReachable_WhenTrustedProxyModeCannotResolveAClient(string path)
+    {
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver(null),
+            options => options.Networking.ClientIpResolutionMode = ClientIpResolutionModes.TrustedProxy);
+
+        await middleware.InvokeAsync(CreateContext(path));
+
+        Assert.True(nextState.WasCalled);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_PassesThrough_WhenDirectModeHasNoClientAddress()
+    {
+        var nextState = new NextDelegateState();
+        var middleware = CreateMiddleware(
+            nextState,
+            new FakeBlocklistService(),
+            new FakeRequestSignalEvaluator(new RequestSignalEvaluation(false, string.Empty, [])),
+            new FakeSuspiciousRequestQueue(),
+            new FakeDefenseEventStore(),
+            new FakeClientIpResolver(null));
+
+        await middleware.InvokeAsync(CreateContext("/products"));
+
+        Assert.True(nextState.WasCalled);
+    }
+
     private static RedisBlocklistMiddleware CreateMiddleware(
         NextDelegateState nextState,
         IBlocklistService blocklistService,

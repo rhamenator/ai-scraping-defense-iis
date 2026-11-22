@@ -37,6 +37,8 @@ Both modes expose `/live` for process liveness and `/health` for dependency/read
 
 Use `TrustedProxy` mode only with explicit addresses. Put ordinary proxies and Envoy collectors in `Networking:TrustedProxies`; put Cloudflare's published ranges in `Networking:TrustedCdnProxies`. Cloudflare identity and fingerprint headers are accepted only from the CDN list when `DefenseEngine:Cloudflare:Enabled` is true. Collector headers are accepted only from the non-CDN list, with no fallback across trust boundaries. Missing, malformed, or spoofed origin headers produce `unknown`; the proxy or Cloudflare edge address is never substituted as the block target.
 
+In `TrustedProxy` mode the client is found by walking `X-Forwarded-For` from the right while each hop is in `TrustedProxies` or `TrustedCdnProxies`; the first address that is not a configured proxy is the client, so a chain such as client, CDN, ingress works as long as the CDN and the ingress are both listed, and entries a client prepends are never reached. `Networking:TrustedProxyHopLimit` (default `0`, meaning the whole verified chain) caps the number of hops for a deployment with a fixed chain. If the walk still ends on a trusted proxy address or on no address (for example a hop is missing from the list), protected routes now answer 403 and log an error instead of skipping inspection; `/health`, `/live`, `/robots.txt` and the other bypassed routes stay reachable. If you see "Could not determine the client address" after upgrading, add the missing proxy addresses.
+
 Fingerprint provenance crossing the split-runtime or MCP boundary must also use
 the HMAC contract in [Trusted TLS fingerprints](tls_fingerprint_attestation.md).
 

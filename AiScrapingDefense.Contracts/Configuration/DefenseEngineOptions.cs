@@ -219,6 +219,13 @@ public sealed class NetworkingOptions
     public string[] TrustedProxies { get; set; } = [];
 
     public string[] TrustedCdnProxies { get; set; } = [];
+
+    /// <summary>
+    /// Maximum number of X-Forwarded-For hops to consume in TrustedProxy mode. 0 (the default) walks the chain from
+    /// the right while each hop is a configured trusted proxy and stops at the first address that is not, which is
+    /// the client. Set a positive number to cap it for a deployment with a known, fixed number of proxies.
+    /// </summary>
+    public int TrustedProxyHopLimit { get; set; }
 }
 
 public static class ClientIpResolutionModes
