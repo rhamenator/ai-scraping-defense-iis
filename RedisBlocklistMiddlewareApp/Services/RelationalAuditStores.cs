@@ -144,6 +144,38 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         summaryCommand.ExecuteNonQuery();
     }
 
+    public int PruneOldest(double fraction, int minimumRows)
+    {
+        if (fraction <= 0 && minimumRows <= 0)
+        {
+            return 0;
+        }
+
+        using var connection = OpenConnection();
+        using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = "SELECT COUNT(*) FROM defense_events;";
+        var total = Convert.ToInt64(countCommand.ExecuteScalar() ?? 0L);
+        if (total <= 0)
+        {
+            return 0;
+        }
+
+        var target = Math.Max(minimumRows, (long)Math.Ceiling(total * fraction));
+        using var deleteCommand = connection.CreateCommand();
+        deleteCommand.CommandText =
+            $"""
+            DELETE FROM defense_events
+            WHERE id IN (
+                SELECT id FROM defense_events
+                WHERE id NOT IN (SELECT decision_id FROM defense_feedback)
+                ORDER BY id ASC
+                {_dialect.LimitClause("@count")}
+            );
+            """;
+        AddParameter(deleteCommand, "@count", target);
+        return deleteCommand.ExecuteNonQuery();
+    }
+
     public IReadOnlyList<DefenseDecision> GetRecent(int count)
     {
         var safeCount = Math.Clamp(count, 1, _maxRecentEvents);
