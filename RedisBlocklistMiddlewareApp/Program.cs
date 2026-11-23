@@ -446,6 +446,7 @@ builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
+builder.Services.AddSingleton<ISetupWizardService, SetupWizardService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
 builder.Services.AddSingleton<IOriginHealthChecker, OriginHealthChecker>();
@@ -776,6 +777,35 @@ public partial class Program
             int count = 50) =>
         {
             return Results.Ok(store.GetRecent(count));
+        });
+
+        management.MapGet("/setup", async (
+            [FromServices] ISetupWizardService setupWizard,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
+        {
+            var accept = httpContext.Request.Headers.Accept.ToString();
+            if (accept.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Content(await setupWizard.RenderHtmlAsync(cancellationToken), "text/html");
+            }
+
+            return Results.Ok(await setupWizard.GetStateAsync(cancellationToken));
+        });
+
+        management.MapPost("/setup", async (
+            SetupWizardUpdateRequest request,
+            [FromServices] ISetupWizardService setupWizard,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                return Results.Ok(await setupWizard.UpdateAsync(request, cancellationToken));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
 
         management.MapGet("/metrics", (

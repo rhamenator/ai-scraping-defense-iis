@@ -477,6 +477,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
             <div class="action-row">
               <button class="primary" id="loginButton" type="submit">Open dashboard</button>
               <button class="secondary" id="refreshButton" type="button">Refresh now</button>
+              <a class="secondary" href="/defense/setup" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;">Setup Wizard</a>
             </div>
           </form>
           <p class="inline-note">The browser session uses a server-issued cookie after the initial sign-in. The dashboard then reads the same `/defense/*` management endpoints as any other operator client, including `/defense/recommendations` for advisory tuning suggestions.</p>
