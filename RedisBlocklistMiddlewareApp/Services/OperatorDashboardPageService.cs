@@ -149,33 +149,64 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     }
 
     .metric-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      display: block;
+      overflow-x: auto;
     }
 
-    .metric-card {
-      padding: 18px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.82);
+    .metrics-sheet {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(255, 255, 255, 0.86);
       border: 1px solid var(--line);
-      min-height: 124px;
-      display: grid;
-      gap: 10px;
-      align-content: start;
+      border-radius: 14px;
+      overflow: hidden;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metrics-sheet th,
+    .metrics-sheet td {
+      border: 1px solid var(--line);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .metrics-sheet thead th {
+      background: rgba(29, 34, 24, 0.07);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .metrics-sheet thead th:last-child,
+    .metrics-sheet td.metric-value-cell {
+      text-align: right;
+    }
+
+    .metrics-sheet tbody tr:nth-child(even) {
+      background: rgba(244, 239, 228, 0.45);
+    }
+
+    .metrics-sheet tbody tr:hover {
+      background: rgba(141, 42, 30, 0.05);
     }
 
     .metric-label {
-      color: var(--muted);
-      font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      font-weight: 600;
+      color: var(--ink);
     }
 
-    .metric-value {
-      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-      font-size: clamp(2rem, 3vw, 2.8rem);
-      line-height: 1;
+    .metric-desc {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .metric-value-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent);
     }
 
     .toolbar,
@@ -412,7 +443,6 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     @media (max-width: 960px) {
       .hero-grid,
       .panel-grid,
-      .metric-grid,
       .status-grid {
         grid-template-columns: 1fr;
       }
@@ -465,26 +495,37 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
         <p class="inline-note">Derived from the persisted defense event store.</p>
       </div>
       <div class="metric-grid">
-        <article class="metric-card">
-          <div class="metric-label">Total decisions</div>
-          <div id="metricTotal" class="metric-value">0</div>
-          <p>All recorded decisions in the durable audit store.</p>
-        </article>
-        <article class="metric-card">
-          <div class="metric-label">Blocked</div>
-          <div id="metricBlocked" class="metric-value">0</div>
-          <p>Requests escalated into active enforcement.</p>
-        </article>
-        <article class="metric-card">
-          <div class="metric-label">Observed</div>
-          <div id="metricObserved" class="metric-value">0</div>
-          <p>Requests retained for analysis without an immediate block.</p>
-        </article>
-        <article class="metric-card">
-          <div class="metric-label">Latest decision</div>
-          <div id="metricLatest" class="metric-value" style="font-size:1.4rem;">none</div>
-          <p>Most recent decision timestamp, formatted in local operator time.</p>
-        </article>
+        <table class="metrics-sheet" aria-label="Edge metrics">
+          <thead>
+            <tr>
+              <th scope="col">Metric</th>
+              <th scope="col">Description</th>
+              <th scope="col">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="metric-label">Total decisions</td>
+              <td class="metric-desc">All recorded decisions in the durable audit store.</td>
+              <td id="metricTotal" class="metric-value-cell">0</td>
+            </tr>
+            <tr>
+              <td class="metric-label">Blocked</td>
+              <td class="metric-desc">Requests escalated into active enforcement.</td>
+              <td id="metricBlocked" class="metric-value-cell">0</td>
+            </tr>
+            <tr>
+              <td class="metric-label">Observed</td>
+              <td class="metric-desc">Requests retained for analysis without an immediate block.</td>
+              <td id="metricObserved" class="metric-value-cell">0</td>
+            </tr>
+            <tr>
+              <td class="metric-label">Latest decision</td>
+              <td class="metric-desc">Most recent decision timestamp, formatted in local operator time.</td>
+              <td id="metricLatest" class="metric-value-cell">none</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
