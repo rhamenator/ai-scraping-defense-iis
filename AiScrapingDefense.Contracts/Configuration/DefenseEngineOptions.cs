@@ -328,6 +328,14 @@ public sealed class AuditOptions
     /// to age out audit history is the operator's policy decision.
     /// </summary>
     public int RetentionDays { get; set; }
+
+    /// <summary>
+    /// A size limit for the audit database in bytes (0, the default, means no limit is monitored). The size is published as
+    /// <c>ai_scraping_defense_audit_storage_bytes</c> next to this limit, an alert fires above 80 percent, at 90 percent the
+    /// stores stop saving score breakdowns, and at 100 percent the monitor prunes the oldest 10 percent of decision rows
+    /// (minimum 1,000, with a cooldown) while keeping decisions referenced by operator feedback.
+    /// </summary>
+    public long MaxDatabaseBytes { get; set; }
 }
 
 public sealed class CloudflareOptions

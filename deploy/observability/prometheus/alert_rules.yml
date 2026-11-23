@@ -36,3 +36,12 @@ groups:
         annotations:
           summary: Intake alert or reporting deliveries are failing
           description: One or more webhook, SMTP, or community-report deliveries failed in the last 15 minutes.
+
+      - alert: AiScrapingDefenseAuditStorageNearLimit
+        expr: max(ai_scraping_defense_audit_storage_bytes / (ai_scraping_defense_audit_storage_limit_bytes > 0)) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The audit database is nearing its size limit
+          description: The audit database is above 80 percent of Audit:MaxDatabaseBytes. At 90 percent score breakdowns stop being stored. Lower Audit:MaxStoredEvents, set Audit:RetentionDays, or raise the limit.

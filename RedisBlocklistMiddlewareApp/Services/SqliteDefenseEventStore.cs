@@ -15,6 +15,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
     private readonly int _retentionDays;
     private int _insertsSincePrune;
     private int _feedbackInsertsSincePrune;
+    private readonly AuditStorageState? _storageState;
     private readonly object _gate = new();
 
     // Pruning runs this often (in inserts) rather than on every one.
@@ -22,8 +23,10 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
 
     public SqliteDefenseEventStore(
         IOptions<DefenseEngineOptions> options,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        AuditStorageState? storageState = null)
     {
+        _storageState = storageState;
         var databasePath = options.Value.Audit.DatabasePath;
         var resolvedDatabasePath = Path.IsPathRooted(databasePath)
             ? databasePath
@@ -93,7 +96,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.Parameters.AddWithValue("$signalsJson", JsonSerializer.Serialize(decision.Signals));
             command.Parameters.AddWithValue(
                 "$breakdownJson",
-                decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
+                decision.Breakdown is null || _storageState?.ShedDetail == true ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
             command.Parameters.AddWithValue("$summary", decision.Summary);
             command.Parameters.AddWithValue("$observedAtUtc", decision.ObservedAtUtc.ToString("O"));
             command.Parameters.AddWithValue("$decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
@@ -183,6 +186,41 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         }
 
         transaction.Commit();
+    }
+
+    public int PruneOldest(double fraction, int minimumRows)
+    {
+        if (fraction <= 0 && minimumRows <= 0)
+        {
+            return 0;
+        }
+
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            using var countCommand = connection.CreateCommand();
+            countCommand.CommandText = "SELECT COUNT(*) FROM defense_events;";
+            var total = Convert.ToInt64(countCommand.ExecuteScalar() ?? 0L);
+            if (total <= 0)
+            {
+                return 0;
+            }
+
+            var target = Math.Max(minimumRows, (long)Math.Ceiling(total * fraction));
+            using var deleteCommand = connection.CreateCommand();
+            deleteCommand.CommandText =
+                """
+                DELETE FROM defense_events
+                WHERE id IN (
+                    SELECT id FROM defense_events
+                    WHERE id NOT IN (SELECT decision_id FROM defense_feedback)
+                    ORDER BY id ASC
+                    LIMIT $count
+                );
+                """;
+            deleteCommand.Parameters.AddWithValue("$count", target);
+            return deleteCommand.ExecuteNonQuery();
+        }
     }
 
     private void PruneFeedbackLocked(SqliteConnection connection, SqliteTransaction transaction)

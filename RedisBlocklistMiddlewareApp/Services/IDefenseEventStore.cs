@@ -15,4 +15,10 @@ public interface IDefenseEventStore
     IReadOnlyList<DefenseDecisionFeedback> GetRecentFeedback(int count);
 
     DefenseEventMetrics GetMetrics();
+
+    /// <summary>
+    /// Prunes the oldest <paramref name="fraction"/> of stored decision rows (at least <paramref name="minimumRows"/>)
+    /// while keeping decisions referenced by operator feedback.
+    /// </summary>
+    int PruneOldest(double fraction, int minimumRows) => 0;
 }

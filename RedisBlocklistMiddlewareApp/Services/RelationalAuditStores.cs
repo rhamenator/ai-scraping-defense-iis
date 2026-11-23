@@ -14,16 +14,16 @@ namespace RedisBlocklistMiddlewareApp.Services;
 
 public sealed class PostgresDefenseEventStore : RelationalDefenseEventStore
 {
-    public PostgresDefenseEventStore(IOptions<DefenseEngineOptions> options)
-        : base(options, RelationalAuditDialect.Postgres)
+    public PostgresDefenseEventStore(IOptions<DefenseEngineOptions> options, AuditStorageState? storageState = null)
+        : base(options, RelationalAuditDialect.Postgres, storageState)
     {
     }
 }
 
 public sealed class SqlServerDefenseEventStore : RelationalDefenseEventStore
 {
-    public SqlServerDefenseEventStore(IOptions<DefenseEngineOptions> options)
-        : base(options, RelationalAuditDialect.SqlServer)
+    public SqlServerDefenseEventStore(IOptions<DefenseEngineOptions> options, AuditStorageState? storageState = null)
+        : base(options, RelationalAuditDialect.SqlServer, storageState)
     {
     }
 }
@@ -64,6 +64,7 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
 {
     private readonly string _connectionString;
     private readonly RelationalAuditDialect _dialect;
+    private readonly AuditStorageState? _storageState;
     private readonly int _maxRecentEvents;
     private readonly int _maxStoredEvents;
     private readonly int _maxStoredFeedback;
@@ -71,8 +72,9 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
     private int _insertsSincePrune;
     private int _feedbackInsertsSincePrune;
 
-    protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect)
+    protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect, AuditStorageState? storageState = null)
     {
+        _storageState = storageState;
         _connectionString = options.Value.Audit.ConnectionString;
         _dialect = dialect;
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
@@ -137,7 +139,7 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         AddParameter(
             command,
             "@breakdownJson",
-            decision.Breakdown is null ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
+            decision.Breakdown is null || _storageState?.ShedDetail == true ? DBNull.Value : JsonSerializer.Serialize(decision.Breakdown));
         AddParameter(command, "@summary", decision.Summary);
         AddParameter(command, "@observedAtUtc", decision.ObservedAtUtc.ToString("O"));
         AddParameter(command, "@decidedAtUtc", decision.DecidedAtUtc.ToString("O"));
@@ -170,6 +172,38 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
             RelationalRetention.Prune(connection, _dialect, "defense_feedback", "created_at_utc", protectFeedback: false, _maxStoredFeedback, _retentionDays, now);
             RelationalRetention.Prune(connection, _dialect, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, now);
         }
+    }
+
+    public int PruneOldest(double fraction, int minimumRows)
+    {
+        if (fraction <= 0 && minimumRows <= 0)
+        {
+            return 0;
+        }
+
+        using var connection = OpenConnection();
+        using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = "SELECT COUNT(*) FROM defense_events;";
+        var total = Convert.ToInt64(countCommand.ExecuteScalar() ?? 0L);
+        if (total <= 0)
+        {
+            return 0;
+        }
+
+        var target = Math.Max(minimumRows, (long)Math.Ceiling(total * fraction));
+        using var deleteCommand = connection.CreateCommand();
+        deleteCommand.CommandText =
+            $"""
+            DELETE FROM defense_events
+            WHERE id IN (
+                SELECT id FROM defense_events
+                WHERE id NOT IN (SELECT decision_id FROM defense_feedback)
+                ORDER BY id ASC
+                {_dialect.LimitClause("@count")}
+            );
+            """;
+        AddParameter(deleteCommand, "@count", target);
+        return deleteCommand.ExecuteNonQuery();
     }
 
     public IReadOnlyList<DefenseDecision> GetRecent(int count)
