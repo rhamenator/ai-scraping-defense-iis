@@ -446,6 +446,7 @@ builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
 builder.Services.AddSingleton<PeerApiKeyEndpointFilter>();
 builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
 builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
+builder.Services.AddSingleton<ISetupWizardService, SetupWizardService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IIntakeAlertDispatcher, IntakeAlertDispatcher>();
 builder.Services.AddSingleton<IOriginHealthChecker, OriginHealthChecker>();
@@ -776,6 +777,33 @@ public partial class Program
             int count = 50) =>
         {
             return Results.Ok(store.GetRecent(count));
+        });
+
+        management.MapGet("/setup", (
+            [FromServices] ISetupWizardService setupWizard,
+            HttpContext httpContext) =>
+        {
+            var accept = httpContext.Request.Headers.Accept.ToString();
+            if (accept.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Content(setupWizard.RenderHtml(), "text/html");
+            }
+
+            return Results.Ok(setupWizard.GetState());
+        });
+
+        management.MapPost("/setup", (
+            SetupWizardUpdateRequest request,
+            [FromServices] ISetupWizardService setupWizard) =>
+        {
+            try
+            {
+                return Results.Ok(setupWizard.Update(request));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
 
         management.MapGet("/metrics", (

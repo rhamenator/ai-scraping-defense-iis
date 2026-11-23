@@ -660,6 +660,7 @@ public sealed class ManagementEndpointTests
         builder.Services.AddSingleton<PublicBlocklistApiKeyEndpointFilter>();
         builder.Services.AddSingleton<IOperatorRecommendationService, OperatorRecommendationService>();
         builder.Services.AddSingleton<IOperatorDashboardPageService, OperatorDashboardPageService>();
+        builder.Services.AddSingleton<ISetupWizardService, SetupWizardService>();
         builder.Services.AddSingleton<IDefenseEventStore, TestDefenseEventStore>();
         builder.Services.AddSingleton<IIntakeDeliveryStore, TestIntakeDeliveryStore>();
         builder.Services.AddSingleton<IBlocklistService, TestBlocklistService>();
