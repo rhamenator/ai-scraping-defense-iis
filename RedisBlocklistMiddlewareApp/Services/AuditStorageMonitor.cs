@@ -50,17 +50,10 @@ public static class AuditStorageSize
         }
 
         // SQLite: the database file plus its write-ahead log and shared-memory files.
-        long total = 0;
-        foreach (var suffix in new[] { string.Empty, "-wal", "-shm", "-journal" })
-        {
-            var file = new FileInfo(sqlitePath + suffix);
-            if (file.Exists)
-            {
-                total += file.Length;
-            }
-        }
-
-        return total;
+        return new[] { string.Empty, "-wal", "-shm", "-journal" }
+            .Select(suffix => new FileInfo(sqlitePath + suffix))
+            .Where(file => file.Exists)
+            .Sum(file => file.Length);
     }
 
     private static long Scalar(DbConnection connection, string sql)
@@ -101,7 +94,7 @@ public sealed class AuditStorageMonitorService : BackgroundService
     public void Sample()
     {
         var audit = _options.Value.Audit;
-        var path = Path.IsPathRooted(audit.DatabasePath) ? audit.DatabasePath : Path.Combine(_environment.ContentRootPath, audit.DatabasePath);
+        var path = Path.IsPathRooted(audit.DatabasePath) ? audit.DatabasePath : Path.Join(_environment.ContentRootPath, audit.DatabasePath);
         var bytes = AuditStorageSize.Measure(audit, path);
         _state.Update(bytes, audit.MaxDatabaseBytes);
         _telemetry.UpdateAuditStorage(bytes, audit.MaxDatabaseBytes);
