@@ -11,8 +11,10 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
     private readonly string _connectionString;
     private readonly int _maxRecentEvents;
     private readonly int _maxStoredEvents;
+    private readonly int _maxStoredFeedback;
     private readonly int _retentionDays;
     private int _insertsSincePrune;
+    private int _feedbackInsertsSincePrune;
     private readonly object _gate = new();
 
     // Pruning runs this often (in inserts) rather than on every one.
@@ -40,6 +42,7 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         }.ToString();
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
         _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _maxStoredFeedback = options.Value.Audit.MaxStoredFeedback;
         _retentionDays = options.Value.Audit.RetentionDays;
 
         EnsureSchema();
@@ -147,16 +150,18 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
     {
         _insertsSincePrune = 0;
         using var transaction = connection.BeginTransaction();
+        PruneFeedbackLocked(connection, transaction);
+
         if (_maxStoredEvents > 0)
         {
             using var cap = connection.CreateCommand();
             cap.Transaction = transaction;
-            // Ids only grow, so everything at or below (newest id - cap) is beyond the cap.
+            // Rank-based boundary: keep the newest _maxStoredEvents rows regardless of identity gaps.
             // Decisions an operator gave feedback on are kept: the feedback refers to them (a foreign key), and they are few.
             cap.CommandText =
                 """
                 DELETE FROM defense_events
-                WHERE id <= (SELECT MAX(id) FROM defense_events) - $cap
+                WHERE id < (SELECT MIN(id) FROM (SELECT id FROM defense_events ORDER BY id DESC LIMIT $cap))
                   AND id NOT IN (SELECT decision_id FROM defense_feedback);
                 """;
             cap.Parameters.AddWithValue("$cap", _maxStoredEvents);
@@ -178,6 +183,36 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
         }
 
         transaction.Commit();
+    }
+
+    private void PruneFeedbackLocked(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        _feedbackInsertsSincePrune = 0;
+        if (_maxStoredFeedback > 0)
+        {
+            using var cap = connection.CreateCommand();
+            cap.Transaction = transaction;
+            cap.CommandText =
+                """
+                DELETE FROM defense_feedback
+                WHERE id < (SELECT MIN(id) FROM (SELECT id FROM defense_feedback ORDER BY id DESC LIMIT $cap));
+                """;
+            cap.Parameters.AddWithValue("$cap", _maxStoredFeedback);
+            cap.ExecuteNonQuery();
+        }
+
+        if (_retentionDays > 0)
+        {
+            using var age = connection.CreateCommand();
+            age.Transaction = transaction;
+            age.CommandText =
+                """
+                DELETE FROM defense_feedback
+                WHERE created_at_utc < $cutoff;
+                """;
+            age.Parameters.AddWithValue("$cutoff", DateTimeOffset.UtcNow.AddDays(-_retentionDays).UtcDateTime.ToString("O"));
+            age.ExecuteNonQuery();
+        }
     }
 
     public IReadOnlyList<DefenseDecision> GetRecent(int count)
@@ -325,6 +360,13 @@ public sealed class SqliteDefenseEventStore : IDefenseEventStore
             command.Parameters.AddWithValue("$createdAtUtc", feedback.CreatedAtUtc.ToString("O"));
 
             var id = (long)(command.ExecuteScalar() ?? 0L);
+            if (++_feedbackInsertsSincePrune >= PruneEveryInserts)
+            {
+                using var transaction = connection.BeginTransaction();
+                PruneFeedbackLocked(connection, transaction);
+                transaction.Commit();
+            }
+
             return feedback with { Id = id };
         }
     }

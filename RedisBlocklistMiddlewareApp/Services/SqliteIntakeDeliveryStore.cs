@@ -11,6 +11,9 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
     private readonly string _connectionString;
     private readonly int _maxRecentEvents;
     private readonly object _gate = new();
+    private readonly int _maxStoredEvents;
+    private readonly int _retentionDays;
+    private int _insertsSincePrune;
 
     public SqliteIntakeDeliveryStore(
         IOptions<DefenseEngineOptions> options,
@@ -33,7 +36,50 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
             Pooling = false
         }.ToString();
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
+        _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _retentionDays = options.Value.Audit.RetentionDays;
         EnsureSchema();
+        Prune();
+    }
+
+    /// <summary>Applies the row cap and age retention now (also done at start and every 500 inserts).</summary>
+    internal void Prune()
+    {
+        lock (_gate)
+        {
+            using var connection = OpenConnection();
+            PruneLocked(connection);
+        }
+    }
+
+    private void PruneLocked(SqliteConnection connection)
+    {
+        _insertsSincePrune = 0;
+        if (_maxStoredEvents <= 0 && _retentionDays <= 0)
+        {
+            return;
+        }
+
+        using var transaction = connection.BeginTransaction();
+        if (_maxStoredEvents > 0)
+        {
+            using var cap = connection.CreateCommand();
+            cap.Transaction = transaction;
+            cap.CommandText = "DELETE FROM intake_delivery_events WHERE id < (SELECT MIN(id) FROM (SELECT id FROM intake_delivery_events ORDER BY id DESC LIMIT $cap));";
+            cap.Parameters.AddWithValue("$cap", _maxStoredEvents);
+            cap.ExecuteNonQuery();
+        }
+
+        if (_retentionDays > 0)
+        {
+            using var age = connection.CreateCommand();
+            age.Transaction = transaction;
+            age.CommandText = "DELETE FROM intake_delivery_events WHERE attempted_at_utc < $cutoff;";
+            age.Parameters.AddWithValue("$cutoff", DateTimeOffset.UtcNow.AddDays(-_retentionDays).UtcDateTime.ToString("O"));
+            age.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
     }
 
     public void Add(IntakeDeliveryRecord record)
@@ -78,6 +124,11 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
             command.Parameters.AddWithValue("$detail", record.Detail);
             command.Parameters.AddWithValue("$attemptedAtUtc", record.AttemptedAtUtc.UtcDateTime.ToString("O"));
             command.ExecuteNonQuery();
+
+            if (++_insertsSincePrune >= 500)
+            {
+                PruneLocked(connection);
+            }
         }
     }
 

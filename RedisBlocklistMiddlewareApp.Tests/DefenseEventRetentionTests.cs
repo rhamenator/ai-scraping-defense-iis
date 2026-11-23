@@ -203,6 +203,53 @@ public sealed class DefenseEventRetentionTests
         Assert.Equal(1, reopened.GetMetrics().BlockedCount);
     }
 
+    [Fact]
+    public void Prune_DoesNotDeleteRowsWhenIdentityGapsExistAndFewerThanCapRowsRemain()
+    {
+        using var harness = Harness.Create(maxStoredEvents: 5);
+        var store = harness.CreateStore();
+        store.Add(Decision("/first"));
+        harness.InsertWithExplicitId(1000, "/gapped");
+
+        store.Prune();
+
+        Assert.Equal(2, store.CountStoredEvents());
+        var paths = store.GetRecent(10).Select(d => d.Path).ToArray();
+        Assert.Contains("/first", paths);
+        Assert.Contains("/gapped", paths);
+    }
+
+    [Fact]
+    public void FeedbackRetention_CapsAndAgesFeedbackAndAllowsUnreferencedDecisionsToPrune()
+    {
+        Assert.Equal(100_000, new AuditOptions().MaxStoredFeedback);
+        using var harness = Harness.Create(maxStoredEvents: 2, retentionDays: 7, maxStoredFeedback: 2);
+        var store = harness.CreateStore();
+        var oldAt = DateTimeOffset.UtcNow.AddDays(-30);
+        store.Add(Decision("/d1", oldAt));
+        store.Add(Decision("/d2"));
+        store.Add(Decision("/d3"));
+        store.Add(Decision("/d4"));
+
+        var all = store.GetRecent(10).OrderBy(d => d.Id).ToArray();
+        // Old feedback on /d1 (aged out by RetentionDays) plus 2 recent feedbacks on /d2 and /d3.
+        store.AddFeedback(new DefenseDecisionFeedback(0, all[0].Id, all[0].IpAddress, "observed", "blocked", "old", "op", oldAt));
+        store.AddFeedback(new DefenseDecisionFeedback(0, all[1].Id, all[1].IpAddress, "observed", "blocked", "f2", "op", DateTimeOffset.UtcNow));
+        store.AddFeedback(new DefenseDecisionFeedback(0, all[2].Id, all[2].IpAddress, "observed", "blocked", "f3", "op", DateTimeOffset.UtcNow));
+
+        store.Prune();
+
+        var remainingFeedback = store.GetRecentFeedback(10);
+        Assert.Equal(2, remainingFeedback.Count);
+        Assert.DoesNotContain(remainingFeedback, f => f.Reason == "old");
+        // /d1 lost its feedback so it can be pruned; /d2 stays because its feedback stayed; /d3 and /d4 are the newest 2.
+        var keptPaths = store.GetRecent(10).Select(d => d.Path).ToArray();
+        Assert.DoesNotContain("/d1", keptPaths);
+        Assert.Contains("/d2", keptPaths);
+        Assert.Contains("/d3", keptPaths);
+        Assert.Contains("/d4", keptPaths);
+    }
+
     private static DefenseDecision Decision(string path, DateTimeOffset? observedAt = null, string action = "observed")
     {
         var at = observedAt ?? DateTimeOffset.UtcNow;
@@ -213,21 +260,41 @@ public sealed class DefenseEventRetentionTests
     {
         private readonly string _rootPath;
         private readonly int _retentionDays;
+        private readonly int _maxStoredFeedback;
 
-        private Harness(string rootPath, int maxStoredEvents, int retentionDays)
+        private Harness(string rootPath, int maxStoredEvents, int retentionDays, int maxStoredFeedback)
         {
             _rootPath = rootPath;
             MaxStoredEvents = maxStoredEvents;
             _retentionDays = retentionDays;
+            _maxStoredFeedback = maxStoredFeedback;
         }
 
         public int MaxStoredEvents { get; set; }
 
-        public static Harness Create(int maxStoredEvents, int retentionDays = 0)
+        public static Harness Create(int maxStoredEvents, int retentionDays = 0, int maxStoredFeedback = 100_000)
         {
             var rootPath = Path.Join(Path.GetTempPath(), "ai-scraping-defense-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(rootPath);
-            return new Harness(rootPath, maxStoredEvents, retentionDays);
+            return new Harness(rootPath, maxStoredEvents, retentionDays, maxStoredFeedback);
+        }
+
+        public void InsertWithExplicitId(long id, string path)
+        {
+            using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Join(_rootPath, "events.db")};Pooling=False");
+            connection.Open();
+            using var command = connection.CreateCommand();
+            var now = DateTimeOffset.UtcNow.ToString("O");
+            command.CommandText =
+                """
+                INSERT INTO defense_events
+                (id, ip_address, action, score, frequency, path, signals_json, breakdown_json, summary, observed_at_utc, decided_at_utc)
+                VALUES ($id, '198.51.100.1', 'observed', 10, 1, $path, '["signal"]', NULL, 'summary', $now, $now);
+                """;
+            command.Parameters.AddWithValue("$id", id);
+            command.Parameters.AddWithValue("$path", path);
+            command.Parameters.AddWithValue("$now", now);
+            command.ExecuteNonQuery();
         }
 
         public void DeleteSummaryRow()
@@ -247,6 +314,7 @@ public sealed class DefenseEventRetentionTests
                 {
                     DatabasePath = "events.db",
                     MaxStoredEvents = MaxStoredEvents,
+                    MaxStoredFeedback = _maxStoredFeedback,
                     RetentionDays = _retentionDays
                 }
             });
