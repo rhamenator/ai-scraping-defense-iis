@@ -137,6 +137,85 @@ public sealed class IntakeDeliveryStoreTests
         return rows;
     }
 
+    [Fact]
+    public void Retention_RowCapRemovesTheOldestDeliveriesAtStartAndEveryFiveHundredInserts()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var options = Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        {
+            Audit = new AuditOptions { DatabasePath = "events.db", MaxRecentEvents = 5000, MaxStoredEvents = 100 }
+        });
+        var store = new SqliteIntakeDeliveryStore(options, new TestHostEnvironment(harness.RootPath));
+        for (var i = 0; i < 700; i++)
+        {
+            store.Add(CreateRecord($"198.51.100.{i % 250}", IntakeDeliveryStatuses.Succeeded, $"n{i}"));
+        }
+
+        // Pruned at insert 500 (down to 100), then 200 more were added.
+        Assert.Equal(300, store.GetRecent(5000).Count);
+        Assert.Equal("n699", store.GetRecent(1)[0].Detail);
+
+        // A restart applies the cap at once.
+        var restarted = new SqliteIntakeDeliveryStore(options, new TestHostEnvironment(harness.RootPath));
+        Assert.Equal(100, restarted.GetRecent(5000).Count);
+        Assert.Equal("n699", restarted.GetRecent(1)[0].Detail);
+    }
+
+    [Fact]
+    public void Retention_AgeRemovesOldDeliveriesAndZeroKeepsEverything()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var unlimited = Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        {
+            Audit = new AuditOptions { DatabasePath = "events.db", MaxRecentEvents = 5000, MaxStoredEvents = 0, RetentionDays = 0 }
+        });
+        var store = new SqliteIntakeDeliveryStore(unlimited, new TestHostEnvironment(harness.RootPath));
+        store.Add(CreateRecord("198.51.100.1", IntakeDeliveryStatuses.Succeeded, "old") with { AttemptedAtUtc = DateTimeOffset.UtcNow.AddDays(-40) });
+        store.Add(CreateRecord("198.51.100.2", IntakeDeliveryStatuses.Succeeded, "new"));
+        Assert.Equal(2, new SqliteIntakeDeliveryStore(unlimited, new TestHostEnvironment(harness.RootPath)).GetRecent(10).Count);
+
+        var thirtyDays = Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        {
+            Audit = new AuditOptions { DatabasePath = "events.db", MaxRecentEvents = 5000, MaxStoredEvents = 0, RetentionDays = 30 }
+        });
+        var pruned = new SqliteIntakeDeliveryStore(thirtyDays, new TestHostEnvironment(harness.RootPath));
+
+        Assert.Equal(["new"], pruned.GetRecent(10).Select(r => r.Detail).ToArray());
+    }
+
+    [Fact]
+    public void Retention_DoesNotDeleteDeliveriesWhenIdentityGapsExistAndFewerThanCapRowsRemain()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var options = Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        {
+            Audit = new AuditOptions { DatabasePath = "events.db", MaxRecentEvents = 5000, MaxStoredEvents = 5 }
+        });
+        var store = new SqliteIntakeDeliveryStore(options, new TestHostEnvironment(harness.RootPath));
+        store.Add(CreateRecord("198.51.100.1", IntakeDeliveryStatuses.Succeeded, "first"));
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Join(harness.RootPath, "events.db")};Pooling=False"))
+        {
+            connection.Open();
+            using var insert = connection.CreateCommand();
+            insert.CommandText =
+                """
+                INSERT INTO intake_delivery_events
+                (id, delivery_type, channel, ip_address, reason, target, status, detail, attempted_at_utc)
+                VALUES (1000, 'alert', 'generic_webhook', '198.51.100.2', 'r', 'https://alerts.example.test', 'succeeded', 'gapped', $now);
+                """;
+            insert.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        store.Prune();
+
+        var details = store.GetRecent(10).Select(r => r.Detail).ToArray();
+        Assert.Equal(2, details.Length);
+        Assert.Contains("first", details);
+        Assert.Contains("gapped", details);
+    }
+
     private static IntakeDeliveryRecord CreateRecord(string ipAddress, string status, string detail)
     {
         return new IntakeDeliveryRecord(
@@ -168,6 +247,8 @@ public sealed class IntakeDeliveryStoreTests
         }
 
         public IOptions<DefenseEngineOptions> Options { get; }
+
+        public string RootPath => _rootPath;
 
         public string DatabasePath => Path.Join(_rootPath, "events.db");
 

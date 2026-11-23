@@ -313,13 +313,18 @@ public sealed class AuditOptions
     public int MaxRecentEvents { get; set; } = 500;
 
     /// <summary>
-    /// Most decision rows the SQLite audit store keeps; the oldest are removed beyond it (0 disables the cap). The decision
+    /// Most decision rows the audit store keeps; the oldest are removed beyond it (0 disables the cap). The decision
     /// totals shown on the dashboard are kept separately and are not reduced.
     /// </summary>
     public int MaxStoredEvents { get; set; } = 1_000_000;
 
     /// <summary>
-    /// Delete decision rows older than this many days (0, the default, keeps them until the row cap removes them). Whether
+    /// Most operator-feedback rows the audit store keeps; the oldest are removed beyond it (0 disables the cap).
+    /// </summary>
+    public int MaxStoredFeedback { get; set; } = 100_000;
+
+    /// <summary>
+    /// Delete decision, feedback, and intake-delivery rows older than this many days (0, the default, keeps them until the row cap removes them). Whether
     /// to age out audit history is the operator's policy decision.
     /// </summary>
     public int RetentionDays { get; set; }
