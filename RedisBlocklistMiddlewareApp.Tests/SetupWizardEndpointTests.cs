@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using RedisBlocklistMiddlewareApp.Configuration;
 using RedisBlocklistMiddlewareApp.Services;
 
 namespace RedisBlocklistMiddlewareApp.Tests;
@@ -6,12 +8,13 @@ namespace RedisBlocklistMiddlewareApp.Tests;
 public sealed class SetupWizardEndpointTests
 {
     [Fact]
-    public void SetupWizardService_UpdatesValidatesAndAllowsRerun()
+    public void SetupWizardService_UpdatesValidatesRuntimeOptionsAndAllowsRerun()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())
             .Build();
-        var service = new SetupWizardService(config);
+        var options = Options.Create(new DefenseEngineOptions());
+        var service = new SetupWizardService(config, options);
 
         Assert.False(service.GetState().Completed);
         Assert.Throws<ArgumentException>(() => service.Update(new SetupWizardUpdateRequest(
@@ -39,11 +42,14 @@ public sealed class SetupWizardEndpointTests
             MarkComplete: true));
         Assert.True(first.Completed);
         Assert.Equal("https://origin.example.com", first.BackendUrl);
+        Assert.True(options.Value.Cloudflare.Enabled);
+        Assert.False(options.Value.Escalation.McpModel.Enabled);
+        Assert.Equal("openai://gpt-4o-mini", options.Value.Escalation.McpModel.ModelUri);
 
         // Authenticated operators can re-run setup anytime after completion.
         var rerun = service.Update(new SetupWizardUpdateRequest(
             BackendUrl: "https://origin2.example.com",
-            ModelUri: null,
+            ModelUri: "mcp://primary/classify",
             CaptchaProvider: "turnstile",
             CloudflareEnabled: false,
             EnableMcpModel: true,
@@ -51,6 +57,9 @@ public sealed class SetupWizardEndpointTests
         Assert.Equal("https://origin2.example.com", rerun.BackendUrl);
         Assert.Equal("turnstile", rerun.CaptchaProvider);
         Assert.True(rerun.EnableMcpModel);
+        Assert.False(options.Value.Cloudflare.Enabled);
+        Assert.True(options.Value.Escalation.McpModel.Enabled);
+        Assert.Equal("mcp://primary/classify", options.Value.Escalation.McpModel.ModelUri);
         Assert.Contains("First-Run Setup Wizard", service.RenderHtml(), StringComparison.Ordinal);
     }
 }

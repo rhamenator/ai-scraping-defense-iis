@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
-using StackExchange.Redis;
+using Microsoft.Extensions.Options;
+using RedisBlocklistMiddlewareApp.Configuration;
 
 namespace RedisBlocklistMiddlewareApp.Services;
 
@@ -24,27 +25,40 @@ public sealed record SetupWizardUpdateRequest(
 public interface ISetupWizardService
 {
     SetupWizardState GetState();
+    Task<SetupWizardState> GetStateAsync(CancellationToken cancellationToken);
     SetupWizardState Update(SetupWizardUpdateRequest request);
+    Task<SetupWizardState> UpdateAsync(SetupWizardUpdateRequest request, CancellationToken cancellationToken);
     string RenderHtml();
+    Task<string> RenderHtmlAsync(CancellationToken cancellationToken);
 }
 
 public sealed class SetupWizardService : ISetupWizardService
 {
     private const string RedisKey = "admin_ui:setup:state";
     private readonly object _gate = new();
-    private readonly IConnectionMultiplexer? _redis;
+    private readonly DefenseEngineOptions? _options;
+    private readonly IRedisConnectionProvider? _redisProvider;
+    private bool _hydratedFromRedis;
     private SetupWizardState _state;
 
-    public SetupWizardService(IConfiguration configuration, IConnectionMultiplexer? redis = null)
+    public SetupWizardService(
+        IConfiguration configuration,
+        IOptions<DefenseEngineOptions>? options = null,
+        IRedisConnectionProvider? redisProvider = null)
     {
-        _redis = redis;
+        _options = options?.Value;
+        _redisProvider = redisProvider;
         _state = new SetupWizardState(
             Completed: string.Equals(configuration["ADMIN_UI_SKIP_SETUP_WIZARD"], "true", StringComparison.OrdinalIgnoreCase),
             BackendUrl: configuration["REAL_BACKEND_HOST"] ?? string.Empty,
-            ModelUri: configuration["MODEL_URI"] ?? string.Empty,
+            ModelUri: _options?.Escalation.McpModel.ModelUri is { Length: > 0 } configuredUri
+                ? configuredUri
+                : configuration["MODEL_URI"] ?? string.Empty,
             CaptchaProvider: NormalizeCaptchaProvider(configuration["CAPTCHA_PROVIDER"] ?? "builtin") ?? "builtin",
-            CloudflareEnabled: string.Equals(configuration["CLOUDFLARE_ENABLED"], "true", StringComparison.OrdinalIgnoreCase),
-            EnableMcpModel: string.Equals(configuration["ENABLE_MCP_MODEL"], "true", StringComparison.OrdinalIgnoreCase),
+            CloudflareEnabled: _options?.Cloudflare.Enabled
+                ?? string.Equals(configuration["CLOUDFLARE_ENABLED"], "true", StringComparison.OrdinalIgnoreCase),
+            EnableMcpModel: _options?.Escalation.McpModel.Enabled
+                ?? string.Equals(configuration["ENABLE_MCP_MODEL"], "true", StringComparison.OrdinalIgnoreCase),
             UpdatedAtUtc: null);
     }
 
@@ -56,7 +70,39 @@ public sealed class SetupWizardService : ISetupWizardService
         }
     }
 
+    public async Task<SetupWizardState> GetStateAsync(CancellationToken cancellationToken)
+    {
+        await EnsureHydratedFromRedisAsync(cancellationToken).ConfigureAwait(false);
+        return GetState();
+    }
+
     public SetupWizardState Update(SetupWizardUpdateRequest request)
+    {
+        var updated = ApplyValidatedUpdate(request);
+        TryApplyRuntimeOptions(updated);
+        return updated;
+    }
+
+    public async Task<SetupWizardState> UpdateAsync(
+        SetupWizardUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureHydratedFromRedisAsync(cancellationToken).ConfigureAwait(false);
+        var updated = ApplyValidatedUpdate(request);
+        TryApplyRuntimeOptions(updated);
+        await TryPersistToRedisAsync(updated, cancellationToken).ConfigureAwait(false);
+        return updated;
+    }
+
+    public string RenderHtml() => RenderHtmlFromState(GetState());
+
+    public async Task<string> RenderHtmlAsync(CancellationToken cancellationToken)
+    {
+        var state = await GetStateAsync(cancellationToken).ConfigureAwait(false);
+        return RenderHtmlFromState(state);
+    }
+
+    private SetupWizardState ApplyValidatedUpdate(SetupWizardUpdateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         var backendUrl = request.BackendUrl?.Trim();
@@ -72,10 +118,9 @@ public sealed class SetupWizardService : ISetupWizardService
                 ?? throw new ArgumentException("captchaProvider must be builtin, recaptcha, or turnstile.", nameof(request));
         }
 
-        SetupWizardState updated;
         lock (_gate)
         {
-            updated = _state with
+            _state = _state with
             {
                 BackendUrl = backendUrl ?? _state.BackendUrl,
                 ModelUri = request.ModelUri?.Trim() ?? _state.ModelUri,
@@ -85,16 +130,93 @@ public sealed class SetupWizardService : ISetupWizardService
                 Completed = request.MarkComplete ?? true,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
             };
-            _state = updated;
+            _hydratedFromRedis = true;
+            return _state;
         }
-
-        TryPersistToRedis(updated);
-        return updated;
     }
 
-    public string RenderHtml()
+    private void TryApplyRuntimeOptions(SetupWizardState updated)
     {
-        var current = GetState();
+        if (_options is null)
+        {
+            return;
+        }
+
+        _options.Cloudflare.Enabled = updated.CloudflareEnabled;
+        _options.Escalation.McpModel.Enabled = updated.EnableMcpModel;
+        if (!string.IsNullOrWhiteSpace(updated.ModelUri))
+        {
+            _options.Escalation.McpModel.ModelUri = updated.ModelUri;
+        }
+    }
+
+    private async Task EnsureHydratedFromRedisAsync(CancellationToken cancellationToken)
+    {
+        if (_redisProvider is null)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_hydratedFromRedis)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            var redis = await _redisProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+            var db = redis.GetDatabase(_options?.Redis.BlocklistDatabase ?? 0);
+            var raw = await db.StringGetAsync(RedisKey).ConfigureAwait(false);
+            if (!raw.IsNullOrEmpty)
+            {
+                var loaded = JsonSerializer.Deserialize<SetupWizardState>(raw.ToString());
+                if (loaded is not null)
+                {
+                    lock (_gate)
+                    {
+                        _state = loaded;
+                        _hydratedFromRedis = true;
+                    }
+                    TryApplyRuntimeOptions(loaded);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Keep configuration-backed state if Redis is unavailable.
+        }
+
+        lock (_gate)
+        {
+            _hydratedFromRedis = true;
+        }
+    }
+
+    private async Task TryPersistToRedisAsync(SetupWizardState updated, CancellationToken cancellationToken)
+    {
+        if (_redisProvider is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var redis = await _redisProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+            var db = redis.GetDatabase(_options?.Redis.BlocklistDatabase ?? 0);
+            await db.StringSetAsync(RedisKey, JsonSerializer.Serialize(updated)).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Keep in-memory state when Redis is unavailable.
+        }
+    }
+
+    private static string RenderHtmlFromState(SetupWizardState current)
+    {
         var backend = WebUtility.HtmlEncode(current.BackendUrl);
         var model = WebUtility.HtmlEncode(current.ModelUri);
         var provider = WebUtility.HtmlEncode(current.CaptchaProvider);
@@ -177,22 +299,5 @@ document.getElementById('iis-setup-form').addEventListener('submit', async (ev) 
     {
         var normalized = value.Trim().ToLowerInvariant();
         return normalized is "builtin" or "recaptcha" or "turnstile" ? normalized : null;
-    }
-
-    private void TryPersistToRedis(SetupWizardState updated)
-    {
-        if (_redis is null || !_redis.IsConnected)
-        {
-            return;
-        }
-
-        try
-        {
-            _redis.GetDatabase().StringSet(RedisKey, JsonSerializer.Serialize(updated));
-        }
-        catch (RedisException)
-        {
-            // Keep in-memory state when Redis is unavailable during local/unit runs.
-        }
     }
 }

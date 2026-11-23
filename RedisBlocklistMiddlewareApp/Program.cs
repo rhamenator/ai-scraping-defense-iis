@@ -779,26 +779,28 @@ public partial class Program
             return Results.Ok(store.GetRecent(count));
         });
 
-        management.MapGet("/setup", (
+        management.MapGet("/setup", async (
             [FromServices] ISetupWizardService setupWizard,
-            HttpContext httpContext) =>
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
         {
             var accept = httpContext.Request.Headers.Accept.ToString();
             if (accept.Contains("text/html", StringComparison.OrdinalIgnoreCase))
             {
-                return Results.Content(setupWizard.RenderHtml(), "text/html");
+                return Results.Content(await setupWizard.RenderHtmlAsync(cancellationToken), "text/html");
             }
 
-            return Results.Ok(setupWizard.GetState());
+            return Results.Ok(await setupWizard.GetStateAsync(cancellationToken));
         });
 
-        management.MapPost("/setup", (
+        management.MapPost("/setup", async (
             SetupWizardUpdateRequest request,
-            [FromServices] ISetupWizardService setupWizard) =>
+            [FromServices] ISetupWizardService setupWizard,
+            CancellationToken cancellationToken) =>
         {
             try
             {
-                return Results.Ok(setupWizard.Update(request));
+                return Results.Ok(await setupWizard.UpdateAsync(request, cancellationToken));
             }
             catch (ArgumentException ex)
             {
