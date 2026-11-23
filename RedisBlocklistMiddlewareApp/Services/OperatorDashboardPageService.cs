@@ -149,12 +149,7 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     }
 
     .metric-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .metric-grid {
+      display: block;
       overflow-x: auto;
     }
 
@@ -448,7 +443,6 @@ public sealed class OperatorDashboardPageService : IOperatorDashboardPageService
     @media (max-width: 960px) {
       .hero-grid,
       .panel-grid,
-      .metric-grid,
       .status-grid {
         grid-template-columns: 1fr;
       }
