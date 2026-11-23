@@ -183,6 +183,39 @@ public sealed class IntakeDeliveryStoreTests
         Assert.Equal(["new"], pruned.GetRecent(10).Select(r => r.Detail).ToArray());
     }
 
+    [Fact]
+    public void Retention_DoesNotDeleteDeliveriesWhenIdentityGapsExistAndFewerThanCapRowsRemain()
+    {
+        using var harness = SqliteStoreHarness.Create();
+        var options = Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        {
+            Audit = new AuditOptions { DatabasePath = "events.db", MaxRecentEvents = 5000, MaxStoredEvents = 5 }
+        });
+        var store = new SqliteIntakeDeliveryStore(options, new TestHostEnvironment(harness.RootPath));
+        store.Add(CreateRecord("198.51.100.1", IntakeDeliveryStatuses.Succeeded, "first"));
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Join(harness.RootPath, "events.db")};Pooling=False"))
+        {
+            connection.Open();
+            using var insert = connection.CreateCommand();
+            insert.CommandText =
+                """
+                INSERT INTO intake_delivery_events
+                (id, delivery_type, channel, ip_address, reason, target, status, detail, attempted_at_utc)
+                VALUES (1000, 'alert', 'generic_webhook', '198.51.100.2', 'r', 'https://alerts.example.test', 'succeeded', 'gapped', $now);
+                """;
+            insert.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        store.Prune();
+
+        var details = store.GetRecent(10).Select(r => r.Detail).ToArray();
+        Assert.Equal(2, details.Length);
+        Assert.Contains("first", details);
+        Assert.Contains("gapped", details);
+    }
+
     private static IntakeDeliveryRecord CreateRecord(string ipAddress, string status, string detail)
     {
         return new IntakeDeliveryRecord(

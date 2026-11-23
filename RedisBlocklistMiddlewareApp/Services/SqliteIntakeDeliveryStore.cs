@@ -65,7 +65,7 @@ public sealed class SqliteIntakeDeliveryStore : IIntakeDeliveryStore
         {
             using var cap = connection.CreateCommand();
             cap.Transaction = transaction;
-            cap.CommandText = "DELETE FROM intake_delivery_events WHERE id <= (SELECT MAX(id) FROM intake_delivery_events) - $cap;";
+            cap.CommandText = "DELETE FROM intake_delivery_events WHERE id < (SELECT MIN(id) FROM (SELECT id FROM intake_delivery_events ORDER BY id DESC LIMIT $cap));";
             cap.Parameters.AddWithValue("$cap", _maxStoredEvents);
             cap.ExecuteNonQuery();
         }

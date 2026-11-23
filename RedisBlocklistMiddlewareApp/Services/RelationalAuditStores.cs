@@ -66,8 +66,10 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
     private readonly RelationalAuditDialect _dialect;
     private readonly int _maxRecentEvents;
     private readonly int _maxStoredEvents;
+    private readonly int _maxStoredFeedback;
     private readonly int _retentionDays;
     private int _insertsSincePrune;
+    private int _feedbackInsertsSincePrune;
 
     protected RelationalDefenseEventStore(IOptions<DefenseEngineOptions> options, RelationalAuditDialect dialect)
     {
@@ -75,6 +77,7 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         _dialect = dialect;
         _maxRecentEvents = options.Value.Audit.MaxRecentEvents;
         _maxStoredEvents = options.Value.Audit.MaxStoredEvents;
+        _maxStoredFeedback = options.Value.Audit.MaxStoredFeedback;
         _retentionDays = options.Value.Audit.RetentionDays;
         EnsureSchema();
         Prune();
@@ -85,7 +88,11 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
     {
         using var connection = OpenConnection();
         _insertsSincePrune = 0;
-        RelationalRetention.Prune(connection, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+        _feedbackInsertsSincePrune = 0;
+        var now = DateTimeOffset.UtcNow;
+        // Prune feedback first so decisions whose feedback just aged/capped out become eligible for pruning too.
+        RelationalRetention.Prune(connection, _dialect, "defense_feedback", "created_at_utc", protectFeedback: false, _maxStoredFeedback, _retentionDays, now);
+        RelationalRetention.Prune(connection, _dialect, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, now);
     }
 
     public void Add(DefenseDecision decision)
@@ -158,7 +165,10 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         if (Interlocked.Increment(ref _insertsSincePrune) >= RelationalRetention.PruneEveryInserts)
         {
             _insertsSincePrune = 0;
-            RelationalRetention.Prune(connection, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+            _feedbackInsertsSincePrune = 0;
+            var now = DateTimeOffset.UtcNow;
+            RelationalRetention.Prune(connection, _dialect, "defense_feedback", "created_at_utc", protectFeedback: false, _maxStoredFeedback, _retentionDays, now);
+            RelationalRetention.Prune(connection, _dialect, "defense_events", "observed_at_utc", protectFeedback: true, _maxStoredEvents, _retentionDays, now);
         }
     }
 
@@ -244,6 +254,12 @@ public abstract class RelationalDefenseEventStore : IDefenseEventStore
         AddParameter(command, "@createdAtUtc", feedback.CreatedAtUtc.ToString("O"));
 
         var id = Convert.ToInt64(command.ExecuteScalar());
+        if (Interlocked.Increment(ref _feedbackInsertsSincePrune) >= RelationalRetention.PruneEveryInserts)
+        {
+            _feedbackInsertsSincePrune = 0;
+            RelationalRetention.Prune(connection, _dialect, "defense_feedback", "created_at_utc", protectFeedback: false, _maxStoredFeedback, _retentionDays, DateTimeOffset.UtcNow);
+        }
+
         return feedback with { Id = id };
     }
 
@@ -386,7 +402,7 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
     {
         using var connection = OpenConnection();
         _insertsSincePrune = 0;
-        RelationalRetention.Prune(connection, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+        RelationalRetention.Prune(connection, _dialect, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
     }
 
     public void Add(IntakeDeliveryRecord record)
@@ -433,7 +449,7 @@ public abstract class RelationalIntakeDeliveryStore : IIntakeDeliveryStore
         if (Interlocked.Increment(ref _insertsSincePrune) >= RelationalRetention.PruneEveryInserts)
         {
             _insertsSincePrune = 0;
-            RelationalRetention.Prune(connection, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
+            RelationalRetention.Prune(connection, _dialect, "intake_delivery_events", "attempted_at_utc", protectFeedback: false, _maxStoredEvents, _retentionDays, DateTimeOffset.UtcNow);
         }
     }
 

@@ -15,6 +15,7 @@ internal static class RelationalRetention
 
     public static void Prune(
         DbConnection connection,
+        RelationalAuditDialect dialect,
         string table,
         string timeColumn,
         bool protectFeedback,
@@ -32,10 +33,11 @@ internal static class RelationalRetention
         using var transaction = connection.BeginTransaction();
         if (maxRows > 0)
         {
+            var limitClause = dialect.LimitClause("@cap");
             Execute(
                 connection,
                 transaction,
-                $"DELETE FROM {table} WHERE id <= (SELECT MAX(id) FROM {table}) - @cap{keep}",
+                $"DELETE FROM {table} WHERE id < (SELECT MIN(id) FROM (SELECT id FROM {table} ORDER BY id DESC {limitClause}) AS newest){keep}",
                 ("@cap", (long)maxRows));
         }
 

@@ -34,9 +34,9 @@ public sealed class RelationalRetentionTests
         Func<IOptions<DefenseEngineOptions>, RelationalDefenseEventStore> createDecisions,
         Func<IOptions<DefenseEngineOptions>, RelationalIntakeDeliveryStore> createDeliveries)
     {
-        IOptions<DefenseEngineOptions> Options(int cap, int days) => Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
+        IOptions<DefenseEngineOptions> Options(int cap, int days, int feedbackCap = 100_000) => Microsoft.Extensions.Options.Options.Create(new DefenseEngineOptions
         {
-            Audit = new AuditOptions { Provider = provider, ConnectionString = connectionString, MaxRecentEvents = 5000, MaxStoredEvents = cap, RetentionDays = days }
+            Audit = new AuditOptions { Provider = provider, ConnectionString = connectionString, MaxRecentEvents = 5000, MaxStoredEvents = cap, MaxStoredFeedback = feedbackCap, RetentionDays = days }
         });
 
         var now = DateTimeOffset.UtcNow;
@@ -66,6 +66,19 @@ public sealed class RelationalRetentionTests
 
         // The dashboard totals are not reduced by retention.
         Assert.Equal(30, capped.GetMetrics().TotalDecisions);
+
+        // Identity gaps do not cause rows to be deleted when fewer than MaxStoredEvents rows exist:
+        // after pruning to 11 rows (oldest id + newest 10), raising the cap to 20 keeps all 11 despite the id gap.
+        var gapped = createDecisions(Options(20, 0));
+        Assert.Equal(11, gapped.GetRecent(5000).Count);
+
+        // Feedback retention: cap and age apply to defense_feedback too, and once feedback is removed its decision can be pruned.
+        var newest = gapped.GetRecent(5000).OrderByDescending(d => d.Id).Take(2).ToArray();
+        gapped.AddFeedback(new DefenseDecisionFeedback(0, newest[0].Id, newest[0].IpAddress, newest[0].Action, ContainmentActions.Observed, "f2", "test", now));
+        gapped.AddFeedback(new DefenseDecisionFeedback(0, newest[1].Id, newest[1].IpAddress, newest[1].Action, ContainmentActions.Observed, "f3", "test", now));
+        var feedbackCapped = createDecisions(Options(2, 0, feedbackCap: 2));
+        Assert.Equal(2, feedbackCapped.GetRecentFeedback(50).Count);
+        Assert.DoesNotContain(feedbackCapped.GetRecent(5000), d => d.Id == oldest.Id);
 
         // Deliveries: cap applies too, with the newest rows kept.
         var deliveries = createDeliveries(Options(0, 0));
