@@ -47,6 +47,19 @@ public sealed class SetupWizardEndpointTests
             new TestFilterContext(sameOriginCtx),
             _ => ValueTask.FromResult<object?>(Results.Ok()));
         Assert.Equal(StatusCodes.Status200OK, ((IStatusCodeHttpResult)okResult!).StatusCode);
+
+        // TLS-terminating Ingress: browser Origin is https://protected.example.com while pod sees http://protected.example.com.
+        var tlsIngressCtx = new DefaultHttpContext();
+        tlsIngressCtx.Request.Method = HttpMethods.Post;
+        tlsIngressCtx.Request.Scheme = "http";
+        tlsIngressCtx.Request.Host = new HostString("protected.example.com");
+        tlsIngressCtx.Request.Headers.Cookie = $"{ManagementAuthenticationService.SessionCookieName}={sessionCookie}";
+        tlsIngressCtx.Request.Headers.Origin = "https://protected.example.com";
+        tlsIngressCtx.Request.Headers["Sec-Fetch-Site"] = "same-origin";
+        var ingressResult = await filter.InvokeAsync(
+            new TestFilterContext(tlsIngressCtx),
+            _ => ValueTask.FromResult<object?>(Results.Ok()));
+        Assert.Equal(StatusCodes.Status200OK, ((IStatusCodeHttpResult)ingressResult!).StatusCode);
     }
 
     private sealed class TestFilterContext(HttpContext httpContext) : EndpointFilterInvocationContext

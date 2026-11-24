@@ -54,12 +54,22 @@ public sealed class ApiKeyEndpointFilter : IEndpointFilter
                    string.Equals(secFetchSite, "none", StringComparison.OrdinalIgnoreCase);
         }
 
-        if (!request.Host.HasValue)
+        if (!request.Host.HasValue || !Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
         {
             return false;
         }
 
-        var expectedOrigin = $"{request.Scheme}://{request.Host.Value}";
-        return string.Equals(origin, expectedOrigin, StringComparison.OrdinalIgnoreCase);
+        var schemeMatches = string.Equals(originUri.Scheme, request.Scheme, StringComparison.OrdinalIgnoreCase) ||
+                            (string.Equals(request.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                             string.Equals(originUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+        if (!schemeMatches ||
+            !string.Equals(originUri.Host, request.Host.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expectedPort = request.Host.Port ??
+                           (string.Equals(originUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? 443 : 80);
+        return originUri.Port == expectedPort;
     }
 }
