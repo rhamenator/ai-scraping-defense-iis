@@ -119,7 +119,7 @@ public sealed class HttpReputationProvider : IThreatReputationProvider
             _logger.LogWarning("HTTP reputation provider timed out.");
             return null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or ResponseTooLargeException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException or JsonException or InvalidOperationException or ResponseTooLargeException)
         {
             _logger.LogWarning(ex, "HTTP reputation provider failed.");
             return null;
