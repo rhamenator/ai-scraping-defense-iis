@@ -31,6 +31,13 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
 - Optional PostgreSQL-backed Markov tarpit content with deterministic render variants and rotating ZIP decoy archives.
 
+## What's New Since v1.1.4
+
+- **Authenticated `/defense/setup` Wizard (`#258`) & Edge Metrics Grid (`#257`):** Added a guided setup wizard for configuring the stack and an Edge metrics table grid in the operator dashboard.
+- **Management & CSRF Security Hardening (`#243`, `#259`, `#260`):** Required HTTPS for the management API by default, returned `400 BadRequest` when `/defense/blocklist` omits the `ip` query parameter, and enforced same-origin checks on cookie-authenticated mutations.
+- **Observability, Intake & Raft Bounding (`#242`, `#244`–`#255`):** Bound Prometheus and the OTLP collector to loopback, bounded webhook/intake/outbound response sizes and audit stores (SQLite, PostgreSQL, SQL Server), added per-credential intake rate limiting, and upgraded to DotNext 6 with Raft snapshots and compaction.
+- **Credential & Release Hygiene (`#240`, `#241`, `#256`):** Kept credentials out of Docker build layers, delivery records, and HTTP client logs, and split installer build, signing, and release publishing workflows.
+
 ## Commercial v1 Scope
 
 The first commercial release is a single deployable ASP.NET Core service that provides the core `ai-scraping-defense` workflow in .NET:
