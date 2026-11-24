@@ -72,7 +72,7 @@ public sealed class BlocklistConsensusCoordinator : IHostedService, IAsyncDispos
             }
 
             Directory.CreateDirectory(_options.StoragePath);
-            var membershipPath = Path.Combine(_options.StoragePath, "membership");
+            var membershipPath = Path.Join(_options.StoragePath, "membership");
             Directory.CreateDirectory(membershipPath);
             var (logPath, snapshotPath) = await RaftLogLayout.PrepareAsync(_options.StoragePath, _logger, cancellationToken);
 
