@@ -862,11 +862,11 @@ public partial class Program
         }
 
         management.MapGet("/blocklist", async (
-            [FromQuery] string ip,
+            [FromQuery] string? ip,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
-            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            if (!TryNormalizeIpAddress(ip ?? string.Empty, out var normalizedIp))
             {
                 return Results.BadRequest(new
                 {
@@ -882,12 +882,12 @@ public partial class Program
         });
 
         management.MapPost("/blocklist", async (
-            [FromQuery] string ip,
+            [FromQuery] string? ip,
             [FromQuery] string? reason,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
-            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            if (!TryNormalizeIpAddress(ip ?? string.Empty, out var normalizedIp))
             {
                 return Results.BadRequest(new
                 {
@@ -917,11 +917,11 @@ public partial class Program
         });
 
         management.MapDelete("/blocklist", async (
-            [FromQuery] string ip,
+            [FromQuery] string? ip,
             IBlocklistService blocklistService,
             CancellationToken cancellationToken) =>
         {
-            if (!TryNormalizeIpAddress(ip, out var normalizedIp))
+            if (!TryNormalizeIpAddress(ip ?? string.Empty, out var normalizedIp))
             {
                 return Results.BadRequest(new
                 {
