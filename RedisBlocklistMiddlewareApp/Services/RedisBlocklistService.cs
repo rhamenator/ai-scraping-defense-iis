@@ -54,7 +54,16 @@ public sealed class RedisBlocklistService : IBlocklistService
 
     internal bool CanBlock(string ipAddress) =>
         TryNormalizeIpAddress(ipAddress, out var normalizedIp) &&
+        !IsLoopbackOrUnspecified(normalizedIp) &&
         !IsTrustedInfrastructureAddress(normalizedIp);
+
+    // Loopback and the unspecified address can never be a real client behind the proxy. Private ranges stay
+    // blockable (internal networks and VPNs are legitimate sources); trusted proxy ranges are protected separately.
+    internal static bool IsLoopbackOrUnspecified(string normalizedIp) =>
+        System.Net.IPAddress.TryParse(normalizedIp, out var parsed) &&
+        (System.Net.IPAddress.IsLoopback(parsed) ||
+         parsed.Equals(System.Net.IPAddress.Any) ||
+         parsed.Equals(System.Net.IPAddress.IPv6Any));
 
     public async Task<bool> BlockUntilAsync(
         string ipAddress,

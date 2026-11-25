@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Loopback and unspecified addresses can no longer be blocked (#263). `CanBlock` now refuses `127.0.0.0/8`, `::1`, `0.0.0.0` and `::` (including their IPv4-mapped forms), so `POST /defense/blocklist`, the tarpit hop limit and every other writer answer the existing 400 (or skip the block) for them, matching the Rust and Python editions. Private ranges stay blockable; trusted proxy and CDN ranges keep their separate protection.
+
 ### Changed
 
 - **Upgrade in two steps:** DotNext is now 6.12.2 (#196, supersedes the Dependabot PR). Run the new `tools/RaftLogExporter` against the stopped node's storage directory first; the Raft log is then imported from its export, and a node with an old log and no export refuses to start and says how to proceed. Consensus membership is now static (`Consensus:Members`, recorded in `members.json`). See `docs/migrations.md`.

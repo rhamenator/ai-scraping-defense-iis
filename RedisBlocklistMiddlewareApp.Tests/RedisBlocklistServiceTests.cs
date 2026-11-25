@@ -39,6 +39,42 @@ public sealed class RedisBlocklistServiceTests
     }
 
     [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("127.1.2.3")]
+    [InlineData("::1")]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("::ffff:127.0.0.1")]
+    [InlineData("::ffff:0.0.0.0")]
+    public async Task BlockAsync_RejectsLoopbackAndUnspecifiedAddresses(string ipAddress)
+    {
+        var provider = new FailIfConnectedRedisProvider();
+        var service = new RedisBlocklistService(
+            provider,
+            Options.Create(new DefenseEngineOptions()),
+            NullLogger<RedisBlocklistService>.Instance);
+
+        var applied = await service.BlockAsync(ipAddress, "test", ["test"], CancellationToken.None);
+
+        Assert.False(applied);
+        Assert.False(provider.WasCalled);
+    }
+
+    [Theory]
+    [InlineData("10.0.0.5")]
+    [InlineData("192.168.1.9")]
+    [InlineData("203.0.113.7")]
+    public void CanBlock_StillAllowsPrivateAndDocumentationAddresses(string ipAddress)
+    {
+        var service = new RedisBlocklistService(
+            new FailIfConnectedRedisProvider(),
+            Options.Create(new DefenseEngineOptions()),
+            NullLogger<RedisBlocklistService>.Instance);
+
+        Assert.True(service.CanBlock(ipAddress));
+    }
+
+    [Theory]
     [InlineData("2001:0db8:0000:0000::1", "2001:db8::1")]
     [InlineData("::ffff:198.51.100.7", "198.51.100.7")]
     public void NormalizeIpAddress_UsesOneKeyForEquivalentAddresses(
