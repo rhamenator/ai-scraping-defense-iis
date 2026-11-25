@@ -31,6 +31,11 @@ The current codebase now contains the first .NET-native defense slice inside [Re
 - Optional peer sync with explicit `ObserveOnly` and `BlockList` trust modes plus authenticated signal export at `/peer-sync/signals`.
 - Optional PostgreSQL-backed Markov tarpit content with deterministic render variants and rotating ZIP decoy archives.
 
+## What's New Since v1.1.5
+
+- **Loopback and unspecified addresses can no longer be blocked (`#263`, `#264`):** The blocklist now refuses `127.0.0.0/8`, `::1`, `0.0.0.0` and `::` (including IPv4-mapped forms), matching the Python and Rust editions. Private ranges remain blockable.
+- **CodeQL hardening (`#262`):** Resolved path-combine and catch-all findings, including a narrower fail-open filter in the HTTP reputation provider.
+
 ## What's New Since v1.1.4
 
 - **Authenticated `/defense/setup` Wizard (`#258`) & Edge Metrics Grid (`#257`):** Added a guided setup wizard for configuring the stack and an Edge metrics table grid in the operator dashboard.
