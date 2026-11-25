@@ -905,7 +905,7 @@ public partial class Program
             {
                 return Results.BadRequest(new
                 {
-                    error = "Refusing to block a configured trusted proxy or CDN address."
+                    error = "Refusing to block a loopback or unspecified address, or a configured trusted proxy or CDN address."
                 });
             }
 
@@ -989,7 +989,7 @@ public partial class Program
                 {
                     return Results.BadRequest(new
                     {
-                        error = "Refusing to block a configured trusted proxy or CDN address."
+                        error = "Refusing to block a loopback or unspecified address, or a configured trusted proxy or CDN address."
                     });
                 }
             }
